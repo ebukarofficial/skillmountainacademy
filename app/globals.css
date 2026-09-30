@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Skill Mountain Academy palette (from brand posters) + cream */
+/* Skill Mountain Academy palette (brand posters) + SMA cream (from the logo animation) */
 :root {
-  --cream: #f3e8d8;
-  --paper: #faf6f0;
+  --cream: #fcf9db;
+  --paper: #fffdf0;
   --navy: #14296b;
   --indigo: #1e0e6f;
   --plum: #5b2270;
@@ -35,14 +35,25 @@ body { background: var(--cream); color: var(--ink); font-size: 1.0625rem; }
 }
 .brand-bg { background: linear-gradient(100deg, var(--red), var(--orange)); }
 
-@keyframes float { 50% { transform: translateY(-12px); } }
+/* Scroll reveal (Skillex-style fade up) */
+.reveal { opacity: 0; transform: translateY(32px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
+.reveal.in { opacity: 1; transform: none; }
+
+@keyframes float { 50% { transform: translateY(-14px) rotate(4deg); } }
 @keyframes marquee { to { transform: translateX(-50%); } }
 @keyframes pop { from { opacity: 0; transform: translateY(24px) scale(.98); } }
-.float { animation: float 5s ease-in-out infinite; }
-.marquee { animation: marquee 28s linear infinite; }
+.float { animation: float 6s ease-in-out infinite; }
+.marquee { animation: marquee 30s linear infinite; }
 .pop { animation: pop .25s ease-out; }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Glossy 3D-style shapes, like the Skillex balloons and rings */
+.orb { background: radial-gradient(circle at 30% 28%, #ffe0bf, var(--orange) 45%, var(--red)); box-shadow: inset -8px -10px 24px rgba(120,20,30,.35), 0 20px 40px rgba(200,35,58,.25); border-radius: 9999px; }
+.donut { border-radius: 9999px; border: 22px solid transparent; background: linear-gradient(var(--cream), var(--cream)) padding-box, linear-gradient(135deg, var(--navy), var(--plum), var(--red), var(--orange)) border-box; box-shadow: 0 20px 40px rgba(30,14,111,.2); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .float, .marquee, .pop { animation: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
 }

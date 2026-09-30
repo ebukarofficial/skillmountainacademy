@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   openGraph: { title: "Skill Mountain Academy", description: "One-on-one skill training.", type: "website", url: SITE_URL },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#f3e8d8" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#fcf9db" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

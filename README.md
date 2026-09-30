@@ -1,35 +1,27 @@
-# Skill Mountain Academy (SMA) platform
+# Skill Mountain Academy (SMA) site
 
-One-on-one training site. Next.js 16, Tailwind 4, hosted on GitHub Pages.
+One-on-one skill training. Next.js 16 + Tailwind 4, hosted on GitHub Pages. Registrations, payment checks and resource emails run in a Google Sheet script (no other server).
 
-## 1. Google Sheet (registrations)
-1. Create a Google Sheet. Extensions > Apps Script, paste `docs/google-sheet-script.gs`.
-2. Deploy > New deployment > Web app. Execute as: Me. Access: Anyone.
-3. Copy the web app URL. It is your `NEXT_PUBLIC_SHEET_URL` and the Supabase `SHEET_URL` secret.
+## Upload to GitHub
+1. Delete the old `supabase` folder from the repo (no longer used).
+2. Upload everything in this folder, replacing existing files. GitHub's web upload skips folders that start with a dot, so `.github/workflows/deploy.yml` must already exist in the repo (yours does). If you change it, edit it on GitHub.
+3. Settings > Pages > Source: **GitHub Actions**.
+4. Settings > Secrets and variables > Actions, add: `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` (pk_...) and `NEXT_PUBLIC_SHEET_URL`. Optional: `NEXT_PUBLIC_WHATSAPP` (e.g. 2347061000472).
+5. Site address: https://ebukarofficial.github.io/skillmountainacademy/
 
-## 2. Paystack + email (Supabase Edge Function)
-```
-supabase functions deploy paystack-webhook --no-verify-jwt
-supabase secrets set PAYSTACK_SECRET_KEY=sk_live_... RESEND_API_KEY=... MAIL_FROM="SMA <hello@yourdomain>" SHEET_URL=<apps script url>
-```
-- Paystack dashboard > Settings > API Keys & Webhooks: set the webhook URL to the function URL.
-- Edit the resource links in `supabase/functions/paystack-webhook/index.ts`.
-- The Paystack secret key lives only in Supabase. Never put it in the site or in GitHub.
+## Google Sheet + payments (one-time setup)
+Follow the steps at the top of `docs/google-sheet-script.gs`. In short: paste it in Apps Script, add the `PAYSTACK_SECRET` script property, put your real resource links in `RESOURCES`, run `setup()`, deploy as a web app, and use the URL as `NEXT_PUBLIC_SHEET_URL`.
 
-## 3. GitHub
-1. Push this folder to github.com/ebukarofficial/sma-platform (branch `main`).
-2. Settings > Pages > Source: **GitHub Actions**.
-3. Settings > Secrets and variables > Actions, add `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` and `NEXT_PUBLIC_SHEET_URL` (optional: `NEXT_PUBLIC_WHATSAPP`).
-4. Every push to `main` builds and deploys to https://ebukarofficial.github.io/sma-platform
+How a payment flows: registration is saved as PENDING > Paystack opens (card or transfer) > the script confirms the payment with Paystack itself > row becomes PAID > resources are emailed once. A 5-minute timer also checks pending rows, so bank transfers that confirm later are still caught.
 
-## 4. Google search
-Add the URL above in Google Search Console and submit `/sitemap.xml`.
+## Edit content
+- Programmes, fees, curriculum, "who it's for": `lib/config.ts`. If you change a fee, change it in `docs/google-sheet-script.gs` too.
+- Phone/WhatsApp in the footer comes from your admissions flyer. Change it in `lib/config.ts` if needed.
+- Photos: `assets/photos/`. Logos: `assets/` and `app/icon.png` (favicon), used exactly as supplied.
+- Logo intro animation: `public/sma-intro.mp4` (plays once per visit, with a Skip button).
 
-## Change programmes or fees
-Edit `lib/config.ts` and keep fees in sync with the webhook function. Set `live: true` to open a programme.
-
-## Local dev
+## Local development
 Copy `.env.example` to `.env.local`, then `npm install && npm run dev`.
 
-## Assets
-Logos in `assets/` and the round badge `app/icon.png` (favicon) are used exactly as supplied.
+## Google search
+Add the site in Google Search Console and submit `/sitemap.xml`.
