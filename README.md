@@ -1,27 +1,21 @@
 # Skill Mountain Academy (SMA) site
 
-One-on-one skill training. Next.js 16 + Tailwind 4, hosted on GitHub Pages. Registrations, payment checks and resource emails run in a Google Sheet script (no other server).
+Personalized skill university, one-on-one training. Next.js 16 + Tailwind 4 on GitHub Pages. Registrations, payment checks and confirmation emails run on Google (Forms, Sheets, Apps Script). No other server.
 
 ## Upload to GitHub
-1. Delete the old `supabase` folder from the repo (no longer used).
-2. Upload everything in this folder, replacing existing files. GitHub's web upload skips folders that start with a dot, so `.github/workflows/deploy.yml` must already exist in the repo (yours does). If you change it, edit it on GitHub.
-3. Settings > Pages > Source: **GitHub Actions**.
-4. Settings > Secrets and variables > Actions, add: `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` (pk_...) and `NEXT_PUBLIC_SHEET_URL`. Optional: `NEXT_PUBLIC_WHATSAPP` (e.g. 2347061000472).
-5. Site address: https://ebukarofficial.github.io/skillmountainacademy/
+Upload everything in this folder EXCEPT the `.github` folder (GitHub's web upload skips dot-folders; yours already exists in the repo). Commit. The site rebuilds itself.
 
-## Google Sheet + payments (one-time setup)
-Follow the steps at the top of `docs/google-sheet-script.gs`. In short: paste it in Apps Script, add the `PAYSTACK_SECRET` script property, put your real resource links in `RESOURCES`, run `setup()`, deploy as a web app, and use the URL as `NEXT_PUBLIC_SHEET_URL`.
+## One-time Google setup
+Follow the steps at the top of `docs/google-sheet-script.gs`. Summary:
+1. New Google Sheet (use skillmountainacademy@gmail.com) > Extensions > Apps Script > paste the file.
+2. Script Properties: `PAYSTACK_SECRET` = your Paystack secret key.
+3. Put your real learning links in `RESOURCES`.
+4. Run `createRegistrationForm()`, copy the printed `FORM` block into `lib/config.ts`.
+5. Run `setup()`. Deploy as a web app. Put its URL in the GitHub secret `NEXT_PUBLIC_SHEET_URL`.
+GitHub secrets needed: `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` (pk_...) and `NEXT_PUBLIC_SHEET_URL`.
 
-How a payment flows: registration is saved as PENDING > Paystack opens (card or transfer) > the script confirms the payment with Paystack itself > row becomes PAID > resources are emailed once. A 5-minute timer also checks pending rows, so bank transfers that confirm later are still caught.
+## Flow
+Programme card > checkout page > details saved to the Google Form/Sheet as a new row > Paystack (card or transfer) > the script confirms the payment with Paystack > row becomes PAID > payment confirmation email with resources is sent to the buyer (copy to the academy inbox).
 
-## Edit content
-- Programmes, fees, curriculum, "who it's for": `lib/config.ts`. If you change a fee, change it in `docs/google-sheet-script.gs` too.
-- Phone/WhatsApp in the footer comes from your admissions flyer. Change it in `lib/config.ts` if needed.
-- Photos: `assets/photos/`. Logos: `assets/` and `app/icon.png` (favicon), used exactly as supplied.
-- Logo intro animation: `public/sma-intro.mp4` (plays once per visit, with a Skip button).
-
-## Local development
-Copy `.env.example` to `.env.local`, then `npm install && npm run dev`.
-
-## Google search
-Add the site in Google Search Console and submit `/sitemap.xml`.
+## Edit content (lib/config.ts)
+Programmes, prices (`fee` = what they pay, `was` = crossed-out price), learning lists, contact, social handles, real testimonials (section appears when you add some). Keep fees in step with `docs/google-sheet-script.gs`.
