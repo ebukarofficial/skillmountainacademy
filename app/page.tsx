@@ -1,32 +1,34 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
-import pGraphics from "@/assets/photos/photo-graphics.webp";
-import pDevops from "@/assets/photos/photo-devops.webp";
-import pCloud from "@/assets/photos/photo-cloud.webp";
-import pMarketing from "@/assets/photos/photo-marketing.webp";
-import pIelts from "@/assets/photos/photo-ielts.webp";
-import pUiux from "@/assets/photos/photo-uiux.webp";
-import pWeb from "@/assets/photos/photo-web.webp";
-import pCert from "@/assets/photos/photo-certificate.webp";
 import banner from "@/assets/photos/banner-students.webp";
-import { AUDIENCE, CFG, PROGRAMMES, SOCIALS, TESTIMONIALS } from "@/lib/config";
-import { Chevrons, CountUp, Intro, Price, Reveal, postSheet } from "./components";
+import { AUDIENCE, CFG, PROGRAMMES, SOCIAL, TESTIMONIALS, type Programme } from "@/lib/config";
+import { Chevrons, CountUp, Intro, PHOTO, Price, Reveal, SocialIcon, naira } from "./components";
 
-const PHOTO: Record<string, StaticImageData> = { graphics: pGraphics, devops: pDevops, cloud: pCloud, marketing: pMarketing, ielts: pIelts, uiux: pUiux, web: pWeb };
-const NAV = [["#programmes", "Programmes"], ["#why", "Why SMA"], ["#who", "Who it's for"], ["#how", "How it works"], ["#faq", "FAQ"]];
-const buy = (id: string) => `/checkout/?p=${id}`;
+const NAV = [["#programmes", "Programmes"], ["#why", "Why SMA"], ["#who", "Who it's for"], ["#how", "How it works"], ["#reviews", "Reviews"], ["#faq", "FAQ"]];
 
-const OPEN = PROGRAMMES.filter((p) => p.live);
-const SOON = PROGRAMMES.length - OPEN.length;
-type Slide = { id: string; name: string; tone: string; photo: StaticImageData; note: string; pid?: string };
+type Slide = { id: string; name: string; tone: string; photo: StaticImageData; note: string; prog?: Programme };
 const SLIDES: Slide[] = [
-  ...OPEN.map((p) => ({ id: p.id, name: p.name, tone: p.tone, photo: PHOTO[p.id], pid: p.id, note: p.months ? `${p.months} months · one-on-one` : "One-on-one training" })),
-  { id: "cert", name: "SMA Certificate", tone: "from-indigo via-navy to-brand-red", photo: pCert, note: "Finish your programme, earn your certificate" },
+  ...PROGRAMMES.filter((p) => p.live).map((p) => ({
+    id: p.id, name: p.name, tone: p.tone, photo: PHOTO[p.id], prog: p,
+    note: `${naira(p.fee!)}${p.was ? ` · was ${naira(p.was)}` : ""}${p.months ? ` · ${p.months} months` : ""}`,
+  })),
+  { id: "cert", name: "SMA Certificate", tone: "from-indigo via-navy to-brand-red", photo: PHOTO.cert, note: "Finish your programme, earn your certificate" },
 ];
+
+const OPEN = PROGRAMMES.filter((p) => p.live).length;
+const SOON = PROGRAMMES.length - OPEN;
+const STATS: { to?: number; suffix?: string; text?: string; label: string }[] = [
+  { to: 300, suffix: "+", label: "People trained across Nigeria" },
+  { text: "1:1", label: "Mentorship, one learner at a time" },
+  { to: OPEN, label: "Programmes open for registration" },
+  { to: SOON, label: "More skills coming soon" },
+];
+
+const regHref = (p: Programme) => `/checkout/?p=${p.id}`;
 
 export default function Home() {
   const [menu, setMenu] = useState(false);
@@ -35,7 +37,6 @@ export default function Home() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [joined, setJoined] = useState(false);
   const touch = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
 
@@ -56,12 +57,7 @@ export default function Home() {
   }, []);
 
   const go = (e: FormEvent) => { e.preventDefault(); document.getElementById("programmes")?.scrollIntoView({ behavior: "smooth" }); };
-  const join = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    await postSheet({ action: "subscribe", email: String(new FormData(e.currentTarget).get("email")).trim() });
-    setJoined(true);
-  };
-  const slide = (d: number) => setActive((a) => (a + d + SLIDES.length) % SLIDES.length);
+  const slide = useCallback((d: number) => setActive((a) => (a + d + SLIDES.length) % SLIDES.length), []);
 
   return (
     <main className="overflow-x-clip">
@@ -72,16 +68,16 @@ export default function Home() {
       <header className="sticky top-0 z-40 bg-cream/90 backdrop-blur">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3" aria-label="Main">
           <a href="#top" aria-label="Skill Mountain Academy home">
-            <Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-9 w-auto sm:h-11" />
+            <Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" />
           </a>
-          <div className="hidden items-center gap-7 font-medium lg:flex">
+          <div className="hidden items-center gap-6 font-medium xl:flex">
             {NAV.map(([h, t]) => <a key={h} href={h} className="transition hover:text-brand-red">{t}</a>)}
           </div>
-          <a href="#programmes" className="hidden rounded-full bg-indigo px-6 py-2.5 font-display text-sm font-semibold text-cream transition hover:bg-navy lg:block">Register now</a>
-          <button aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)} className="grid h-11 w-11 place-items-center rounded-full bg-paper text-lg lg:hidden">{menu ? "✕" : "☰"}</button>
+          <a href="#programmes" className="hidden rounded-full bg-indigo px-6 py-2.5 font-display text-sm font-semibold text-cream transition hover:bg-navy xl:block">Register now</a>
+          <button aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)} className="grid h-11 w-11 place-items-center rounded-full bg-paper text-lg xl:hidden">{menu ? "✕" : "☰"}</button>
         </nav>
         {menu && (
-          <div className="pop mx-5 mb-3 flex flex-col gap-1 rounded-3xl bg-paper p-3 lg:hidden" onClick={() => setMenu(false)}>
+          <div className="pop mx-5 mb-3 flex flex-col gap-1 rounded-3xl bg-paper p-3 xl:hidden" onClick={() => setMenu(false)}>
             {NAV.map(([h, t]) => <a key={h} href={h} className="rounded-2xl px-4 py-3.5 font-medium hover:bg-cream">{t}</a>)}
             <a href="#programmes" className="brand-bg mt-1 rounded-2xl px-4 py-3.5 text-center font-display font-semibold text-white">Register now</a>
           </div>
@@ -89,21 +85,20 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section id="top" className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-10 pt-6 lg:grid-cols-[.85fr_1.15fr] lg:pt-12">
-        <div className="pointer-events-none absolute -left-32 -bottom-6 hidden h-40 w-40 donut float lg:block" aria-hidden="true" />
-        <div className="pointer-events-none absolute left-[40%] top-4 hidden h-14 w-14 orb float [animation-delay:1.5s] lg:block" aria-hidden="true" />
+      <section id="top" className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-10 pt-6 lg:grid-cols-[.9fr_1.1fr] lg:pt-12">
+        <div className="pointer-events-none absolute -bottom-10 -left-32 -z-10 hidden h-40 w-40 donut float lg:block" aria-hidden="true" />
         <Reveal className="relative">
           <p className="mb-4 w-fit rounded-full bg-paper px-4 py-1.5 text-sm font-medium">Personalized Skill University</p>
-          <h1 className="font-display text-[2.7rem] font-extrabold leading-[1.04] sm:text-6xl xl:text-7xl">
+          <h1 className="font-display text-[2.6rem] font-extrabold leading-[1.04] sm:text-6xl xl:text-7xl">
             <span className="brand-text">For those made for more.</span>
           </h1>
-          <p className="mt-5 max-w-md text-xl text-ink/70">Learn in-demand skills with structure, depth and guidance, one-on-one with a mentor, and graduate with credentials that matter globally.</p>
+          <p className="mt-5 max-w-md text-xl text-ink/70">Learn in-demand skills with structure, depth, and guidance, and graduate with credentials that matter globally.</p>
           <form onSubmit={go} className="mt-7 flex max-w-md overflow-hidden rounded-2xl bg-white shadow-lg shadow-indigo/10">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your programme" aria-label="Find your programme" list="progs"
-              className="min-w-0 flex-1 bg-transparent px-5 py-4 outline-none" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your programme" aria-label="Find your programme" list="progs" className="min-w-0 flex-1 bg-transparent px-5 py-4 outline-none" />
             <datalist id="progs">{PROGRAMMES.map((p) => <option key={p.id} value={p.name} />)}</datalist>
             <button className="brand-bg px-7 font-display font-semibold text-white transition hover:brightness-110">Go</button>
           </form>
+          <p className="mt-4 text-sm font-medium text-ink/60">300+ people trained across Nigeria, one-on-one.</p>
         </Reveal>
 
         <Reveal delay={150}>
@@ -112,23 +107,20 @@ export default function Home() {
             onTouchEnd={(e) => { const dx = e.changedTouches[0].clientX - touch.current; if (Math.abs(dx) > 40) slide(dx < 0 ? 1 : -1); setPaused(false); }}>
             {SLIDES.map((s, i) => {
               const on = i === active;
-              const p = PROGRAMMES.find((x) => x.id === s.pid);
               return (
-                <div key={s.id} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} role="button" tabIndex={0} aria-label={s.name}
-                  onKeyDown={(e) => e.key === "Enter" && setActive(i)}
-                  className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${s.tone} transition-all duration-700 ease-out ${on ? "flex-[7]" : "hidden flex-[1] cursor-pointer md:block"}`}>
+                <div key={s.id} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} role="button" tabIndex={0} aria-label={s.name} onKeyDown={(e) => e.key === "Enter" && setActive(i)}
+                  className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${s.tone} transition-all duration-700 ease-out ${on ? "flex-[6]" : "hidden flex-[1] cursor-pointer md:block"}`}>
                   <Image src={s.photo} alt="" fill sizes="(max-width: 768px) 90vw, 40vw" className="object-cover object-top" />
-                  <div className={`absolute inset-0 bg-gradient-to-t from-ink/75 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
+                  <div className={`absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
                   {on ? (
                     <div className="pop absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
-                      <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-ink">{p ? "Open for registration" : "SMA"}</span>
+                      <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-ink">{s.prog ? "Open for registration" : "SMA"}</span>
                       <h2 className="mt-3 font-display text-2xl font-extrabold sm:text-3xl">{s.name}</h2>
                       <p className="text-white/85">{s.note}</p>
-                      {p && <p className="mt-1 font-display font-bold">{p.was ? <s className="mr-2 font-normal text-white/60">₦{p.was.toLocaleString("en-NG")}</s> : null}₦{p.fee!.toLocaleString("en-NG")}</p>}
-                      {p && <Link href={buy(p.id)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-block rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Register</Link>}
+                      {s.prog && <Link href={regHref(s.prog)} onClick={(e) => e.stopPropagation()} className="mt-4 inline-block rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Register</Link>}
                     </div>
                   ) : (
-                    <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-indigo px-2 py-4 font-display text-sm font-semibold text-white [writing-mode:vertical-rl] [rotate:180deg]">{s.name}</span>
+                    <span className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-indigo px-2 py-4 font-display text-sm font-semibold text-white [writing-mode:vertical-rl] [rotate:180deg]">{s.name}</span>
                   )}
                 </div>
               );
@@ -140,20 +132,16 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* Stats: staggered cards */}
-      <section className="mx-auto max-w-6xl px-5 pb-16 pt-6 sm:pb-24">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[
-            { big: <>1:1</>, label: "One mentor for each learner", c: "from-brand-orange to-brand-red" },
-            { big: <CountUp to={OPEN.length} />, label: "Programmes open now", c: "from-navy to-plum" },
-            { big: <CountUp to={SOON} />, label: "More coming soon", c: "from-plum to-brand-red" },
-            { big: <>Abuja</>, label: "Nigeria, serving learners everywhere", c: "from-brand-red to-brand-orange" },
-          ].map((s, i) => (
+      {/* Stats */}
+      <section className="mx-auto max-w-6xl px-5 pb-6 pt-10">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {STATS.map((s, i) => (
             <Reveal key={s.label} delay={i * 90} className={i % 2 ? "lg:mt-10" : ""}>
-              <div className="relative overflow-hidden rounded-[1.5rem] bg-paper px-4 pb-7 pt-8 text-center shadow-lg shadow-indigo/5">
-                <p className="font-display text-3xl font-extrabold sm:text-4xl">{s.big}</p>
-                <p className="mt-2 text-sm text-ink/70 sm:text-base">{s.label}</p>
-                <span className={`absolute inset-x-0 bottom-0 h-1.5 bg-gradient-to-r ${s.c}`} />
+              <div className="relative overflow-hidden rounded-2xl bg-white px-6 pb-9 pt-8 text-center shadow-lg shadow-indigo/10">
+                <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-cream shadow-inner"><span className="orb h-8 w-8" /></span>
+                <p className="mt-5 font-display text-4xl font-extrabold">{s.text ?? <CountUp to={s.to!} suffix={s.suffix} />}</p>
+                <p className="mt-1 text-ink/70">{s.label}</p>
+                <span className="brand-bg absolute inset-x-0 bottom-0 h-2" />
               </div>
             </Reveal>
           ))}
@@ -161,10 +149,10 @@ export default function Home() {
       </section>
 
       {/* Programmes */}
-      <section id="programmes" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-16 sm:pb-24">
+      <section id="programmes" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-14 sm:py-20">
         <Reveal className="text-center">
           <h2 className="font-display text-3xl font-extrabold sm:text-5xl">One mentor. One student<span className="text-brand-orange">.</span></h2>
-          <p className="mx-auto mt-3 max-w-xl text-ink/70">Choose a programme and register. Prices shown are already reduced.</p>
+          <p className="mx-auto mt-3 max-w-xl text-ink/70">Choose a programme and register. More skills are coming.</p>
           <div className="mt-6 flex justify-start gap-2 overflow-x-auto pb-2 no-scrollbar sm:justify-center" role="tablist" aria-label="Categories">
             {cats.map((c) => (
               <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)}
@@ -173,12 +161,13 @@ export default function Home() {
           </div>
         </Reveal>
         {list.length === 0 && <p className="mt-10 text-center text-ink/60">No match yet. That skill may be coming soon.</p>}
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {list.map((p, i) => (
-            <Reveal key={p.id} delay={(i % 3) * 80} className="h-full">
+            <Reveal key={p.id} delay={(i % 4) * 80} className="h-full">
               <article className="flex h-full flex-col rounded-[1.75rem] bg-paper p-3 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo/10">
-                <div className={`relative h-52 overflow-hidden rounded-[1.25rem] bg-gradient-to-br ${p.tone} ${p.live ? "" : "opacity-70 saturate-50"}`}>
-                  <Image src={PHOTO[p.id]} alt="" fill sizes="(max-width: 640px) 90vw, 33vw" className="object-cover object-top" />
+                <div className={`relative h-48 overflow-hidden rounded-[1.25rem] bg-gradient-to-br ${p.tone} ${p.live ? "" : "opacity-70 saturate-50"}`}>
+                  <Image src={PHOTO[p.id]} alt="" fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover object-top" />
+                  {p.was && <span className="absolute left-3 top-3 rounded-full bg-brand-red px-3 py-1 text-xs font-bold text-white">{Math.round((1 - p.fee! / p.was) * 100)}% OFF</span>}
                 </div>
                 <div className="flex flex-1 flex-col px-2 pb-2 pt-4">
                   <h3 className="font-display text-xl font-bold">{p.name}</h3>
@@ -191,7 +180,7 @@ export default function Home() {
                         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink/75">{p.learn.map((l) => <li key={l}>{l}</li>)}</ul>
                       </details>
                       <div className="mt-4"><Price p={p} /></div>
-                      <Link href={buy(p.id)} className="brand-bg mt-3 rounded-full py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register and pay</Link>
+                      <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register</Link>
                     </>
                   ) : (
                     <p className="mt-4 rounded-full bg-cream py-3.5 text-center font-display font-semibold text-ink/50">Coming soon</p>
@@ -206,7 +195,7 @@ export default function Home() {
       {/* Why SMA */}
       <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-10 px-5 pb-16 sm:pb-24 lg:grid-cols-2">
         <Reveal>
-          <h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Learn deeply. Grow confidently. Graduate prepared.</span></h2>
+          <h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Get the skills you need to climb higher.</span></h2>
           <p className="mt-4 max-w-md text-ink/70">Skill Mountain Academy is for people who are made for more. One-on-one training means your mentor&apos;s full attention is on you.</p>
           <ul className="mt-8 space-y-6">
             {[["One mentor, just for you", "Ask anything and get direct answers from the person teaching you."],
@@ -219,44 +208,22 @@ export default function Home() {
             ))}
           </ul>
         </Reveal>
-        <Reveal delay={150}>
-          <div className="overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo/20">
-            <Image src={banner} alt="Students outside the Skill Mountain Academy sign" className="h-auto w-full" />
+        <Reveal delay={150} className="relative">
+          <div className="overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo/20"><Image src={banner} alt="Students outside the Skill Mountain Academy sign" className="h-auto w-full" /></div>
+          <div className="float absolute -bottom-5 -left-2 rounded-2xl bg-indigo px-5 py-3 text-white shadow-xl sm:-left-6">
+            <p className="text-sm text-white/70">Trained so far</p><p className="font-display font-bold">300+ people, 1-on-1</p>
           </div>
         </Reveal>
       </section>
 
-      {/* Testimonials: only shown once real feedback is added in lib/config.ts */}
-      {TESTIMONIALS.length > 0 && (
-        <section className="bg-navy py-16 text-white sm:py-20">
-          <div className="mx-auto max-w-6xl px-5">
-            <Reveal><h2 className="font-display text-3xl font-extrabold sm:text-5xl">What our learners say</h2></Reveal>
-            <div className="mt-8 columns-1 gap-4 sm:columns-2 lg:columns-3">
-              {TESTIMONIALS.map((t, i) => (
-                <Reveal key={t.name + i} delay={(i % 3) * 80} className="mb-4 break-inside-avoid">
-                  <figure className="rounded-[1.5rem] bg-white p-6 text-ink">
-                    <figcaption className="flex items-center gap-3">
-                      <span className="brand-bg grid h-11 w-11 place-items-center rounded-full font-display font-bold text-white">{t.name[0]}</span>
-                      <span><b className="block font-display">{t.name}</b><span className="text-sm text-ink/60">{t.role}{t.date ? ` · ${t.date}` : ""}</span></span>
-                    </figcaption>
-                    <blockquote className="mt-4 text-ink/80">{t.text}</blockquote>
-                  </figure>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Who it's for */}
-      <section id="who" className="scroll-mt-20 py-16 sm:py-24">
+      <section id="who" className="scroll-mt-20 pb-16 sm:pb-24">
         <div className="mx-auto max-w-6xl px-5">
           <Reveal className="flex items-end justify-between gap-4">
             <h2 className="font-display text-3xl font-extrabold sm:text-5xl">Who it&apos;s for<span className="text-brand-orange">.</span></h2>
             <div className="flex gap-2">
               {[-1, 1].map((d) => (
-                <button key={d} aria-label={d < 0 ? "Previous" : "Next"} onClick={() => rail.current?.scrollBy({ left: d * 320, behavior: "smooth" })}
-                  className="grid h-11 w-11 place-items-center rounded-full bg-paper transition hover:bg-white">{d < 0 ? "←" : "→"}</button>
+                <button key={d} aria-label={d < 0 ? "Previous" : "Next"} onClick={() => rail.current?.scrollBy({ left: d * 320, behavior: "smooth" })} className="grid h-11 w-11 place-items-center rounded-full bg-paper transition hover:bg-white">{d < 0 ? "←" : "→"}</button>
               ))}
             </div>
           </Reveal>
@@ -278,7 +245,7 @@ export default function Home() {
         <div className="relative mx-auto max-w-6xl px-5">
           <Reveal><h2 className="font-display text-3xl font-extrabold sm:text-5xl">How it works</h2></Reveal>
           <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {["Pick a programme", "Fill in the registration form", "Pay with Paystack by card or transfer", "Get your payment confirmation and learning resources by email"].map((t, i) => (
+            {["Pick a programme", "Fill in the registration form", "Pay with Paystack by card or transfer", "Get a confirmation email and your learning resources"].map((t, i) => (
               <Reveal key={t} delay={i * 90}>
                 <li className="h-full rounded-[1.75rem] bg-white/10 p-6 backdrop-blur">
                   <span className="brand-bg grid h-10 w-10 place-items-center rounded-full font-display font-bold">{i + 1}</span>
@@ -290,14 +257,44 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Reviews */}
+      <section id="reviews" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-16 sm:py-24">
+        <Reveal className="text-center">
+          <h2 className="font-display text-3xl font-extrabold sm:text-5xl">Real Learners. Real Transformation<span className="text-brand-orange">.</span></h2>
+          <p className="mx-auto mt-3 max-w-xl text-ink/70">What learners say about us on social media.</p>
+        </Reveal>
+        {TESTIMONIALS.length ? (
+          <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {TESTIMONIALS.map((t, i) => (
+              <Reveal key={t.url + i} delay={(i % 3) * 90} className="h-full">
+                <article className="flex h-full flex-col rounded-[1.75rem] bg-paper p-6 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 place-items-center rounded-full bg-indigo font-display font-bold text-white">{t.name.charAt(0)}</span>
+                    <div className="min-w-0 flex-1"><p className="truncate font-display font-bold">{t.name}</p><p className="truncate text-sm text-ink/60">{t.handle}</p></div>
+                    <span className="text-xs text-ink/50">{t.date}</span>
+                  </div>
+                  <p className="mt-4 flex-1 text-ink/80">{t.quote}</p>
+                  <a href={t.url} target="_blank" rel="noopener noreferrer" className="mt-4 flex items-center gap-2 text-sm font-semibold text-brand-red hover:underline"><SocialIcon name={t.platform} />View the post on {t.platform}</a>
+                </article>
+              </Reveal>
+            ))}
+          </div>
+        ) : (
+          <Reveal className="mx-auto mt-10 max-w-xl rounded-[1.75rem] bg-paper p-8 text-center shadow-sm">
+            <p className="font-display text-xl font-bold">Learner stories are coming soon.</p>
+            <p className="mt-2 text-ink/70">Trained with SMA? Share your story on social media and mention @skillmountainacademy.</p>
+          </Reveal>
+        )}
+      </section>
+
       {/* FAQ */}
-      <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-5 py-16 sm:py-20">
+      <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-5 pb-16 sm:pb-24">
         <Reveal><h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Questions</span></h2></Reveal>
         <div className="mt-8 space-y-3">
-          {[["How do I pay?", "After you register, you go to the checkout page and pay with Paystack by card or bank transfer."],
-            ["What happens after I pay?", "Once Paystack confirms your payment, we email you a payment confirmation and your learning resources."],
+          {[["How do I pay?", "Pick a programme and register. You will land on a secure checkout page where you pay with Paystack by card or bank transfer."],
+            ["What happens after I pay?", "Once Paystack confirms your payment, we email you a payment confirmation together with your learning resources."],
             ["Can I register for the other skills?", "Not yet. They show Coming soon and will open for registration when they are ready."],
-            ["I did not get my email. What now?", `Check your spam folder first. If it is not there, email ${CFG.email} with your payment reference.`]].map(([qq, a]) => (
+            ["I did not get my email. What now?", "Check your spam folder first. If it is not there, contact us with your payment reference."]].map(([qq, a]) => (
             <details key={qq} className="group rounded-2xl bg-paper px-5 py-4 open:shadow-md">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display font-semibold">{qq}<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
               <p className="mt-3 text-ink/70">{a}</p>
@@ -307,43 +304,32 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer id="contact" className="bg-ink text-white">
-        <div className="mx-auto max-w-6xl px-5 pt-14">
-          <div className="grid gap-10 md:grid-cols-2">
+      <footer id="contact" className="bg-black text-white/75">
+        <div className="mx-auto max-w-6xl px-5">
+          <div className="grid gap-10 border-t border-white/10 py-12 md:grid-cols-2">
             <div>
-              <h2 className="font-display text-3xl font-extrabold">Join our community</h2>
-              <p className="mt-2 text-white/70">Get news on new programmes and when the other skills open.</p>
-              {joined ? <p className="mt-5 font-display font-semibold text-brand-orange">Thank you. You&apos;re on the list.</p> : (
-                <form onSubmit={join} className="mt-5 flex max-w-md overflow-hidden rounded-2xl bg-white text-ink">
-                  <input name="email" type="email" required placeholder="Enter your email" aria-label="Email" className="min-w-0 flex-1 bg-transparent px-5 py-4 outline-none" />
-                  <button className="brand-bg px-7 font-display font-semibold text-white">Go</button>
-                </form>
-              )}
+              <Image src={logoWhite} alt="Skill Mountain Academy" unoptimized className="h-14 w-auto" />
+              <p className="mt-6 max-w-md text-lg">Skill Mountain Academy is a personalized skill university. We have trained over 300 people across Nigeria through one-on-one mentorship.</p>
+              <div className="mt-6 flex items-center gap-5">
+                {SOCIAL.map((s) => (
+                  <a key={s.name} href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`Skill Mountain Academy on ${s.name}`} className="text-white/70 transition hover:text-brand-orange"><SocialIcon name={s.name} /></a>
+                ))}
+                <a href={`mailto:${CFG.emailReal}`} aria-label="Email Skill Mountain Academy" className="text-white/70 transition hover:text-brand-orange"><SocialIcon name="Email" /></a>
+              </div>
             </div>
-            <div className="md:text-right">
-              <p className="font-display italic text-white/70">Learn deeply. Grow confidently. Graduate prepared.</p>
-              <p className="mt-3 text-white/70">WhatsApp / call: <a href={`https://wa.me/${CFG.whatsapp}`} className="font-semibold text-brand-orange hover:underline">{CFG.phone}</a></p>
-              <p className="text-white/70">Email: <a href={`mailto:${CFG.email}`} className="font-semibold text-brand-orange hover:underline">{CFG.email}</a></p>
+            <div className="flex flex-col gap-8 md:items-end md:text-right">
+              <p className="italic text-white/60">Learn deeply. Grow confidently. Graduate prepared.</p>
+              <div className="space-y-1">
+                <p>Contact us: <a href={`tel:${CFG.phone.replace(/\s/g, "")}`} className="font-semibold text-white hover:text-brand-orange">{CFG.phone}</a></p>
+                <p>Email: <a href={`mailto:${CFG.emailReal}`} className="font-semibold text-white hover:text-brand-orange">{CFG.emailShown}</a></p>
+                <p className="pt-3 text-sm text-white/60">© Skill Mountain Academy 2021–{new Date().getFullYear()}</p>
+              </div>
             </div>
-          </div>
-          <div className="mt-10 border-t border-white/15 py-8">
-            <Image src={logoWhite} alt="Skill Mountain Academy" unoptimized className="h-auto w-44" />
-            <p className="mt-4 max-w-xl text-white/70">Skill Mountain Academy is a personalized skill university. We recognise mastery, not shortcuts.</p>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              {SOCIALS.map((s) => (
-                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label}
-                  className="grid h-11 w-11 place-items-center rounded-full border border-white/25 font-display text-sm font-bold transition hover:border-brand-orange hover:text-brand-orange">{s.short}</a>
-              ))}
-              <a href={`mailto:${CFG.email}`} aria-label="Email" className="grid h-11 w-11 place-items-center rounded-full border border-white/25 transition hover:border-brand-orange hover:text-brand-orange">✉</a>
-              <span className="text-white/60">@{CFG.handle}</span>
-            </div>
-            <p className="mt-6 text-sm text-white/50">© {new Date().getFullYear()} Skill Mountain Academy. Abuja, Nigeria.</p>
           </div>
         </div>
       </footer>
 
-      <a href={`https://wa.me/${CFG.whatsapp}`} aria-label="Chat with us on WhatsApp"
-        className="fixed bottom-4 right-4 z-30 rounded-full bg-[#25d366] px-4 py-2.5 font-display text-sm font-semibold text-ink shadow-xl transition hover:scale-105">Chat</a>
+      <a href={`https://wa.me/${CFG.whatsapp}`} aria-label="Chat with us on WhatsApp" className="fixed bottom-4 right-4 z-30 rounded-full bg-[#25d366] px-4 py-2.5 font-display text-sm font-semibold text-ink shadow-xl transition hover:scale-105">Chat</a>
     </main>
   );
 }

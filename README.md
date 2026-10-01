@@ -1,21 +1,33 @@
 # Skill Mountain Academy (SMA) site
 
-Personalized skill university, one-on-one training. Next.js 16 + Tailwind 4 on GitHub Pages. Registrations, payment checks and confirmation emails run on Google (Forms, Sheets, Apps Script). No other server.
+Next.js 16 + Tailwind 4 on GitHub Pages. Registrations go to a Google Form, payment is taken with Paystack, and a Google script confirms the payment and emails the learner.
 
 ## Upload to GitHub
-Upload everything in this folder EXCEPT the `.github` folder (GitHub's web upload skips dot-folders; yours already exists in the repo). Commit. The site rebuilds itself.
+Unzip, then drag everything EXCEPT the `.github` folder into the repo (GitHub's upload page cannot take dot-folders; your existing `.github/workflows/deploy.yml` stays). Commit, then watch the Actions tab.
+Settings > Pages > Source must be **GitHub Actions**.
+Repo secrets (Settings > Secrets and variables > Actions): `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` (pk_...) and `NEXT_PUBLIC_SHEET_URL` (from step 3 below).
 
-## One-time Google setup
-Follow the steps at the top of `docs/google-sheet-script.gs`. Summary:
-1. New Google Sheet (use skillmountainacademy@gmail.com) > Extensions > Apps Script > paste the file.
-2. Script Properties: `PAYSTACK_SECRET` = your Paystack secret key.
-3. Put your real learning links in `RESOURCES`.
-4. Run `createRegistrationForm()`, copy the printed `FORM` block into `lib/config.ts`.
-5. Run `setup()`. Deploy as a web app. Put its URL in the GitHub secret `NEXT_PUBLIC_SHEET_URL`.
-GitHub secrets needed: `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` (pk_...) and `NEXT_PUBLIC_SHEET_URL`.
+## 1. Google Form (registrations)
+1. Create a Google Form with 5 short-answer questions, titled exactly: **Full name, Email, Phone, Programme, Reference**.
+2. Responses tab > Link to Sheets (creates the response sheet).
+3. Get the form address: Send > link icon. It looks like `https://docs.google.com/forms/d/e/XXXX/viewform`. Change `viewform` to `formResponse`.
+4. Get each question's id: three-dot menu > Get pre-filled link. Type any text in each question, click Get link, paste it somewhere. It contains `entry.123456=...` for each question.
+5. Open `lib/config.ts` on GitHub and fill in `GFORM`:
+   `url` = the formResponse address, and `entries` = the five entry.… ids (name, email, phone, programme, reference).
 
-## Flow
-Programme card > checkout page > details saved to the Google Form/Sheet as a new row > Paystack (card or transfer) > the script confirms the payment with Paystack > row becomes PAID > payment confirmation email with resources is sent to the buyer (copy to the academy inbox).
+## 2. Paystack
+Put your PUBLIC key in the GitHub secret above. Your SECRET key goes only in step 3 (never in GitHub).
 
-## Edit content (lib/config.ts)
-Programmes, prices (`fee` = what they pay, `was` = crossed-out price), learning lists, contact, social handles, real testimonials (section appears when you add some). Keep fees in step with `docs/google-sheet-script.gs`.
+## 3. Payment check + confirmation email (Google Apps Script)
+Follow the steps at the top of `docs/google-sheet-script.gs` inside the response Sheet. Use the skillmountainacademy@gmail.com account so emails come from SMA. Put real resource links in `RESOURCES`.
+Flow: learner submits the form > pays on the checkout page > the script confirms the payment with Paystack > row becomes PAID > the confirmation email and resources are sent straight away (a 5-minute timer also catches bank transfers that confirm later).
+
+## Edit content
+- Programmes, prices, "was" (crossed-out) prices, curriculum: `lib/config.ts`. Prices are enforced in `docs/google-sheet-script.gs` too, so change both.
+- Learner reviews: add real social posts to `TESTIMONIALS` in `lib/config.ts`.
+- Social links (footer icons only): `SOCIAL` in `lib/config.ts`.
+- Email shown: admission@skillmountainacademy.com opens an email to the Gmail until the domain is bought. Change `emailShown` and `emailReal` in `lib/config.ts` then.
+- Logos: `assets/` and favicon `app/icon.png`, used exactly as supplied.
+
+## Local development
+Copy `.env.example` to `.env.local`, then `npm install && npm run dev`.

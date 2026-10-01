@@ -1,24 +1,34 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CFG, FORM, type Programme } from "@/lib/config";
+import type { StaticImageData } from "next/image";
+import { CFG, GFORM, type Programme } from "@/lib/config";
+import pGraphics from "@/assets/photos/photo-graphics.webp";
+import pDevops from "@/assets/photos/photo-devops.webp";
+import pCloud from "@/assets/photos/photo-cloud.webp";
+import pMarketing from "@/assets/photos/photo-marketing.webp";
+import pIelts from "@/assets/photos/photo-ielts.webp";
+import pUiux from "@/assets/photos/photo-uiux.webp";
+import pWeb from "@/assets/photos/photo-web.webp";
+import pCert from "@/assets/photos/photo-certificate.webp";
+
+export const PHOTO: Record<string, StaticImageData> = {
+  graphics: pGraphics, devops: pDevops, cloud: pCloud, marketing: pMarketing, ielts: pIelts, uiux: pUiux, web: pWeb, cert: pCert,
+};
 
 export const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
-export const pctOff = (p: Programme) => (p.was && p.fee && p.was > p.fee ? Math.round((1 - p.fee / p.was) * 100) : 0);
 
-// Sends data to the Apps Script web app (payment check, community signups). We cannot read the reply, and do not need to.
+// Sends data to the Google Apps Script (payment check). no-cors: we cannot read the reply, and do not need to.
 export function postSheet(data: object) {
   if (!CFG.sheetUrl) return Promise.resolve();
   return fetch(CFG.sheetUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(data) }).catch(() => {});
 }
 
-// Submits a registration to the Google Form (its responses land in your Google Sheet).
-export function postForm(d: { name: string; email: string; phone: string; programme: string; amount: number; reference: string }) {
-  if (!FORM.action) return Promise.resolve();
+// Submits the registration to the Google Form (it lands in the form's response sheet).
+export function postForm(d: { name: string; email: string; phone: string; programme: string; reference: string }) {
+  if (!GFORM.url) return Promise.resolve();
   const body = new URLSearchParams();
-  const e = FORM.entries;
-  body.set(e.name, d.name); body.set(e.email, d.email); body.set(e.phone, d.phone);
-  body.set(e.programme, d.programme); body.set(e.amount, String(d.amount)); body.set(e.reference, d.reference);
-  return fetch(FORM.action, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }).catch(() => {});
+  (Object.keys(GFORM.entries) as (keyof typeof GFORM.entries)[]).forEach((k) => { if (GFORM.entries[k]) body.append(GFORM.entries[k], d[k]); });
+  return fetch(GFORM.url, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }).catch(() => {});
 }
 
 export function Chevrons({ className = "" }: { className?: string }) {
@@ -29,19 +39,7 @@ export function Chevrons({ className = "" }: { className?: string }) {
   );
 }
 
-// Slashed price: old price crossed out, new price, and the saving
-export function Price({ p, big = false }: { p: Programme; big?: boolean }) {
-  const off = pctOff(p);
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <span className={`font-display font-extrabold ${big ? "text-4xl" : "text-2xl"}`}>{naira(p.fee!)}</span>
-      {off > 0 && <s className="text-ink/50 decoration-brand-red decoration-2">{naira(p.was!)}</s>}
-      {off > 0 && <span className="rounded-full bg-brand-red px-2.5 py-0.5 text-xs font-bold text-white">Save {off}%</span>}
-    </div>
-  );
-}
-
-// Fade-up on scroll, like the Skillex sections
+// Fade-up on scroll
 export function Reveal({ children, className = "", delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -54,10 +52,9 @@ export function Reveal({ children, className = "", delay = 0 }: { children: Reac
   return <div ref={ref} className={`reveal ${className}`} style={{ transitionDelay: `${delay}ms` }}>{children}</div>;
 }
 
-// Number that counts up when it scrolls into view
 export function CountUp({ to, suffix = "" }: { to: number; suffix?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
   const [n, setN] = useState(0);
+  const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -65,13 +62,24 @@ export function CountUp({ to, suffix = "" }: { to: number; suffix?: string }) {
       if (!e.isIntersecting) return;
       io.disconnect();
       const t0 = performance.now();
-      const tick = (t: number) => { const k = Math.min(1, (t - t0) / 1200); setN(Math.round(to * (1 - Math.pow(1 - k, 3)))); if (k < 1) requestAnimationFrame(tick); };
+      const tick = (t: number) => { const k = Math.min(1, (t - t0) / 1000); setN(Math.round(to * k)); if (k < 1) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
-    }, { threshold: 0.4 });
+    });
     io.observe(el);
     return () => io.disconnect();
   }, [to]);
   return <span ref={ref}>{n}{suffix}</span>;
+}
+
+export function Price({ p, size = "md" }: { p: Programme; size?: "md" | "lg" }) {
+  const save = p.was ? p.was - p.fee! : 0;
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      {p.was && <s className="text-ink/45 decoration-brand-red decoration-2">{naira(p.was)}</s>}
+      <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}>{naira(p.fee!)}</span>
+      {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save {naira(save)}</span>}
+    </div>
+  );
 }
 
 // SMA logo animation on the cream background. Plays once per visit.
@@ -94,4 +102,15 @@ export function Intro() {
       <button onClick={skip} className="absolute bottom-8 right-6 rounded-full bg-paper px-5 py-2 text-sm font-medium shadow">Skip</button>
     </div>
   );
+}
+
+export function SocialIcon({ name }: { name: string }) {
+  const c = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+  switch (name) {
+    case "Facebook": return <svg {...c}><path d="M14 8h3V4h-3a4 4 0 0 0-4 4v2H7v4h3v7h4v-7h3l1-4h-4V8.5c0-.3.2-.5.5-.5z" /></svg>;
+    case "LinkedIn": return <svg {...c}><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7" /></svg>;
+    case "Instagram": return <svg {...c}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><path d="M17.5 6.5v.01" /></svg>;
+    case "TikTok": return <svg {...c}><path d="M15 3c.3 2.4 1.8 3.9 4 4v3.2c-1.5 0-2.8-.5-4-1.3v6.1a5.5 5.5 0 1 1-5.5-5.5c.3 0 .7 0 1 .1v3.3a2.3 2.3 0 1 0 1.5 2.1V3z" /></svg>;
+    default: return <svg {...c}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>;
+  }
 }
