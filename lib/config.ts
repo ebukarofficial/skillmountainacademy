@@ -22,7 +22,7 @@ export const SOCIAL = [
 // Google Form that receives every registration. See README "Google Form" steps.
 // url = the form address with /viewform changed to /formResponse. entries = the entry.XXXX ids of each question.
 export const GFORM = {
-   url: "https://docs.google.com/forms/d/e/1FAIpQLSezGUioInLaOeKbwcvYzP3_kLAT4Yb-sa1PZyVBEwcnZHQjNg/formResponse",
+  url: "https://docs.google.com/forms/d/e/1FAIpQLSezGUioInLaOeKbwcvYzP3_kLAT4Yb-sa1PZyVBEwcnZHQjNg/formResponse",
   entries: {
     name: "entry.1113918736",
     email: "entry.1715586709",
@@ -92,3 +92,4 @@ export type Testimonial = { name: string; handle: string; platform: string; date
 // Real learner posts that mention SMA. Paste each one here (with the learner's permission) and it appears on the site.
 // Example: { name: "Jane D.", handle: "@jane", platform: "Instagram", date: "12 Aug 2026", quote: "Their words", url: "https://link-to-the-post" }
 export const TESTIMONIALS: Testimonial[] = [];
+

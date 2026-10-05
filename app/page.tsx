@@ -28,6 +28,23 @@ const STATS: { to?: number; suffix?: string; text?: string; label: string }[] = 
   { to: SOON, label: "More skills coming soon" },
 ];
 
+const USPS = [
+  ["1-on-1 Personalized Training & Mentorship", "Individual attention tailored to each learner's goals, pace and learning style."],
+  ["Flexible Scheduling", "Choose training times that fit around your school, work or personal commitments."],
+  ["Beginner to Advanced Training", "Structured learning paths for complete beginners right through to advanced learners."],
+  ["Inclusive & Specialized Learning", "Customized curricula for children, including learners who need additional support, and for adults with little or no prior IT experience."],
+  ["Practical, Career-Focused Learning", "Learn by doing with hands-on projects, real-world scenarios, industry tools, portfolio development and career guidance, so you build skills you can actually use."],
+];
+
+function UspIcon({ i }: { i: number }) {
+  const c = { width: 26, height: 26, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+  if (i === 0) return <svg {...c}><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-4 3-6 7-6s7 2 7 6" /></svg>;
+  if (i === 1) return <svg {...c}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
+  if (i === 2) return <svg {...c}><path d="M3 20h5v-5h5v-5h5V5h3" /></svg>;
+  if (i === 3) return <svg {...c}><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M3 19c0-3.5 2.7-5 6-5s6 1.5 6 5M15 14c3 0 6 1 6 4.5" /></svg>;
+  return <svg {...c}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" /></svg>;
+}
+
 const regHref = (p: Programme) => `/checkout/?p=${p.id}`;
 
 export default function Home() {
@@ -175,6 +192,7 @@ export default function Home() {
                   <p className="mt-2 flex-1 text-ink/75">{p.blurb}</p>
                   {p.live ? (
                     <>
+                      <p className="mt-2 text-xs font-semibold text-brand-red">Flexible schedule · Beginner to advanced</p>
                       <details className="group mt-3 rounded-2xl bg-cream px-4 py-3">
                         <summary className="flex cursor-pointer list-none items-center justify-between font-display text-sm font-semibold">What you&apos;ll learn<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
                         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink/75">{p.learn.map((l) => <li key={l}>{l}</li>)}</ul>
@@ -190,6 +208,23 @@ export default function Home() {
             </Reveal>
           ))}
         </div>
+
+        {/* What every programme comes with */}
+        <Reveal className="mt-20 text-center">
+          <h3 className="font-display text-3xl font-extrabold sm:text-4xl"><span className="brand-text">The right place. The right way.</span></h3>
+          <p className="mx-auto mt-3 max-w-xl text-ink/70">Every SMA programme comes with:</p>
+        </Reveal>
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-6">
+          {USPS.map(([t, d], i) => (
+            <Reveal key={t} delay={(i % 3) * 90} className={`h-full ${i < 3 ? "lg:col-span-2" : "lg:col-span-3"} ${i === 4 ? "sm:col-span-2" : ""}`}>
+              <div className={`h-full rounded-[1.75rem] p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo/10 ${["bg-paper", "bg-brand-orange/25", "bg-indigo text-white", "bg-brand-red/15", "bg-paper"][i]}`}>
+                <span className={`grid h-12 w-12 place-items-center rounded-full ${i === 2 ? "bg-white/15 text-white" : "brand-bg text-white"}`}><UspIcon i={i} /></span>
+                <h4 className="mt-5 font-display text-xl font-bold">{t}</h4>
+                <p className={`mt-2 ${i === 2 ? "text-white/75" : "text-ink/75"}`}>{d}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
       </section>
 
       {/* Why SMA */}
@@ -197,16 +232,6 @@ export default function Home() {
         <Reveal>
           <h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Get the skills you need to climb higher.</span></h2>
           <p className="mt-4 max-w-md text-ink/70">Skill Mountain Academy is for people who are made for more. One-on-one training means your mentor&apos;s full attention is on you.</p>
-          <ul className="mt-8 space-y-6">
-            {[["One mentor, just for you", "Ask anything and get direct answers from the person teaching you."],
-              ["Your pace", "Lessons move as fast as you do, so nothing is skipped and nothing drags."],
-              ["Learn by doing", "You practise on real projects, not only slides and videos."]].map(([t, d], i) => (
-              <li key={t} className="flex gap-4">
-                <span className="brand-bg grid h-10 w-10 shrink-0 place-items-center rounded-full font-display font-bold text-white">{i + 1}</span>
-                <div><p className="font-display font-bold">{t}</p><p className="text-ink/70">{d}</p></div>
-              </li>
-            ))}
-          </ul>
         </Reveal>
         <Reveal delay={150} className="relative">
           <div className="overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo/20"><Image src={banner} alt="Students outside the Skill Mountain Academy sign" className="h-auto w-full" /></div>
