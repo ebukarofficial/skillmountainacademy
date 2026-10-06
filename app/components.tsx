@@ -8,11 +8,12 @@ import pCloud from "@/assets/photos/photo-cloud.webp";
 import pMarketing from "@/assets/photos/photo-marketing.webp";
 import pIelts from "@/assets/photos/photo-ielts.webp";
 import pUiux from "@/assets/photos/photo-uiux.webp";
+import pCyber from "@/assets/photos/photo-cyber.webp";
 import pWeb from "@/assets/photos/photo-web.webp";
 import pCert from "@/assets/photos/photo-certificate.webp";
 
 export const PHOTO: Record<string, StaticImageData> = {
-  graphics: pGraphics, devops: pDevops, cloud: pCloud, marketing: pMarketing, ielts: pIelts, uiux: pUiux, web: pWeb, cert: pCert,
+  graphics: pGraphics, devops: pDevops, cloud: pCloud, cyber: pCyber, marketing: pMarketing, ielts: pIelts, uiux: pUiux, web: pWeb, data: pCert,
 };
 
 export const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
@@ -24,10 +25,10 @@ export function postSheet(data: object) {
 }
 
 // Submits the registration to the Google Form (it lands in the form's response sheet).
-export function postForm(d: { name: string; email: string; phone: string; programme: string; reference: string }) {
+export function postForm(d: { name: string; email: string; phone: string; programme: string; reference: string; terms?: string }) {
   if (!GFORM.url) return Promise.resolve();
   const body = new URLSearchParams();
-  (Object.keys(GFORM.entries) as (keyof typeof GFORM.entries)[]).forEach((k) => { if (GFORM.entries[k]) body.append(GFORM.entries[k], d[k]); });
+  (Object.keys(GFORM.entries) as (keyof typeof GFORM.entries)[]).forEach((k) => { if (GFORM.entries[k]) body.append(GFORM.entries[k], d[k] ?? ""); });
   return fetch(GFORM.url, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body }).catch(() => {});
 }
 
@@ -71,13 +72,33 @@ export function CountUp({ to, suffix = "" }: { to: number; suffix?: string }) {
   return <span ref={ref}>{n}{suffix}</span>;
 }
 
+let ratePromise: Promise<number> | null = null;
+function fetchRate(): Promise<number> {
+  if (!ratePromise) {
+    ratePromise = fetch("https://open.er-api.com/v6/latest/USD").then((r) => r.json())
+      .then((j) => (j?.rates?.NGN > 500 ? (j.rates.NGN as number) : CFG.usdRate)).catch(() => CFG.usdRate);
+  }
+  return ratePromise;
+}
+// Naira per US dollar: the live rate when it loads, otherwise the fallback in lib/config.ts
+export function useRate() {
+  const [r, setR] = useState(CFG.usdRate);
+  useEffect(() => { let on = true; fetchRate().then((x) => { if (on) setR(x); }); return () => { on = false; }; }, []);
+  return r;
+}
+export const usd = (naira: number, rate: number) => "US$" + Math.round(naira / rate).toLocaleString("en-US");
+
 export function Price({ p, size = "md" }: { p: Programme; size?: "md" | "lg" }) {
+  const rate = useRate();
   const save = p.was ? p.was - p.fee! : 0;
   return (
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      {p.was && <s className="text-ink/45 decoration-brand-red decoration-2">{naira(p.was)}</s>}
-      <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}>{naira(p.fee!)}</span>
-      {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save {naira(save)}</span>}
+    <div>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        {p.was && <s className="text-ink/45 decoration-brand-red decoration-2">{naira(p.was)}</s>}
+        <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}>{naira(p.fee!)}</span>
+        {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save {naira(save)}</span>}
+      </div>
+      <p className="mt-0.5 text-sm text-ink/60">≈ {usd(p.fee!, rate)}{p.was ? <span className="text-ink/40"> (was {usd(p.was, rate)})</span> : null}</p>
     </div>
   );
 }
@@ -109,6 +130,7 @@ export function SocialIcon({ name }: { name: string }) {
   switch (name) {
     case "Facebook": return <svg {...c}><path d="M14 8h3V4h-3a4 4 0 0 0-4 4v2H7v4h3v7h4v-7h3l1-4h-4V8.5c0-.3.2-.5.5-.5z" /></svg>;
     case "LinkedIn": return <svg {...c}><rect x="3" y="3" width="18" height="18" rx="3" /><path d="M8 10v7M8 7v.01M12 17v-4a2 2 0 0 1 4 0v4M12 10v7" /></svg>;
+    case "X": return <svg {...c}><path d="M4 4h4l12 16h-4zM19.5 4 13 11M4.5 20 11 13" /></svg>;
     case "Instagram": return <svg {...c}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><path d="M17.5 6.5v.01" /></svg>;
     case "TikTok": return <svg {...c}><path d="M15 3c.3 2.4 1.8 3.9 4 4v3.2c-1.5 0-2.8-.5-4-1.3v6.1a5.5 5.5 0 1 1-5.5-5.5c.3 0 .7 0 1 .1v3.3a2.3 2.3 0 1 0 1.5 2.1V3z" /></svg>;
     default: return <svg {...c}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg>;

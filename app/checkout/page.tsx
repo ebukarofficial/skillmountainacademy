@@ -6,7 +6,8 @@ import Script from "next/script";
 import { useSearchParams } from "next/navigation";
 import logo from "@/assets/sma-logo.png";
 import { CFG, GFORM, PROGRAMMES, type Programme } from "@/lib/config";
-import { PHOTO, naira, postForm, postSheet } from "../components";
+import { TERMS_VERSION } from "@/lib/terms";
+import { PHOTO, naira, postForm, postSheet, useRate, usd } from "../components";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global { interface Window { PaystackPop: any } }
@@ -19,16 +20,19 @@ function Checkout() {
   const [busy, setBusy] = useState(false);
   const [paid, setPaid] = useState<{ ref: string; email: string } | null>(null);
   const [err, setErr] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const rate = useRate();
 
   async function pay(e: FormEvent<HTMLFormElement>, prog: Programme) {
     e.preventDefault();
     setErr("");
+    if (!agreed) return setErr("Please read and accept the Terms and Conditions to continue.");
     if (!window.PaystackPop || !CFG.paystackKey) return setErr("Payment is not ready yet. Refresh the page and try again.");
     const f = new FormData(e.currentTarget);
     const d = { name: String(f.get("name")).trim(), email: String(f.get("email")).trim(), phone: String(f.get("phone")).trim() };
     const reference = newRef();
     setBusy(true);
-    await postForm({ ...d, programme: prog.name, reference }); // registration goes to the Google Form
+    await postForm({ ...d, programme: prog.name, reference, terms: `Accepted v${TERMS_VERSION} on ${new Date().toISOString()}` }); // registration goes to the Google Form
     window.PaystackPop.setup({
       key: CFG.paystackKey, email: d.email, amount: prog.fee! * 100, currency: "NGN", ref: reference,
       channels: ["card", "bank_transfer"],
@@ -77,11 +81,16 @@ function Checkout() {
         <label className="block font-medium">Full name<input name="name" required autoComplete="name" className={field} /></label>
         <label className="block font-medium">Email<input name="email" type="email" required autoComplete="email" className={field} /></label>
         <label className="block font-medium">Phone or WhatsApp<input name="phone" type="tel" required autoComplete="tel" className={field} /></label>
+        <label className="flex items-start gap-3 rounded-2xl bg-cream px-4 py-3 text-sm">
+          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#c8233a]" />
+          <span>I have read and understood the <Link href="/terms/" target="_blank" className="font-semibold text-brand-red underline">Terms and Conditions</Link> and I agree to them before I register and pay.</span>
+        </label>
         {!GFORM.url && <p className="rounded-xl bg-brand-orange/20 px-4 py-2 text-sm">Setup note: the Google Form is not connected yet, so registrations will not be saved.</p>}
         {err && <p role="alert" className="font-medium text-brand-red">{err}</p>}
-        <button disabled={busy} className="brand-bg w-full rounded-full py-4 font-display font-semibold text-white disabled:opacity-60">
+        <button disabled={busy || !agreed} className="brand-bg w-full rounded-full py-4 font-display font-semibold text-white disabled:opacity-60">
           {busy ? "Opening payment…" : `Pay ${naira(p.fee!)} with Paystack`}
         </button>
+        {!agreed && <p className="text-center text-sm text-ink/60">Tick the box above to enable payment.</p>}
         <p className="text-center text-sm text-ink/60">Pay by card or bank transfer. Your payment is handled by Paystack.</p>
       </form>
 
@@ -100,6 +109,8 @@ function Checkout() {
           {p.was && <div className="flex justify-between text-white/70"><span>Original price</span><s>{naira(p.was)}</s></div>}
           {p.was && <div className="flex justify-between text-brand-orange"><span>You save</span><span>{naira(p.was - p.fee!)}</span></div>}
           <div className="flex items-end justify-between pt-2"><span className="text-white/80">Total</span><span className="font-display text-3xl font-extrabold">{naira(p.fee!)}</span></div>
+          <p className="text-right text-sm text-white/70">≈ {usd(p.fee!, rate)} · discounted price for you</p>
+          <p className="text-right text-xs text-white/50">Dollar amount is approximate. You pay in naira (₦).</p>
         </div>
         <ul className="mt-6 space-y-2 text-sm text-white/75">
           <li>✓ Pay by card or bank transfer</li>

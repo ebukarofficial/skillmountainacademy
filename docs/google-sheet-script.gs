@@ -23,6 +23,7 @@ var FEES = {
   "Graphics Design": 350000,
   "DevOps Engineering": 450000,
   "Cloud Engineering": 450000,
+  "Cybersecurity": 650000,
   "Digital Marketing": 300000,
   "IELTS Training": 200000
 };
@@ -32,6 +33,7 @@ var RESOURCES = {
   "Graphics Design": [["Welcome guide", "https://example.com/graphics-guide"]],
   "DevOps Engineering": [["Welcome guide", "https://example.com/devops-guide"]],
   "Cloud Engineering": [["Welcome guide", "https://example.com/cloud-guide"]],
+  "Cybersecurity": [["Welcome guide", "https://example.com/cybersecurity-guide"]],
   "Digital Marketing": [["Welcome guide", "https://example.com/marketing-guide"]],
   "IELTS Training": [["Welcome guide", "https://example.com/ielts-guide"]]
 };
@@ -53,10 +55,20 @@ function doPost(e) {
   try {
     var d = JSON.parse(e.postData.contents);
     if (d.action === "verify") { verify_(d.reference); }
+    else if (d.action === "subscribe" && d.email) { subscribe_(d.email); }
     else if (d.event === "charge.success" && d.data) { verify_(d.data.reference); } // optional Paystack webhook
   } catch (err) { console.error(err); }
   finally { lock.releaseLock(); }
   return ContentService.createTextOutput("ok");
+}
+
+// Mailing list sign-ups from the website footer. Saved on a "Mailing list" tab in this same spreadsheet.
+function subscribe_(email) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName("Mailing list") || ss.insertSheet("Mailing list");
+  if (s.getLastRow() === 0) s.appendRow(["Date", "Email"]);
+  var existing = s.getRange(2, 2, Math.max(1, s.getLastRow() - 1), 1).getValues().map(function (r) { return String(r[0]).toLowerCase(); });
+  if (existing.indexOf(String(email).trim().toLowerCase()) === -1) s.appendRow([new Date(), String(email).trim()]);
 }
 
 // Confirms the payment with Paystack, marks the row PAID, and emails the learner once.
