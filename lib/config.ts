@@ -1,4 +1,4 @@
-export const SITE_URL = "https://ebukarofficial.github.io/skillmountainacademy";
+   export const SITE_URL = "https://skillmountainacademy.com";
 
 export const CFG = {
   paystackKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
