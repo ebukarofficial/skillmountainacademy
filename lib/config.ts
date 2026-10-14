@@ -1,12 +1,28 @@
-   export const SITE_URL = "https://skillmountainacademy.com";
+export const SITE_URL = "https://skillmountainacademy.com";
 
 export const CFG = {
   paystackKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
   sheetUrl: process.env.NEXT_PUBLIC_SHEET_URL ?? "", // Google Apps Script web app (payment check, emails, mailing list)
   base: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
   whatsapp: process.env.NEXT_PUBLIC_WHATSAPP || "2347061000472", // used only for the Chat button and Partner button
+  calendlyConsult: "", // paste your Calendly link for FREE CONSULTATION calls here, e.g. https://calendly.com/yourname/consultation
   usdRate: 1400, // naira per US dollar. Used only if the live rate cannot be loaded.
 };
+
+// Bank transfer details shown on the checkout page.
+export const BANK = { name: "Skill Mountain Academy Limited", number: "1025440484", bank: "UBA" };
+
+// Public Google Drive links to each programme's curriculum (share as "Anyone with the link can view").
+// They power the Download curriculum button. The same links go in the welcome email (see docs/google-sheet-script.gs).
+export const CURRICULUM_LINKS: Record<string, string> = {
+  graphics: "", devops: "", cloud: "", cyber: "", marketing: "", ielts: "",
+};
+
+// Options used by the application form.
+export const DURATIONS = ["3 months", "6 months", "1 year"];
+export const EDUCATION = ["Primary", "Secondary", "Tertiary"];
+export const MARITAL = ["Single", "Married", "Other"];
+export const ENGLISH = ["Basic", "Good", "Very good", "Excellent"];
 
 // Social pages. These appear ONLY as icons in the footer.
 export const SOCIAL = [
@@ -106,13 +122,14 @@ export const GOALS: { goal: string; id: string; why: string }[] = [
 
 // "Your path" step-by-step guide.
 export const STEPS: { title: string; text: string; cta?: [string, string] }[] = [
-  { title: "Explore at your own pace", text: "Use the search box at the top of the page, or the category tabs in the Programmes section. Open What you'll learn on any card to see exactly what you will cover.", cta: ["Browse programmes", "#programmes"] },
-  { title: "Choose the programme that fits your goal", text: "Not sure where to start? Pick your goal in the box above and we will point you to the best match. You can change your mind before you pay.", cta: ["Pick my goal", "#goal"] },
-  { title: "Check your price and your discount", text: "The price on each card is the discounted price you pay. Where you see a crossed-out figure, that is the usual price. Prices show in naira with an approximate US dollar amount for learners outside Nigeria." },
-  { title: "Read and accept the terms", text: "On the checkout page you will read our Terms and Conditions and tick the box to confirm you have read and understood them. You cannot pay until you do." },
-  { title: "Register and pay securely", text: "Enter your name, email and phone or WhatsApp number, then click Pay. Paystack opens so you can pay by card or bank transfer. Learners abroad can pay with an international card." },
-  { title: "Get your confirmation", text: "Within minutes of your payment being confirmed, we email you a payment confirmation and your learning resources. Check your spam folder if you do not see it." },
-  { title: "Meet your mentor and begin", text: "Your mentor contacts you to learn your goals, agree your schedule and set up your first one-on-one session. From there, you learn at your pace." },
+  { title: "Explore and read the curriculum", text: "Use the search box or the category tabs in the Programmes section. On any programme, tap View curriculum to see exactly what you will learn, and download it before you decide.", cta: ["Browse programmes", "#programmes"] },
+  { title: "Choose the programme that fits your goal", text: "Not sure where to start? Pick your goal in the box above and we will point you to the best match. You can also book a free call with us first.", cta: ["Pick my goal", "#goal"] },
+  { title: "Check your price and your discount", text: "The price on each card is the discounted price you pay. Where you see a crossed-out figure, that is the usual price. Prices show in naira with an approximate US dollar amount." },
+  { title: "Fill in your application", text: "Click Register. A short application asks for your details, a few questions about your goals, and your parent, guardian or spouse details. Learners under 18 need a parent or guardian." },
+  { title: "Accept the terms and pay", text: "Read and accept the Terms and Conditions, then choose how to pay: Paystack (card or bank transfer) or a manual transfer to our UBA account. If you transfer manually, send us your teller so we can confirm it." },
+  { title: "Receive your welcome email", text: "As soon as your payment is confirmed, we email you a welcome message from Skill Mountain Academy with your curriculum link and a link to book your classes." },
+  { title: "Pick your class days and times", text: "Use the booking link to choose the days and time that suit you. For example, three days a week for 45 minutes at 9 am. You receive a link to your virtual class for each session." },
+  { title: "Start learning one-on-one", text: "Your mentor meets you online, at your pace, and guides you through projects until you are ready for the next step in your career." },
 ];
 
 export const FAQ: [string, string][] = [
@@ -124,7 +141,9 @@ export const FAQ: [string, string][] = [
   ["How can IELTS Training help my career?", "Many universities and employers abroad ask for an IELTS score. Our IELTS Training prepares you for the exam so you can apply for study and work opportunities with confidence."],
   ["Will I have something real to show employers or clients?", "Yes. You learn by doing, through hands-on projects, real-world scenarios and industry tools. You build a portfolio and get career guidance along the way."],
   ["I am outside Nigeria. Can I register?", "Yes. Prices show in US dollars as a guide. You pay through Paystack in naira, and your bank converts the amount at its own rate."],
-  ["How do I pay, and what happens next?", "Choose your programme, accept the terms, and pay by card or bank transfer. Once Paystack confirms your payment, we email you a payment confirmation and your learning resources, and your mentor gets in touch."],
+  ["How do I pay, and what happens next?", "Fill in the application, accept the terms and choose Paystack (card or bank transfer) or a manual transfer to our UBA account. When your payment is confirmed, we email you a welcome message with your curriculum link and a link to book your classes."],
+  ["I paid by bank transfer. What do I do now?", "Send us your teller (proof of payment) on WhatsApp or email, quoting your reference. We confirm it and then send your welcome email. Please send it on or before the scheduled date for your programme."],
+  ["How do I choose my class days and times?", "After payment, your welcome email has a booking link. Pick the days and time that suit you, for example three days a week for 45 minutes at 9 am. Each booking comes with a link to your virtual class."],
 ];
 
 // Screenshots of real posts about SMA. Upload each image to the public/reviews folder in GitHub,

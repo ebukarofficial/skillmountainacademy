@@ -31,3 +31,14 @@ Flow: learner submits the form > pays on the checkout page > the script confirms
 
 ## Local development
 Copy `.env.example` to `.env.local`, then `npm install && npm run dev`.
+
+
+## Application, curriculum, bank transfer and class booking (latest update)
+- **Application form:** Register opens a 3-step checkout (your details, a few questions, payment). Every answer is saved on an "Applications" tab in your Google Sheet. The 5 core fields also go to your Google Form.
+- **View curriculum:** each programme card and the checkout page have a View curriculum button. To add a download button, paste each public Google Drive link into `CURRICULUM_LINKS` in `lib/config.ts`.
+- **Free consultation (Calendly):** paste your consultation link into `calendlyConsult` in `lib/config.ts`. Until then the section shows a WhatsApp button.
+- **Payment options:** Paystack (card or transfer) and manual bank transfer (UBA account details with Copy buttons).
+- **Paystack payments:** confirmed automatically, then the welcome email is sent.
+- **Bank transfers:** the learner gets an "application received" email, then sends their teller. After you confirm the money in UBA, type PAID in the Status column on the "Form Responses 1" tab. The welcome email is sent automatically, once.
+- **Welcome email:** payment confirmation, curriculum link (Google Drive), a Calendly link to book class days and time, and a request for a passport photograph. Edit `CURRICULUM`, `CALENDLY_CLASSES` and `CLASS_LINK` at the top of `docs/google-sheet-script.gs`, then redeploy a New version.
+- **Calendly setup:** create a 45-minute event type for class sessions. Connect Google Meet or Zoom in Calendly so every booking gets its own class link.

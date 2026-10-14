@@ -7,7 +7,7 @@ import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
 import banner from "@/assets/photos/banner-students.webp";
 import { AUDIENCE, CFG, FAQ, GOALS, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, type Programme } from "@/lib/config";
-import { Chevrons, CountUp, Intro, PHOTO, Price, Reveal, SocialIcon, naira, postSheet, useRate, usd } from "./components";
+import { CalendlyEmbed, Chevrons, CountUp, CurriculumModal, Intro, PHOTO, Price, Reveal, SocialIcon, naira, postSheet, useRate, usd } from "./components";
 
 const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]];
 
@@ -49,6 +49,8 @@ const regHref = (p: Programme) => `/checkout/?p=${p.id}`;
 
 export default function Home() {
   const [menu, setMenu] = useState(false);
+  const [view, setView] = useState<Programme | null>(null);
+  const closeView = useCallback(() => setView(null), []);
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
@@ -229,6 +231,7 @@ export default function Home() {
                         <summary className="flex cursor-pointer list-none items-center justify-between font-display text-sm font-semibold">What you&apos;ll learn<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
                         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink/75">{p.learn.map((l) => <li key={l}>{l}</li>)}</ul>
                       </details>
+                      <button onClick={() => setView(p)} className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum</button>
                       <div className="mt-4"><Price p={p} /><p className="mt-1 text-xs font-semibold text-brand-red">Discounted for you</p></div>
                       <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register</Link>
                     </>
@@ -336,6 +339,15 @@ export default function Home() {
       </section>
 
       {/* Reviews */}
+      {/* Free consultation */}
+      <section id="book" className="mx-auto max-w-4xl scroll-mt-20 px-5 pb-16 text-center sm:pb-24">
+        <Reveal>
+          <h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Not sure yet? Talk to us first.</span></h2>
+          <p className="mx-auto mt-3 max-w-xl text-ink/70">Book a free call. We will listen to your goals and help you choose the right programme before you pay anything.</p>
+          <div className="mt-8"><CalendlyEmbed url={CFG.calendlyConsult} /></div>
+        </Reveal>
+      </section>
+
       <section id="reviews" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-16 sm:py-24">
         <Reveal className="text-center">
           <h2 className="font-display text-3xl font-extrabold sm:text-5xl">Real Learners. Real Transformation<span className="text-brand-orange">.</span></h2>
@@ -418,6 +430,7 @@ export default function Home() {
       </footer>
 
       <a href={`https://wa.me/${CFG.whatsapp}`} aria-label="Chat with us on WhatsApp" className="fixed bottom-4 right-4 z-30 rounded-full bg-[#25d366] px-4 py-2.5 font-display text-sm font-semibold text-ink shadow-xl transition hover:scale-105">Chat</a>
+      {view && <CurriculumModal p={view} onClose={closeView} action={<Link href={regHref(view)} className="brand-bg block rounded-full py-3.5 text-center font-display font-semibold text-white">Register for {view.name}</Link>} />}
     </main>
   );
 }
