@@ -72,19 +72,9 @@ export function CountUp({ to, suffix = "" }: { to: number; suffix?: string }) {
   return <span ref={ref}>{n}{suffix}</span>;
 }
 
-let ratePromise: Promise<number> | null = null;
-function fetchRate(): Promise<number> {
-  if (!ratePromise) {
-    ratePromise = fetch("https://open.er-api.com/v6/latest/USD").then((r) => r.json())
-      .then((j) => (j?.rates?.NGN > 500 ? (j.rates.NGN as number) : CFG.usdRate)).catch(() => CFG.usdRate);
-  }
-  return ratePromise;
-}
-// Naira per US dollar: the live rate when it loads, otherwise the fallback in lib/config.ts
+// Naira per US dollar. A fixed approximate rate set in lib/config.ts (no third-party request is made from visitors' browsers).
 export function useRate() {
-  const [r, setR] = useState(CFG.usdRate);
-  useEffect(() => { let on = true; fetchRate().then((x) => { if (on) setR(x); }); return () => { on = false; }; }, []);
-  return r;
+  return CFG.usdRate;
 }
 export const usd = (naira: number, rate: number) => "US$" + Math.round(naira / rate).toLocaleString("en-US");
 
@@ -94,11 +84,11 @@ export function Price({ p, size = "md" }: { p: Programme; size?: "md" | "lg" }) 
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        {p.was && <s className="text-ink/45 decoration-brand-red decoration-2">{naira(p.was)}</s>}
+        {p.was && <s className="text-ink/70 decoration-brand-red decoration-2">{naira(p.was)}</s>}
         <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}>{naira(p.fee!)}</span>
         {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save {naira(save)}</span>}
       </div>
-      <p className="mt-0.5 text-sm text-ink/60">≈ {usd(p.fee!, rate)}{p.was ? <span className="text-ink/40"> (was {usd(p.was, rate)})</span> : null}</p>
+      <p className="mt-0.5 text-sm text-ink/70">≈ {usd(p.fee!, rate)}{p.was ? <span className="text-ink/70"> (was {usd(p.was, rate)})</span> : null}</p>
     </div>
   );
 }
@@ -140,7 +130,9 @@ export function SocialIcon({ name }: { name: string }) {
 // Curriculum viewer: shows what a learner will cover, with a download link when a Google Drive link is set.
 export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose: () => void; action?: ReactNode }) {
   const link = CURRICULUM_LINKS[p.id];
+  const closeBtn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
+    closeBtn.current?.focus();
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", esc);
     document.body.style.overflow = "hidden";
@@ -154,9 +146,9 @@ export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose:
           <div>
             <p className="text-sm font-medium text-brand-red">Curriculum</p>
             <h2 className="font-display text-2xl font-extrabold">{p.name}</h2>
-            <p className="text-sm text-ink/60">{p.months ? `${p.months} months · ` : ""}one-on-one mentorship</p>
+            <p className="text-sm text-ink/70">{p.months ? `${p.months} months · ` : ""}one-on-one mentorship</p>
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} className="h-10 w-10 shrink-0 rounded-full bg-cream">✕</button>
+          <button ref={closeBtn} type="button" aria-label="Close" onClick={onClose} className="h-10 w-10 shrink-0 rounded-full bg-cream">✕</button>
         </div>
         <p className="mt-3 text-ink/75">{p.blurb}</p>
         <h3 className="mt-5 font-display font-bold">What you will cover</h3>
@@ -182,18 +174,27 @@ export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose:
   );
 }
 
-// Calendly booking widget. If no link is set yet, shows a WhatsApp button instead.
+// Calendly booking widget. It loads only after the visitor clicks (it is a third-party service). If no link is set, shows a WhatsApp button.
 export function CalendlyEmbed({ url }: { url: string }) {
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    if (!url || document.getElementById("calendly-js")) return;
+    if (!url || !loaded || document.getElementById("calendly-js")) return;
     const sc = document.createElement("script");
     sc.id = "calendly-js"; sc.src = "https://assets.calendly.com/assets/external/widget.js"; sc.async = true;
     document.body.appendChild(sc);
-  }, [url]);
+  }, [url, loaded]);
   if (!url) {
     return (
       <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent("Hello Skill Mountain Academy, I would like to book a free consultation call.")}`} target="_blank" rel="noopener noreferrer"
         className="brand-bg inline-block rounded-full px-8 py-4 font-display font-semibold text-white transition hover:brightness-110">Book a call on WhatsApp</a>
+    );
+  }
+  if (!loaded) {
+    return (
+      <div className="mx-auto max-w-xl rounded-3xl bg-paper p-6 text-center shadow-sm">
+        <p className="text-sm text-ink/70">Our booking calendar is provided by Calendly. Loading it shares some data with Calendly. See our <a href="/cookies/" className="font-semibold text-brand-red underline">Cookie Policy</a> and <a href="/privacy/" className="font-semibold text-brand-red underline">Privacy Policy</a>.</p>
+        <button type="button" onClick={() => setLoaded(true)} className="brand-bg mt-4 rounded-full px-8 py-3.5 font-display font-semibold text-white">Load booking calendar</button>
+      </div>
     );
   }
   return <div className="calendly-inline-widget overflow-hidden rounded-3xl bg-white" data-url={url} style={{ minWidth: "280px", height: "720px" }} />;
@@ -212,8 +213,8 @@ export function BankDetails() {
       <dl className="mt-3 space-y-2">
         {rows.map(([k, v]) => (
           <div key={k} className="flex items-center justify-between gap-3 rounded-xl bg-white px-4 py-3">
-            <div className="min-w-0"><dt className="text-xs text-ink/55">{k}</dt><dd className="truncate font-display font-bold">{v}</dd></div>
-            <button type="button" onClick={() => copy(k, v)} className="shrink-0 rounded-full bg-indigo px-3 py-1.5 text-xs font-semibold text-white">{copied === k ? "Copied" : "Copy"}</button>
+            <div className="min-w-0"><dt className="text-xs text-ink/70">{k}</dt><dd className="truncate font-display font-bold">{v}</dd></div>
+            <button type="button" aria-label={`Copy ${k.toLowerCase()}`} onClick={() => copy(k, v)} className="shrink-0 rounded-full bg-indigo px-3 py-1.5 text-xs font-semibold text-white">{copied === k ? "Copied" : "Copy"}</button>
           </div>
         ))}
       </dl>

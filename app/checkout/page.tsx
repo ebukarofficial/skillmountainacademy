@@ -5,7 +5,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { useSearchParams } from "next/navigation";
 import logo from "@/assets/sma-logo.png";
-import { CFG, DURATIONS, EDUCATION, ENGLISH, GFORM, MARITAL, PROGRAMMES, type Programme } from "@/lib/config";
+import { CFG, DURATIONS, EDUCATION, ENGLISH, GFORM, PROGRAMMES, type Programme } from "@/lib/config";
 import { TERMS_VERSION } from "@/lib/terms";
 import { BankDetails, CurriculumModal, PHOTO, naira, postForm, postSheet, useRate, usd } from "../components";
 
@@ -13,8 +13,8 @@ import { BankDetails, CurriculumModal, PHOTO, naira, postForm, postSheet, useRat
 declare global { interface Window { PaystackPop: any } }
 
 type Data = Record<string, string>;
+const stripped = (d: Data) => { const { website, ...rest } = d; void website; return rest; };
 const newRef = (bank: boolean) => `SMA-${bank ? "BT-" : ""}${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-const age = (dob: string) => { const d = new Date(dob); if (isNaN(+d)) return -1; const n = new Date(); let a = n.getFullYear() - d.getFullYear(); if (n < new Date(n.getFullYear(), d.getMonth(), d.getDate())) a--; return a; };
 
 const input = "mt-1 w-full rounded-2xl border border-ink/15 bg-white px-4 py-3.5 text-base outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/40";
 
@@ -22,7 +22,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block font-medium">{label}{children}</label>;
 }
 function Text({ label, name, d, type = "text", required = true, auto }: { label: string; name: string; d: Data; type?: string; required?: boolean; auto?: string }) {
-  return <Field label={label}><input name={name} type={type} required={required} autoComplete={auto} defaultValue={d[name] ?? ""} className={input} /></Field>;
+  return <Field label={label}><input name={name} type={type} required={required} autoComplete={auto} maxLength={120} defaultValue={d[name] ?? ""} className={input} /></Field>;
 }
 function Choice({ label, name, options, d, onPick }: { label: string; name: string; options: string[]; d: Data; onPick?: (v: string) => void }) {
   return (
@@ -70,10 +70,8 @@ function Checkout() {
   function next1(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = grab(e);
-    const a = age(f.dob);
-    if (a < 0 || a > 110) return setErr("Please enter a valid date of birth.");
-    if (a < 18 && !(f.guardianName?.trim() && f.guardianPhone?.trim() && f.guardianAddress?.trim())) {
-      return setErr("Learners under 18 need a parent or guardian. Please fill in the parent, guardian or spouse details.");
+    if (f.adult === "No" && !(f.guardianName?.trim() && f.guardianPhone?.trim())) {
+      return setErr("Learners under 18 need a parent or guardian. Please fill in the parent or guardian details.");
     }
     setErr(""); setD(f); setStep(1); top();
   }
@@ -86,12 +84,13 @@ function Checkout() {
     if (!agreed) return setErr("Please read and accept the Terms and Conditions to continue.");
     const bank = method === "bank";
     if (!bank && (!window.PaystackPop || !CFG.paystackKey)) return setErr("Payment is not ready yet. Refresh the page and try again.");
+    if (d.website) { setDone({ ref: newRef(bank), kind: bank ? "bank" : "paid" }); return; } // bot caught by the hidden field: pretend it worked, save nothing
     const reference = newRef(bank);
     const fullName = [d.firstName, d.middleName, d.surname].filter(Boolean).join(" ");
     const terms = `Accepted v${TERMS_VERSION} on ${new Date().toISOString()}`;
     setBusy(true);
     await postForm({ name: fullName, email: d.email, phone: d.phone, programme: prog.name, reference, terms });
-    await postSheet({ action: "apply", reference, method: bank ? "Bank transfer" : "Paystack", programme: prog.name, fullName, terms, ...d });
+    await postSheet({ action: "apply", reference, method: bank ? "Bank transfer" : "Paystack", programme: prog.name, fullName, terms, ...stripped(d) });
     if (bank) { setBusy(false); setDone({ ref: reference, kind: "bank" }); top(); return; }
     window.PaystackPop.setup({
       key: CFG.paystackKey, email: d.email, amount: prog.fee! * 100, currency: "NGN", ref: reference,
@@ -138,11 +137,11 @@ function Checkout() {
               <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" className="brand-bg rounded-full py-3 text-center font-display font-semibold text-white">Send teller on WhatsApp</a>
               <a href={`mailto:admission@skillmountainacademy.com?subject=${encodeURIComponent(`Teller: ${done.ref}`)}&body=${encodeURIComponent(msg)}`} className="rounded-full border-2 border-indigo py-3 text-center font-display font-semibold text-indigo">Send teller by email</a>
             </div>
-            <p className="mt-3 text-center text-sm text-ink/60">When we confirm your payment, we email your welcome message with your curriculum and your booking link.</p>
+            <p className="mt-3 text-center text-sm text-ink/70">When we confirm your payment, we email your welcome message with your curriculum and your booking link.</p>
           </>
         )}
         <p className="mt-5 rounded-2xl bg-cream px-4 py-3 text-center text-sm">Your reference: <b>{done.ref}</b></p>
-        <p className="mt-3 text-center text-sm text-ink/60">Please also email a recent passport photograph of the learner to us after you register. Check your spam folder if you do not see our email.</p>
+        <p className="mt-3 text-center text-sm text-ink/70">Check your spam folder if you do not see our email.</p>
         <div className="mt-5 text-center"><Link href="/" className="brand-bg inline-block rounded-full px-8 py-3 font-display font-semibold text-white">Back to home</Link></div>
       </div>
     );
@@ -154,30 +153,26 @@ function Checkout() {
       <div className="rounded-[2rem] bg-paper p-6 shadow-xl shadow-indigo/10 sm:p-8">
         <ol className="mb-6 flex gap-2" aria-label="Progress">
           {labels.map((l, i) => (
-            <li key={l} className={`flex-1 rounded-full px-3 py-2 text-center text-xs font-semibold sm:text-sm ${i === step ? "brand-bg text-white" : i < step ? "bg-indigo text-white" : "bg-cream text-ink/60"}`}>{i + 1}. {l}</li>
+            <li key={l} className={`flex-1 rounded-full px-3 py-2 text-center text-xs font-semibold sm:text-sm ${i === step ? "brand-bg text-white" : i < step ? "bg-indigo text-white" : "bg-cream text-ink/70"}`}>{i + 1}. {l}</li>
           ))}
         </ol>
 
         {step === 0 && (
           <form onSubmit={next1} className="space-y-4">
+            <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden"><label>Leave this empty<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
             <h1 className="font-display text-2xl font-extrabold">Application form</h1>
-            <p className="text-sm text-ink/65">For: <b>{p.name}</b>. Please fill in the learner&apos;s details.</p>
+            <p className="text-sm text-ink/70">For: <b>{p.name}</b>. Please fill in the learner&apos;s details.</p>
             <div className="grid gap-4 sm:grid-cols-3">
               <Text label="First name" name="firstName" d={d} auto="given-name" />
               <Text label="Middle name" name="middleName" d={d} required={false} />
               <Text label="Surname" name="surname" d={d} auto="family-name" />
             </div>
-            <Choice label="Gender" name="gender" options={["Male", "Female"]} d={d} />
-            <Text label="Date of birth" name="dob" type="date" d={d} auto="bday" />
+            <Choice label="Is the learner 18 years or older?" name="adult" options={["Yes", "No"]} d={d} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Text label="State of origin" name="stateOrigin" d={d} />
-              <Text label="State of residence" name="stateResidence" d={d} />
+              <Text label="Country" name="country" d={d} auto="country-name" />
+              <Text label="City or state" name="city" d={d} auto="address-level1" />
             </div>
-            <Text label="Residential address" name="address" d={d} auto="street-address" />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Pick label="Marital status" name="marital" options={MARITAL} d={d} />
-              <Pick label="English proficiency" name="english" options={ENGLISH} d={d} />
-            </div>
+            <Pick label="English proficiency" name="english" options={ENGLISH} d={d} />
             <div className="grid gap-4 sm:grid-cols-2">
               <Text label="Phone or WhatsApp number" name="phone" type="tel" d={d} auto="tel" />
               <Text label="Email address" name="email" type="email" d={d} auto="email" />
@@ -185,15 +180,13 @@ function Checkout() {
             <Choice label="Educational level" name="education" options={EDUCATION} d={d} />
             <Choice label="Preferred programme duration" name="duration" options={DURATIONS} d={d} />
             <div className="rounded-2xl bg-cream p-4">
-              <p className="font-display font-bold">Parent, guardian or spouse</p>
-              <p className="text-sm text-ink/65">Required if the learner is under 18. Optional for adults.</p>
+              <p className="font-display font-bold">Parent or guardian</p>
+              <p className="text-sm text-ink/70">Required only if the learner is under 18. Leave blank if the learner is 18 or older.</p>
               <div className="mt-3 space-y-4">
                 <Text label="Full name" name="guardianName" d={d} required={false} />
                 <Text label="Phone number(s)" name="guardianPhone" type="tel" d={d} required={false} />
-                <Text label="Residential address" name="guardianAddress" d={d} required={false} />
               </div>
             </div>
-            <p className="text-sm text-ink/60">Passport photograph: after you register, we will ask you to email a recent passport photograph of the learner.</p>
             {err && <p role="alert" className="font-medium text-brand-red">{err}</p>}
             <button className="brand-bg w-full rounded-full py-4 font-display font-semibold text-white">Continue</button>
           </form>
@@ -202,17 +195,16 @@ function Checkout() {
         {step === 1 && (
           <form onSubmit={next2} className="space-y-4">
             <h1 className="font-display text-2xl font-extrabold">A few questions</h1>
-            <p className="text-sm text-ink/65">This helps your mentor plan your learning from day one.</p>
+            <p className="text-sm text-ink/70">This helps your mentor plan your learning from day one.</p>
             <Choice label="Are you computer literate?" name="computerLiterate" options={["Yes", "No"]} d={d} />
             <div className="rounded-2xl bg-cream px-4 py-3 text-sm">Skill of interest: <b>{p.name}</b></div>
             <Choice label="Any background knowledge on this skill?" name="background" options={["Yes", "No"]} d={d} onPick={setBg} />
             {(bg || d.background) === "Yes" && (
-              <Field label="Where did you get the knowledge, and for how long?"><textarea name="backgroundDetail" required rows={2} defaultValue={d.backgroundDetail ?? ""} className={input} /></Field>
+              <Field label="Where did you get the knowledge, and for how long?"><textarea name="backgroundDetail" required rows={2} maxLength={500} defaultValue={d.backgroundDetail ?? ""} className={input} /></Field>
             )}
-            <Field label="Why choose this skill?"><textarea name="why" required rows={2} defaultValue={d.why ?? ""} className={input} /></Field>
-            <Field label="What are your goals and aspirations?"><textarea name="goals" required rows={3} defaultValue={d.goals ?? ""} className={input} /></Field>
+            <Field label="Why choose this skill?"><textarea name="why" required rows={2} maxLength={500} defaultValue={d.why ?? ""} className={input} /></Field>
+            <Field label="What are your goals and aspirations?"><textarea name="goals" required rows={3} maxLength={800} defaultValue={d.goals ?? ""} className={input} /></Field>
             <Text label="Which industry would you like to work in after acquiring the skill?" name="industry" d={d} />
-            <Choice label="Have you conducted a market analysis on the skill?" name="marketAnalysis" options={["Yes", "No"]} d={d} />
             <div className="flex gap-3">
               <button type="button" onClick={() => { setStep(0); top(); }} className="rounded-full border-2 border-indigo px-6 py-3.5 font-display font-semibold text-indigo">Back</button>
               <button className="brand-bg flex-1 rounded-full py-3.5 font-display font-semibold text-white">Continue</button>
@@ -225,7 +217,7 @@ function Checkout() {
             <h1 className="font-display text-2xl font-extrabold">Review and pay</h1>
             <div className="rounded-2xl bg-cream p-4 text-sm">
               <p><b>{fullName}</b> · {d.email} · {d.phone}</p>
-              <p className="text-ink/65">{p.name} · {d.duration} · {d.education}</p>
+              <p className="text-ink/70">{p.name} · {d.duration} · {d.education}</p>
               <button type="button" onClick={() => { setStep(0); top(); }} className="mt-1 font-semibold text-brand-red underline">Edit my details</button>
             </div>
 
@@ -235,7 +227,7 @@ function Checkout() {
                 {([["paystack", "Pay online with Paystack", "Card or bank transfer. Confirmed automatically."], ["bank", "Bank transfer", "Pay to our UBA account, then send us your teller."]] as const).map(([v, t, s]) => (
                   <label key={v} className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 px-4 py-3 transition ${method === v ? "border-indigo bg-white" : "border-transparent bg-cream"}`}>
                     <input type="radio" name="method" checked={method === v} onChange={() => setMethod(v)} className="mt-1 h-5 w-5 accent-[#1e0e6f]" />
-                    <span><span className="block font-display font-bold">{t}</span><span className="text-sm text-ink/65">{s}</span></span>
+                    <span><span className="block font-display font-bold">{t}</span><span className="text-sm text-ink/70">{s}</span></span>
                   </label>
                 ))}
               </div>
@@ -245,7 +237,7 @@ function Checkout() {
 
             <label className="flex items-start gap-3 rounded-2xl bg-cream px-4 py-3 text-sm">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#c8233a]" />
-              <span>I have read and understood the <Link href="/terms/" target="_blank" className="font-semibold text-brand-red underline">Terms and Conditions</Link>. I confirm the details above are correct and I agree to SMA using them to process my registration.</span>
+              <span>I have read and understood the <Link href="/terms/" target="_blank" className="font-semibold text-brand-red underline">Terms and Conditions</Link>, <Link href="/refunds/" target="_blank" className="font-semibold text-brand-red underline">Refund Policy</Link> and <Link href="/privacy/" target="_blank" className="font-semibold text-brand-red underline">Privacy Policy</Link>. I confirm the details are correct and I agree to SMA using them to process this registration. If the learner is under 18, I am their parent or guardian and I give this consent for them.</span>
             </label>
             {!GFORM.url && <p className="rounded-xl bg-brand-orange/20 px-4 py-2 text-sm">Setup note: the Google Form is not connected yet, so registrations will not be saved.</p>}
             {err && <p role="alert" className="font-medium text-brand-red">{err}</p>}
@@ -255,7 +247,7 @@ function Checkout() {
                 {busy ? "Please wait…" : method === "bank" ? "Submit application" : `Pay ${naira(p.fee!)} with Paystack`}
               </button>
             </div>
-            {!agreed && <p className="text-center text-sm text-ink/60">Tick the box above to continue.</p>}
+            {!agreed && <p className="text-center text-sm text-ink/70">Tick the box above to continue.</p>}
           </div>
         )}
       </div>
@@ -277,7 +269,7 @@ function Checkout() {
           {p.was && <div className="flex justify-between text-brand-orange"><span>You save</span><span>{naira(p.was - p.fee!)}</span></div>}
           <div className="flex items-end justify-between pt-2"><span className="text-white/80">Total</span><span className="font-display text-3xl font-extrabold">{naira(p.fee!)}</span></div>
           <p className="text-right text-sm text-white/70">≈ {usd(p.fee!, rate)} · discounted price for you</p>
-          <p className="text-right text-xs text-white/50">Dollar amount is approximate. You pay in naira (₦).</p>
+          <p className="text-right text-xs text-white/60">Dollar amount is approximate. You pay in naira (₦).</p>
         </div>
         <ul className="mt-6 space-y-2 text-sm text-white/75">
           <li>✓ Pay with Paystack or by bank transfer</li>
@@ -300,7 +292,7 @@ export default function CheckoutPage() {
         <span className="rounded-full bg-paper px-4 py-1.5 text-sm font-medium">🔒 Secure checkout</span>
       </header>
       <div className="px-5 pt-4">
-        <Suspense fallback={<p className="text-center text-ink/60">Loading checkout…</p>}><Checkout /></Suspense>
+        <Suspense fallback={<p className="text-center text-ink/70">Loading checkout…</p>}><Checkout /></Suspense>
       </div>
     </main>
   );

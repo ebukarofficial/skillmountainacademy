@@ -57,13 +57,34 @@ var CLASS_LINK = "";
 var BANK = { name: "Skill Mountain Academy Limited", number: "1025440484", bank: "UBA" };
 
 var APP_FIELDS = [
-  ["Reference", "reference"], ["Payment method", "method"], ["Programme", "programme"], ["Full name", "fullName"], ["Gender", "gender"],
-  ["Date of birth", "dob"], ["State of origin", "stateOrigin"], ["State of residence", "stateResidence"], ["Address", "address"],
-  ["Marital status", "marital"], ["Phone", "phone"], ["Email", "email"], ["Education", "education"], ["Duration", "duration"],
-  ["English", "english"], ["Guardian name", "guardianName"], ["Guardian phone", "guardianPhone"], ["Guardian address", "guardianAddress"],
+  ["Reference", "reference"], ["Payment method", "method"], ["Programme", "programme"], ["Full name", "fullName"],
+  ["18 or older", "adult"], ["Country", "country"], ["City or state", "city"], ["Phone", "phone"], ["Email", "email"],
+  ["Education", "education"], ["Duration", "duration"], ["English", "english"],
+  ["Guardian name", "guardianName"], ["Guardian phone", "guardianPhone"],
   ["Computer literate", "computerLiterate"], ["Background", "background"], ["Background detail", "backgroundDetail"], ["Why this skill", "why"],
-  ["Goals", "goals"], ["Industry", "industry"], ["Market analysis", "marketAnalysis"], ["Terms accepted", "terms"]
+  ["Goals", "goals"], ["Industry", "industry"], ["Terms accepted", "terms"]
 ];
+
+var EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+var REF_RE = /^SMA-(BT-)?[A-Z0-9]{8,24}$/;
+
+// ---------- safety helpers ----------
+// Cleans text from the website before it is saved: limits length and stops spreadsheet formula injection.
+function clean_(v, max) {
+  var t = String(v == null ? "" : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").trim().slice(0, max || 500);
+  return /^[=+\-@]/.test(t) ? "'" + t : t;
+}
+// Escapes text before it goes into an HTML email.
+function esc_(v) {
+  return String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+// Simple rate limit: allows `limit` calls per `seconds` for a key. Returns false when the limit is passed.
+function throttle_(key, limit, seconds) {
+  var cache = CacheService.getScriptCache();
+  var n = Number(cache.get(key) || 0) + 1;
+  cache.put(key, String(n), seconds);
+  return n <= limit;
+}
 
 function sheet_() { return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME); }
 
@@ -79,15 +100,20 @@ function cols_(s) {
   return m;
 }
 
+function doGet() { return ContentService.createTextOutput("ok"); }
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.waitLock(25000);
   try {
-    var d = JSON.parse(e.postData.contents);
+    var raw = (e && e.postData && e.postData.contents) || "";
+    if (raw.length > 20000) return ContentService.createTextOutput("ok");                                   // too big
+    if (!throttle_("g:" + Math.floor(Date.now() / 60000), 120, 120)) return ContentService.createTextOutput("ok"); // too many requests
+    var d = JSON.parse(raw);
     if (d.action === "apply") { apply_(d); }
-    else if (d.action === "verify") { verify_(d.reference); }
-    else if (d.action === "subscribe" && d.email) { subscribe_(d.email); }
-    else if (d.event === "charge.success" && d.data) { verify_(d.data.reference); } // optional Paystack webhook
+    else if (d.action === "verify") { verify_(String(d.reference || "")); }
+    else if (d.action === "subscribe") { subscribe_(String(d.email || "")); }
+    else if (d.event === "charge.success" && d.data) { verify_(String(d.data.reference || "")); } // optional Paystack webhook
   } catch (err) { console.error(err); }
   finally { lock.releaseLock(); }
   return ContentService.createTextOutput("ok");
@@ -95,34 +121,41 @@ function doPost(e) {
 
 // Saves the full application, and for bank transfers emails the bank details.
 function apply_(d) {
-  if (!FEES[d.programme] || !d.reference || !d.email) return;
+  var c = {};
+  APP_FIELDS.forEach(function (f) { c[f[1]] = clean_(d[f[1]], f[1] === "goals" || f[1] === "why" || f[1] === "backgroundDetail" ? 800 : 160); });
+  c.email = String(d.email || "").trim().toLowerCase();
+  if (!FEES[c.programme] || !REF_RE.test(String(d.reference)) || !EMAIL_RE.test(c.email)) return;   // only known programmes, valid reference and email
+  c.reference = String(d.reference);
+  c.method = c.method === "Bank transfer" ? "Bank transfer" : "Paystack";
+  if (!throttle_("a:" + c.email, 5, 3600)) return;                                                   // max 5 applications per email per hour
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName(APPS_SHEET) || ss.insertSheet(APPS_SHEET);
   if (s.getLastRow() === 0) s.appendRow(["Date"].concat(APP_FIELDS.map(function (f) { return f[0]; })));
-  s.appendRow([new Date()].concat(APP_FIELDS.map(function (f) { return d[f[1]] || ""; })));
-  if (d.method === "Bank transfer") {
+  s.appendRow([new Date()].concat(APP_FIELDS.map(function (f) { return c[f[1]]; })));
+  if (c.method === "Bank transfer") {
     MailApp.sendEmail({
-      to: d.email, name: "Skill Mountain Academy", replyTo: ADMIN_EMAIL,
-      subject: "We received your application: " + d.programme,
+      to: c.email, name: "Skill Mountain Academy", replyTo: ADMIN_EMAIL,
+      subject: "We received your application: " + c.programme,
       htmlBody:
-        "<p>Hi " + first_(d.fullName) + ",</p>" +
-        "<p>Thank you for applying for <b>" + d.programme + "</b> at Skill Mountain Academy.</p>" +
-        "<p>Please pay <b>N" + FEES[d.programme].toLocaleString() + "</b> to the account below:</p>" +
+        "<p>Hi " + first_(c.fullName) + ",</p>" +
+        "<p>Thank you for applying for <b>" + esc_(c.programme) + "</b> at Skill Mountain Academy.</p>" +
+        "<p>Please pay <b>N" + FEES[c.programme].toLocaleString() + "</b> to the account below:</p>" +
         "<p>Account name: <b>" + BANK.name + "</b><br>Account number: <b>" + BANK.number + "</b><br>Bank: <b>" + BANK.bank + "</b></p>" +
-        "<p>Your reference: <b>" + d.reference + "</b></p>" +
+        "<p>Your reference: <b>" + esc_(c.reference) + "</b></p>" +
         "<p>Send us your teller for confirmation on or before the scheduled date for the programme. Reply to this email with a photo of your teller, or send it on WhatsApp.</p>" +
         "<p>When we confirm your payment, we will send your welcome email with your curriculum and a link to book your classes.</p>" +
         "<p>Skill Mountain Academy</p>"
     });
-    MailApp.sendEmail(ADMIN_EMAIL, "New bank-transfer application: " + d.programme,
-      d.fullName + " applied for " + d.programme + " (N" + FEES[d.programme].toLocaleString() + ").\nEmail: " + d.email + "\nPhone: " + d.phone + "\nReference: " + d.reference +
+    MailApp.sendEmail(ADMIN_EMAIL, "New bank-transfer application: " + c.programme,
+      c.fullName + " applied for " + c.programme + " (N" + FEES[c.programme].toLocaleString() + ").\nEmail: " + c.email + "\nPhone: " + c.phone + "\nReference: " + c.reference +
       "\nWhen you confirm the money in UBA, type PAID in the Status column of the Form Responses 1 sheet.");
   }
 }
 
 // Confirms a Paystack payment, marks the row PAID, and sends the welcome email.
 function verify_(ref) {
-  if (!ref) return;
+  if (!REF_RE.test(ref)) return;
+  if (!throttle_("v:" + ref, 20, 600)) return;
   var s = sheet_(), c = cols_(s);
   for (var attempt = 0; attempt < 3; attempt++) {           // the form row can take a moment to appear
     var rows = s.getDataRange().getValues();
@@ -163,17 +196,15 @@ function welcome_(s, row, c) {
       "<p>Hi " + first_(name) + ",</p>" +
       "<p><b>Welcome to Skill Mountain Academy.</b> Your payment is confirmed and your place is secured.</p>" +
       "<table style='border-collapse:collapse'>" +
-      "<tr><td style='padding:3px 16px 3px 0'>Programme</td><td><b>" + programme + "</b></td></tr>" +
+      "<tr><td style='padding:3px 16px 3px 0'>Programme</td><td><b>" + esc_(programme) + "</b></td></tr>" +
       "<tr><td style='padding:3px 16px 3px 0'>Amount paid</td><td><b>N" + fee.toLocaleString() + "</b></td></tr>" +
-      "<tr><td style='padding:3px 16px 3px 0'>Reference</td><td><b>" + ref + "</b></td></tr>" +
+      "<tr><td style='padding:3px 16px 3px 0'>Reference</td><td><b>" + esc_(ref) + "</b></td></tr>" +
       "<tr><td style='padding:3px 16px 3px 0'>Date</td><td>" + when + "</td></tr></table>" +
       "<h3>Step 1: Get your curriculum</h3>" +
       "<p>This is everything you will cover.</p><p><a style='" + btn + "' href='" + (CURRICULUM[programme] || "#") + "'>Open my curriculum</a></p>" +
       "<h3>Step 2: Choose your class days and time</h3>" +
       "<p>Pick the days and time that suit you. For example, 3 days a week, 45 minutes a day, at 9 am.</p>" +
       "<p><a style='" + btn + "' href='" + CALENDLY_CLASSES + "'>Book my classes</a></p>" + meet +
-      "<h3>Step 3: Send your passport photograph</h3>" +
-      "<p>Please reply to this email with a recent passport photograph of the learner.</p>" +
       "<p>Questions? Just reply to this email and we will help.</p>" +
       "<p>Learn deeply. Grow confidently. Graduate prepared.<br>Skill Mountain Academy</p>"
   });
@@ -193,14 +224,16 @@ function onStatusEdit(e) {
 }
 
 function subscribe_(email) {
+  email = String(email).trim().toLowerCase().slice(0, 150);
+  if (!EMAIL_RE.test(email) || !throttle_("s:" + email, 3, 3600)) return;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName("Mailing list") || ss.insertSheet("Mailing list");
-  if (s.getLastRow() === 0) s.appendRow(["Date", "Email"]);
-  var existing = s.getRange(2, 2, Math.max(1, s.getLastRow() - 1), 1).getValues().map(function (r) { return String(r[0]).toLowerCase(); });
-  if (existing.indexOf(String(email).trim().toLowerCase()) === -1) s.appendRow([new Date(), String(email).trim()]);
+  if (s.getLastRow() === 0) s.appendRow(["Date", "Email", "Consent"]);
+  var existing = s.getLastRow() > 1 ? s.getRange(2, 2, s.getLastRow() - 1, 1).getValues().map(function (r) { return String(r[0]).toLowerCase(); }) : [];
+  if (existing.indexOf(email) === -1) s.appendRow([new Date(), email, "Ticked the consent box on the website"]);
 }
 
-function first_(name) { return String(name || "").trim().split(" ")[0] || "there"; }
+function first_(name) { return esc_(String(name || "").trim().split(" ")[0] || "there"); }
 
 // Runs every 5 minutes: checks recent Paystack rows that are not paid yet (bank-transfer references SMA-BT-... are skipped).
 function sweep() {

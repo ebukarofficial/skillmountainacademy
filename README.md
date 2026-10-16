@@ -33,12 +33,14 @@ Flow: learner submits the form > pays on the checkout page > the script confirms
 Copy `.env.example` to `.env.local`, then `npm install && npm run dev`.
 
 
-## Application, curriculum, bank transfer and class booking (latest update)
-- **Application form:** Register opens a 3-step checkout (your details, a few questions, payment). Every answer is saved on an "Applications" tab in your Google Sheet. The 5 core fields also go to your Google Form.
-- **View curriculum:** each programme card and the checkout page have a View curriculum button. To add a download button, paste each public Google Drive link into `CURRICULUM_LINKS` in `lib/config.ts`.
-- **Free consultation (Calendly):** paste your consultation link into `calendlyConsult` in `lib/config.ts`. Until then the section shows a WhatsApp button.
-- **Payment options:** Paystack (card or transfer) and manual bank transfer (UBA account details with Copy buttons).
-- **Paystack payments:** confirmed automatically, then the welcome email is sent.
-- **Bank transfers:** the learner gets an "application received" email, then sends their teller. After you confirm the money in UBA, type PAID in the Status column on the "Form Responses 1" tab. The welcome email is sent automatically, once.
-- **Welcome email:** payment confirmation, curriculum link (Google Drive), a Calendly link to book class days and time, and a request for a passport photograph. Edit `CURRICULUM`, `CALENDLY_CLASSES` and `CLASS_LINK` at the top of `docs/google-sheet-script.gs`, then redeploy a New version.
-- **Calendly setup:** create a 45-minute event type for class sessions. Connect Google Meet or Zoom in Calendly so every booking gets its own class link.
+
+## What is in this version
+- **Application form:** Register opens a 3-step checkout (your details, a few questions, payment). Only the data we need is collected. Every answer is saved on an "Applications" tab in your Google Sheet; the 5 core fields also go to your Google Form.
+- **View curriculum:** each programme has a View curriculum button. To add a download button, paste each public Google Drive link into `CURRICULUM_LINKS` in `lib/config.ts`.
+- **Free consultation (Calendly):** paste your consultation link into `calendlyConsult` in `lib/config.ts`. Until then the section shows a WhatsApp button. The calendar loads only after the visitor clicks.
+- **Payments:** Paystack (card or transfer) and manual bank transfer. Paystack payments confirm automatically. For bank transfers, after you confirm the money in UBA, type PAID in the Status column on the "Form Responses 1" tab; the welcome email is sent automatically, once.
+- **Welcome email:** payment confirmation, curriculum link (Google Drive) and a Calendly link to book class days and time. Edit `CURRICULUM`, `CALENDLY_CLASSES` and `CLASS_LINK` at the top of `docs/google-sheet-script.gs`, then redeploy a New version.
+- **Legal pages:** `/terms/`, `/privacy/`, `/cookies/`, `/refunds/` (content in `lib/terms.ts` and `lib/legal.ts`). Business details are in `BUSINESS` in `lib/config.ts` (add your CAC RC number).
+- **Link preview image:** `public/og-share.jpg` is shown when the site link is shared (WhatsApp, Facebook, X, LinkedIn). Replace the file to change it. Social apps cache previews, so use their link debugger tools after changing it.
+- **Reviews:** the Reviews section stays hidden until you add real items to `REVIEW_SHOTS` (screenshots saved in `public/reviews/`) in `lib/config.ts`.
+- **Read before launch:** `docs/COMPLIANCE-AND-RISKS.md`, `docs/SECURITY-CHECKLIST.md`, `docs/IMAGE-LICENSES.md`.

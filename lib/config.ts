@@ -9,6 +9,17 @@ export const CFG = {
   usdRate: 1400, // naira per US dollar. Used only if the live rate cannot be loaded.
 };
 
+// Business details shown in the footer and on the legal pages.
+export const BUSINESS = {
+  name: "Skill Mountain Academy Limited",
+  address: "Suite C8, Zara Plaza, Life Camp, Abuja, Nigeria",
+  phone: "0706 100 0472",
+  email: "admission@skillmountainacademy.com",
+  rc: "", // add your CAC registration number (RC number) here. It is shown automatically once filled in.
+};
+// If any website photos require credit under their licence (for example free Freepik images), write the credit line here. It shows in the footer.
+export const IMAGE_CREDIT = "";
+
 // Bank transfer details shown on the checkout page.
 export const BANK = { name: "Skill Mountain Academy Limited", number: "1025440484", bank: "UBA" };
 
@@ -124,8 +135,8 @@ export const GOALS: { goal: string; id: string; why: string }[] = [
 export const STEPS: { title: string; text: string; cta?: [string, string] }[] = [
   { title: "Explore and read the curriculum", text: "Use the search box or the category tabs in the Programmes section. On any programme, tap View curriculum to see exactly what you will learn, and download it before you decide.", cta: ["Browse programmes", "#programmes"] },
   { title: "Choose the programme that fits your goal", text: "Not sure where to start? Pick your goal in the box above and we will point you to the best match. You can also book a free call with us first.", cta: ["Pick my goal", "#goal"] },
-  { title: "Check your price and your discount", text: "The price on each card is the discounted price you pay. Where you see a crossed-out figure, that is the usual price. Prices show in naira with an approximate US dollar amount." },
-  { title: "Fill in your application", text: "Click Register. A short application asks for your details, a few questions about your goals, and your parent, guardian or spouse details. Learners under 18 need a parent or guardian." },
+  { title: "Check your price and your discount", text: "The price on each card is the price you pay. Where you see a crossed-out figure, that is the previous price. Prices show in naira with an approximate US dollar amount." },
+  { title: "Fill in your application", text: "Click Register. A short application asks for your details, a few questions about your goals, and your parent or guardian details if the learner is under 18. Learners under 18 need a parent or guardian." },
   { title: "Accept the terms and pay", text: "Read and accept the Terms and Conditions, then choose how to pay: Paystack (card or bank transfer) or a manual transfer to our UBA account. If you transfer manually, send us your teller so we can confirm it." },
   { title: "Receive your welcome email", text: "As soon as your payment is confirmed, we email you a welcome message from Skill Mountain Academy with your curriculum link and a link to book your classes." },
   { title: "Pick your class days and times", text: "Use the booking link to choose the days and time that suit you. For example, three days a week for 45 minutes at 9 am. You receive a link to your virtual class for each session." },

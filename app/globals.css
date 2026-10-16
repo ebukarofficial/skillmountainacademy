@@ -30,10 +30,11 @@ body { background: var(--cream); color: var(--ink); font-size: 1.0625rem; }
 :focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
 
 .brand-text {
-  background: linear-gradient(90deg, var(--navy), var(--plum) 40%, var(--red) 70%, var(--orange));
+  background: linear-gradient(90deg, var(--navy), var(--plum) 40%, var(--red) 70%, #cf4a16);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.brand-bg { background: linear-gradient(100deg, var(--red), var(--orange)); }
+/* Darkened so white text on buttons meets the WCAG AA contrast ratio (4.5:1) */
+.brand-bg { background: linear-gradient(100deg, #b81f35, #cf4a16); }
 
 /* Scroll reveal (Skillex-style fade up) */
 .reveal { opacity: 0; transform: translateY(32px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); }
@@ -57,3 +58,6 @@ body { background: var(--cream); color: var(--ink); font-size: 1.0625rem; }
   .float, .marquee, .pop { animation: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
 }
+
+.skip-link { position: absolute; left: 1rem; top: -4rem; z-index: 100; background: var(--indigo); color: #fff; padding: .75rem 1.25rem; border-radius: 9999px; font-weight: 700; }
+.skip-link:focus { top: 1rem; }
