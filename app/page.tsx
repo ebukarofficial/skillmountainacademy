@@ -7,7 +7,7 @@ import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
 import banner from "@/assets/photos/banner-students.webp";
 import { AUDIENCE, BUSINESS, CFG, FAQ, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, type Programme } from "@/lib/config";
-import { CalendlyEmbed, Chevrons, CurriculumModal, Intro, PHOTO, Price, Reveal, SocialIcon, naira, postSheet, useRate, usd } from "./components";
+import { CalendlyEmbed, Chevrons, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, naira, postSheet, useRate, usd } from "./components";
 
 const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]].filter(([h]) => h !== "#reviews" || REVIEW_SHOTS.length > 0);
 
@@ -135,7 +135,7 @@ export default function Home() {
               return (
                 <div key={sl.id} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} role="button" tabIndex={0} aria-label={sl.name} onKeyDown={(e) => e.key === "Enter" && setActive(i)}
                   className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${sl.tone} transition-all duration-700 ease-out ${on ? "flex-[6]" : "hidden flex-[1] cursor-pointer md:block"}`}>
-                  <Image src={sl.photo} alt="" fill sizes="(max-width: 768px) 90vw, 40vw" className="object-cover object-top" />
+                  <Image src={sl.photo} alt="" fill sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[sl.id] }} />
                   <div className={`absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
                   {on ? (
                     <div className="pop absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
@@ -169,7 +169,10 @@ export default function Home() {
           </ul>
         </Reveal>
         <Reveal delay={150} className="relative">
-          <div className="overflow-hidden rounded-[2rem] shadow-2xl shadow-indigo/20"><Image src={banner} alt="Students outside the Skill Mountain Academy sign" className="h-auto w-full" /></div>
+          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo via-plum to-brand-red pt-10 shadow-2xl shadow-indigo/20">
+            <Chevrons className="pointer-events-none absolute -right-8 top-2 h-48 w-64 text-white/15" />
+            <Image src={banner} alt="Five smiling students sitting together with their hands raised" className="relative mx-auto h-auto w-full max-w-[34rem] px-4" />
+          </div>
           <div className="float absolute -bottom-5 -left-2 rounded-2xl bg-indigo px-5 py-3 text-white shadow-xl sm:-left-6">
             <p className="text-sm text-white/70">Learning format</p><p className="font-display font-bold">One teacher, one student</p>
           </div>
@@ -193,7 +196,7 @@ export default function Home() {
             <Reveal key={p.id} delay={(i % 4) * 80} className="h-full">
               <article className="flex h-full flex-col rounded-[1.75rem] bg-paper p-3 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo/10">
                 <div className={`relative h-48 overflow-hidden rounded-[1.25rem] bg-gradient-to-br ${p.tone} ${p.live ? "" : "opacity-70 saturate-50"}`}>
-                  <Image src={PHOTO[p.id]} alt="" fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover object-top" />
+                  <Image src={PHOTO[p.id]} alt="" fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover" style={{ objectPosition: FOCUS[p.id] }} />
                   {p.live && p.was && <span className="absolute left-3 top-3 rounded-full bg-brand-red px-3 py-1 text-xs font-bold text-white">{`${Math.round((1 - p.fee! / p.was) * 100)}% OFF`}</span>}
                 </div>
                 <div className="flex flex-1 flex-col px-2 pb-2 pt-4">
@@ -362,14 +365,19 @@ export default function Home() {
       </section>
 
       {/* Vision / partners */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-indigo via-navy to-plum py-16 text-white sm:py-20">
+      <section className="relative overflow-hidden bg-gradient-to-br from-indigo via-navy to-plum pb-16 pt-16 text-white sm:pb-20 sm:pt-20 lg:pb-0">
         <Chevrons className="pointer-events-none absolute -left-20 bottom-0 h-72 w-96 text-white/10" />
-        <Reveal className="relative mx-auto max-w-3xl px-5 text-center">
+        <div className="relative mx-auto grid max-w-5xl items-end gap-8 px-5 lg:grid-cols-[1.15fr_.85fr]">
+          <Reveal className="text-center lg:pb-20 lg:text-left">
           <p className="text-sm font-medium uppercase tracking-widest text-brand-orange">Our vision</p>
           <h2 className="mt-3 font-display text-3xl font-extrabold sm:text-5xl">A mentor beside every learner.</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-white/80">We believe the best education is personal. Our mission is to give every learner a teacher of their own and to open doors to careers and opportunities wherever they are. If you share this vision and would like to help us grow it, we would love to hear from you.</p>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-white/80 lg:mx-0">We believe the best education is personal. Our mission is to give every learner a teacher of their own and to open doors to careers and opportunities wherever they are. If you share this vision and would like to help us grow it, we would love to hear from you.</p>
           <a href={partnerHref} target="_blank" rel="noopener noreferrer" className="brand-bg mt-8 inline-block rounded-full px-8 py-4 font-display font-semibold text-white transition hover:brightness-110">Partner with us</a>
         </Reveal>
+          <div className="hidden justify-center lg:flex">
+            <Image src={SMA_PHOTO} alt="A smiling learner wearing a Skill Mountain Academy t-shirt" className="h-auto max-h-[27rem] w-auto" />
+          </div>
+        </div>
       </section>
 
       {/* Footer */}

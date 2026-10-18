@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import logo from "@/assets/sma-logo.png";
 import { CFG, DURATIONS, EDUCATION, ENGLISH, GFORM, PROGRAMMES, type Programme } from "@/lib/config";
 import { TERMS_VERSION } from "@/lib/terms";
-import { BankDetails, CurriculumModal, PHOTO, naira, postForm, postSheet, useRate, usd } from "../components";
+import { BankDetails, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet, useRate, usd } from "../components";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global { interface Window { PaystackPop: any } }
@@ -256,7 +256,7 @@ function Checkout() {
         <p className="text-sm font-medium text-white/60">Your order</p>
         <div className="mt-4 flex gap-4">
           <div className={`relative h-24 w-20 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br ${p.tone}`}>
-            <Image src={PHOTO[p.id]} alt="" fill sizes="80px" className="object-cover object-top" />
+            <Image src={PHOTO[p.id]} alt="" fill sizes="80px" className="object-cover" style={{ objectPosition: FOCUS[p.id] }} />
           </div>
           <div>
             <h2 className="font-display text-xl font-bold">{p.name}</h2>

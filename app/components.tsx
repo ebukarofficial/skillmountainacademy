@@ -10,11 +10,19 @@ import pIelts from "@/assets/photos/photo-ielts.webp";
 import pUiux from "@/assets/photos/photo-uiux.webp";
 import pCyber from "@/assets/photos/photo-cyber.webp";
 import pWeb from "@/assets/photos/photo-web.webp";
-import pCert from "@/assets/photos/photo-certificate.webp";
+import pData from "@/assets/photos/photo-data.webp";
+import pSma from "@/assets/photos/photo-sma.webp";
 
 export const PHOTO: Record<string, StaticImageData> = {
-  graphics: pGraphics, devops: pDevops, cloud: pCloud, cyber: pCyber, marketing: pMarketing, ielts: pIelts, uiux: pUiux, web: pWeb, data: pCert,
+  graphics: pGraphics, devops: pDevops, cloud: pCloud, cyber: pCyber, marketing: pMarketing, ielts: pIelts, uiux: pUiux, web: pWeb, data: pData,
 };
+
+// Where each photo is anchored inside its card, so faces are never cropped out ("x% y%").
+export const FOCUS: Record<string, string> = {
+  graphics: "75% 0%", devops: "35% 0%", cloud: "50% 0%", cyber: "50% 0%", marketing: "60% 0%",
+  ielts: "45% 0%", uiux: "45% 0%", data: "50% 0%", web: "50% 0%",
+};
+export const SMA_PHOTO = pSma;
 
 export const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
 
