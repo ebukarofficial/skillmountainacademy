@@ -146,7 +146,9 @@ export default function Home() {
                       {sl.prog && <Link href={regHref(sl.prog)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-block rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Register</Link>}
                     </div>
                   ) : (
-                    <span className="absolute bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-indigo px-2 py-4 font-display text-sm font-semibold text-white [writing-mode:vertical-rl] [rotate:180deg]">{sl.name}</span>
+                    <span className="absolute inset-x-2.5 bottom-4 flex justify-center rounded-full bg-indigo py-4 text-white">
+                      <span className="whitespace-nowrap font-display text-[13px] font-semibold leading-none [writing-mode:vertical-rl] [rotate:180deg]">{sl.name}</span>
+                    </span>
                   )}
                 </div>
               );
