@@ -3,7 +3,6 @@ export const SITE_URL = "https://skillmountainacademy.com";
 export const CFG = {
   paystackKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
   sheetUrl: process.env.NEXT_PUBLIC_SHEET_URL ?? "", // Google Apps Script web app (payment check, emails, mailing list)
-  base: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
   whatsapp: process.env.NEXT_PUBLIC_WHATSAPP || "2347061000472", // used only for the Chat button and Partner button
   calendlyConsult: "", // paste your Calendly link for FREE CONSULTATION calls here, e.g. https://calendly.com/yourname/consultation
   usdRate: 1400, // naira per US dollar. Used only if the live rate cannot be loaded.

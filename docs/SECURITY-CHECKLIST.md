@@ -1,7 +1,7 @@
 # Security checklist for this site
 
 ## What this site is (and why most "hacking" risks do not apply yet)
-It is a static website on GitHub Pages. It has no database, no login, no admin area, no passwords and no server of its own.
+It is a static website served by Cloudflare (Workers with static assets). It has no database, no login, no admin area, no passwords and no server of its own.
 The only things that receive data are your Google Form, your Google Sheet script and Paystack. So IDOR, mass assignment, password hashing
 and admin-route protection do NOT apply today. They will apply when you build the learner portal (see the end of this file).
 
@@ -17,7 +17,7 @@ and admin-route protection do NOT apply today. They will apply when you build th
 - A basic Content-Security-Policy tag blocks plugins and base-tag tricks.
 
 ## Limits you should know about
-- GitHub Pages does not let you set HTTP security headers (HSTS, X-Frame-Options, a full CSP). HTTPS is enforced. If you want the full set, put the site behind Cloudflare (free) and add headers there.
+- Security headers (X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS and a clickjacking-safe Content-Security-Policy) are set in `public/_headers`. A stricter script-src policy is not enabled because Paystack and Calendly load scripts; add one later and test checkout carefully. You can also turn on Cloudflare's own protections (Bot Fight Mode, rate limiting rules) in the dashboard.
 - Your Google Form and Apps Script web address are public by design, so someone can send junk to them. The script limits the damage. For stronger protection later, add Cloudflare Turnstile.
 - CORS: nothing to configure. The site sends one-way requests to Google, and your script has no private data to read back.
 - Anyone who gets into the Google account that owns the Sheet can see all applications. Turn on 2-step verification for skillmountainacademy@gmail.com, use a strong unique password, and share the Sheet with as few people as possible.

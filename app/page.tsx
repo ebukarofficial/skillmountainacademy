@@ -338,7 +338,7 @@ export default function Home() {
           <div className="mt-10 columns-1 gap-4 sm:columns-2 lg:columns-3">
             {REVIEW_SHOTS.map((r, i) => (
               <button key={r.file} onClick={() => setShot(i)} className="mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl bg-white text-left shadow-md transition hover:-translate-y-1 hover:shadow-xl" aria-label={`Open ${r.alt}`}>
-                <img src={`${CFG.base}/reviews/${r.file}`} alt={r.alt} loading="lazy" className="h-auto w-full" />
+                <img src={`/reviews/${r.file}`} alt={r.alt} loading="lazy" className="h-auto w-full" />
                 <span className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-ink/70"><SocialIcon name={r.platform} />{r.platform}</span>
               </button>
             ))}
@@ -348,7 +348,7 @@ export default function Home() {
       )}
       {shot !== null && (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/80 p-4" onClick={() => setShot(null)} role="dialog" aria-modal="true" aria-label="Learner post">
-          <img src={`${CFG.base}/reviews/${REVIEW_SHOTS[shot].file}`} alt={REVIEW_SHOTS[shot].alt} className="max-h-[90dvh] max-w-full rounded-2xl bg-white object-contain" />
+          <img src={`/reviews/${REVIEW_SHOTS[shot].file}`} alt={REVIEW_SHOTS[shot].alt} className="max-h-[90dvh] max-w-full rounded-2xl bg-white object-contain" />
           <button aria-label="Close" className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white text-lg">✕</button>
         </div>
       )}

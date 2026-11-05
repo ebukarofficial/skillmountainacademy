@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "skillmountainacademy",
+  "compatibility_date": "2026-10-26",
+
+  // The website: the folder that `npm run build` creates (Next.js static export).
+  "assets": {
+    "directory": "./out",
+    // /checkout -> /checkout/ (matches trailingSlash: true in next.config.ts)
+    "html_handling": "auto-trailing-slash",
+    // Unknown URLs show out/404.html with a real 404 status
+    "not_found_handling": "404-page"
+  }
+
+  // ------------------------------------------------------------------
+  // LATER, when you add a backend (leave all of this commented for now):
+  // 1. Copy src/worker.ts.example to src/worker.ts
+  // 2. Create the database:  npx wrangler d1 create skillmountainacademy-db
+  // 3. Paste the database_id it prints below, then remove the // marks.
+  //
+  // "main": "src/worker.ts",
+  // "assets": {
+  //   "directory": "./out",
+  //   "html_handling": "auto-trailing-slash",
+  //   "not_found_handling": "404-page",
+  //   "binding": "ASSETS",
+  //   "run_worker_first": ["/api/*"]   // only /api/* goes to your Worker; everything else stays static
+  // },
+  // "d1_databases": [
+  //   { "binding": "DB", "database_name": "skillmountainacademy-db", "database_id": "REPLACE-WITH-YOUR-DATABASE-ID" }
+  // ],
+  // "observability": { "enabled": true }
+}

@@ -1,22 +1,23 @@
 # Skill Mountain Academy (SMA) site
 
-Next.js 16 + Tailwind 4 on GitHub Pages. Registrations go to a Google Form, payment is taken with Paystack, and a Google script confirms the payment and emails the learner.
+Next.js 16 + Tailwind 4, built as a static website (`output: "export"`) and served by Cloudflare (Workers with static assets), deployed from GitHub.
+Registrations go to a Google Form, payment is taken with Paystack, and a Google script confirms the payment and emails the learner.
 
-## Upload to GitHub
-Unzip, then drag everything EXCEPT the `.github` folder into the repo (GitHub's upload page cannot take dot-folders; your existing `.github/workflows/deploy.yml` stays). Commit, then watch the Actions tab.
-Settings > Pages > Source must be **GitHub Actions**.
-Repo secrets (Settings > Secrets and variables > Actions): `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` (pk_...) and `NEXT_PUBLIC_SHEET_URL` (from step 3 below).
+## Deploy (Cloudflare)
+Full steps, build settings, variables and checklist: **docs/CLOUDFLARE-DEPLOY.md**.
+Short version: Build command `npm run build` · Deploy command `npx wrangler deploy` · Node 22 · the website folder is `out` (set in `wrangler.jsonc`).
+Public settings (Paystack public key, Google script address) are added in Cloudflare as BUILD variables. No secret is stored in this repo.
 
 ## 1. Google Form (registrations)
 1. Create a Google Form with 5 short-answer questions, titled exactly: **Full name, Email, Phone, Programme, Reference**.
 2. Responses tab > Link to Sheets (creates the response sheet).
 3. Get the form address: Send > link icon. It looks like `https://docs.google.com/forms/d/e/XXXX/viewform`. Change `viewform` to `formResponse`.
 4. Get each question's id: three-dot menu > Get pre-filled link. Type any text in each question, click Get link, paste it somewhere. It contains `entry.123456=...` for each question.
-5. Open `lib/config.ts` on GitHub and fill in `GFORM`:
+5. Open `lib/config.ts` and fill in `GFORM`:
    `url` = the formResponse address, and `entries` = the five entry.… ids (name, email, phone, programme, reference).
 
 ## 2. Paystack
-Put your PUBLIC key in the GitHub secret above. Your SECRET key goes only in step 3 (never in GitHub).
+Put your PUBLIC key in the Cloudflare build variable (see docs/CLOUDFLARE-DEPLOY.md). Your SECRET key goes only in step 3 (Google Apps Script), never in GitHub or Cloudflare build variables.
 
 ## 3. Payment check + confirmation email (Google Apps Script)
 Follow the steps at the top of `docs/google-sheet-script.gs` inside the response Sheet. Use the skillmountainacademy@gmail.com account so emails come from SMA. Put real resource links in `RESOURCES`.

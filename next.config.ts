@@ -1,15 +1,11 @@
 import type { NextConfig } from "next";
 
-// BASE_PATH is set by the GitHub Actions workflow to "/<repo-name>".
-// Leave it empty when using a custom domain.
-const base = process.env.BASE_PATH ?? "";
-
+// Static export. `next build` writes the finished website to the "out" folder, and Cloudflare serves that folder
+// (see wrangler.jsonc). The site lives at the domain root, so no basePath or assetPrefix is needed.
 const nextConfig: NextConfig = {
   output: "export",
-  basePath: base,
-  images: { unoptimized: true },
-  trailingSlash: true,
-  env: { NEXT_PUBLIC_BASE_PATH: base },
+  images: { unoptimized: true }, // there is no image optimiser on a static host
+  trailingSlash: true,           // /checkout/ is written to out/checkout/index.html (matches html_handling in wrangler.jsonc)
 };
 
 export default nextConfig;

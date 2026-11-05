@@ -1,10 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat, Carlito } from "next/font/google";
+import localFont from "next/font/local";
 import { SITE_URL } from "@/lib/config";
 import "./globals.css";
 
-const montserrat = Montserrat({ subsets: ["latin"], variable: "--font-montserrat", weight: ["500", "600", "700", "800"] });
-const carlito = Carlito({ subsets: ["latin"], variable: "--font-carlito", weight: ["400", "700"] });
+// Fonts are bundled from npm packages (@fontsource), so the build needs no internet access.
+const montserrat = localFont({
+  src: "../node_modules/@fontsource-variable/montserrat/files/montserrat-latin-wght-normal.woff2",
+  variable: "--font-montserrat", weight: "100 900", display: "swap", adjustFontFallback: "Arial",
+});
+const carlito = localFont({
+  src: [
+    { path: "../node_modules/@fontsource/carlito/files/carlito-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../node_modules/@fontsource/carlito/files/carlito-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-carlito", display: "swap", adjustFontFallback: "Arial",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

@@ -1,0 +1,11 @@
+# Cloudflare redirects (permanent, 301). One rule per line: source  destination  status
+# Old IELTS checkout / page links go to the home page.
+# NOTE: this file cannot match query strings. The current checkout address /checkout/?p=ielts is a live page and is NOT redirected.
+/ielts               /  301
+/ielts-checkout      /  301
+/checkout/ielts      /  301
+/programmes/ielts    /  301
+/ielts/*             /  301
+/ielts-checkout/*    /  301
+/checkout/ielts/*    /  301
+/programmes/ielts/*  /  301

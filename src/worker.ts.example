@@ -1,0 +1,29 @@
+// BACKEND PLACEHOLDER. Not used yet: this file is ignored by the build because it does not end in .ts
+//
+// To switch it on later:
+//   1. Rename this file to src/worker.ts
+//   2. Uncomment the "main", "assets" (with binding) and "d1_databases" blocks in wrangler.jsonc
+//   3. Run:  npx wrangler d1 create skillmountainacademy-db   and paste the database_id into wrangler.jsonc
+//   4. Run:  npx wrangler types   (creates the Env types)  and add a src/tsconfig.json for the Worker
+//
+// Secrets (for example a Paystack SECRET key) go in Cloudflare, never in this repo:
+//   npx wrangler secret put PAYSTACK_SECRET
+
+interface Env {
+  ASSETS: Fetcher;   // the static website (the out folder)
+  DB: D1Database;    // D1 database binding named DB
+  // PAYSTACK_SECRET: string;   // example secret
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/")) {
+      // Example only: const row = await env.DB.prepare("SELECT 1 AS ok").first();
+      return Response.json({ ok: true, path: url.pathname });
+    }
+
+    return env.ASSETS.fetch(request); // everything else is the static website
+  },
+};
