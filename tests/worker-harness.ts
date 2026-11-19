@@ -6,16 +6,22 @@ import { readFileSync, readdirSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT } from "./helpers.ts";
 
-const OUT = join(ROOT, ".wrangler", "test", "worker.mjs");
-let built: Promise<unknown> | null = null;
-function bundle() {
+const builds = new Map<string, Promise<string>>();
+// `patch` is extra code appended to lib/config.ts in the test bundle only, for example to give a programme a
+// timed price or switch a flag on. The real config file is never changed.
+function bundle(patch = ""): Promise<string> {
   mkdirSync(join(ROOT, ".wrangler", "test"), { recursive: true });
-  built ??= build({
-    entryPoints: [join(ROOT, "src/worker.ts")], bundle: true, format: "esm", platform: "neutral", target: "es2022", outfile: OUT,
+  const out = join(ROOT, ".wrangler", "test", `worker-${builds.size}.mjs`);
+  if (builds.has(patch)) return builds.get(patch)!;
+  const configPath = join(ROOT, "lib", "config.ts");
+  const p = build({
+    entryPoints: [join(ROOT, "src/worker.ts")], bundle: true, format: "esm", platform: "neutral", target: "es2022", outfile: out,
+    plugins: [{ name: "patch-config", setup(b) { b.onLoad({ filter: /lib[\\/]config\.ts$/ }, (a) => (a.path === configPath ? { contents: readFileSync(configPath, "utf8") + "\n" + patch, loader: "ts" } : undefined)); } }],
     conditions: ["workerd", "worker", "browser"], logLevel: "silent",
     define: { "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": '""', "process.env.NEXT_PUBLIC_SHEET_URL": '""', "process.env.NEXT_PUBLIC_WHATSAPP": '""' },
-  });
-  return built;
+  }).then(() => out);
+  builds.set(patch, p);
+  return p;
 }
 
 export type Call = { url: string; method: string; headers: Record<string, string>; body: string };
@@ -41,12 +47,12 @@ export function defaultMock(req: Request, body: string): Response {
   return new Response("not mocked", { status: 599 });
 }
 
-export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; mock?: Mock } = {}) {
-  await bundle();
+export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; mock?: Mock; patch?: string } = {}) {
+  const scriptPath = await bundle(opts.patch);
   const calls: Call[] = [];
   // Miniflare 5 (bundled with Wrangler 4.156) takes the classic option shape through convertV4MiniflareOptions.
   const mf = new Miniflare(convertV4MiniflareOptions({
-    modules: true, scriptPath: OUT, compatibilityDate: "2026-10-01",
+    modules: true, scriptPath, compatibilityDate: "2026-10-01",
     d1Databases: opts.db === false ? undefined : { DB: "test-db-" + crypto.randomUUID() },
     kvNamespaces: opts.kv === false ? undefined : { KV: "test-kv-" + crypto.randomUUID() },
     bindings: { SITE_URL: SITE, ADMIN_EMAIL: "admin@example.com", EMAIL_FROM: "SMA <admission@skillmountainacademy.com>", CLASS_BOOKING_URL: "", ...(opts.env ?? SECRETS) },

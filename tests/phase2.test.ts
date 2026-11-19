@@ -75,7 +75,7 @@ test("no job placement, job guarantee or income claims anywhere", () => {
 
 test("programme pages: one per programme, with Course data, price, curriculum, career package, trust lines and Register", () => {
   const page = read("app/programmes/[slug]/page.tsx");
-  for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<Price", "<CurriculumActions", "<CareerLaunch", "<TrustLines", "/checkout/?p=", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
+  for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<HoldPrice", "<CurriculumActions", "<CareerLaunch", "<TrustLines", "/checkout/?p=", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
   for (const p of PROGRAMMES) {
     const html = built(`programmes/${p.slug}/index.html`);
     if (!html) continue; // checked after a build

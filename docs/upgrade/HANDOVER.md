@@ -9,7 +9,8 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 | 2 Programme pages + message | done |
 | 3 Worker + D1 forms | done (backend; the checkout switches to it in Phase 6) |
 | 4 Currency | done |
-| 5 to 9 | see the phase log below |
+| 5 Timed price hold | done (dormant) |
+| 6 to 9 | see the phase log below |
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
@@ -62,6 +63,19 @@ Every phase must end with `npm run build`, `npm run lint` and `npm test` all pas
   `display_currency`, `fx_rate` and `fx_at`.
 - Files: `app/currency.tsx` (new), `lib/pricing.ts` (new), `src/server/routes/geo.ts`, `app/components.tsx` (Price uses Money; CloudBadges `dark`),
   `app/page.tsx`, `app/site-parts.tsx`, `app/programmes/[slug]/page.tsx`, `app/checkout/page.tsx`, `tests/phase4.test.ts`.
+
+### Phase 5: timed price hold (dormant)
+- Turns on only for a programme whose `timedPrice` is set in `lib/config.ts`. Today every programme has `timedPrice: null`, so the site
+  makes no hold request at all.
+- `GET /api/hold?p=<slug>` (src/server/routes/hold.ts): 48-minute hold, recorded in D1 (`holds`), signed HttpOnly `sma_hold_<slug>` cookie
+  (HMAC-SHA256 with `HOLD_SIGNING_KEY`) plus a signed visitor cookie. No restart for 7 days, checked by visitor AND by IP hash.
+  Checkout prices the order from config + a valid, unexpired hold only; the browser's amount is ignored.
+- `app/hold.tsx`: countdown (screen readers hear only 30/10/5/1-minute milestones; minutes only with reduced motion), timed price
+  with the regular price crossed out, "Offer ended. The regular price applies." Exit prompt once per visit (cursor leaves the top,
+  back button, or returning to a hidden tab) with "Secure my seat" / "Not now"; focus is trapped, Escape closes, "Not now" after
+  pressing back lets the visitor leave. No scarcity claims.
+- Checked visually with a temporary timed price through `wrangler dev` (then reverted).
+- Files: `app/hold.tsx` (new), `src/server/routes/hold.ts`, `app/programmes/[slug]/page.tsx`, `tests/phase5.test.ts`, `tests/worker-harness.ts` (config patching for tests).
 
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.
