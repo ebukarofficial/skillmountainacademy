@@ -8,6 +8,8 @@ import logo from "@/assets/sma-logo.png";
 import { CFG, EDUCATION, ENGLISH, GFORM, PROGRAMMES, REMOVED_SLUGS, duration, findProgramme, type Programme } from "@/lib/config";
 import { TERMS_VERSION } from "@/lib/terms";
 import { MessageStrip } from "../site-parts";
+import { BankDone, Confirming, ServerPayment, useBackend } from "./server-pay";
+import { useHold } from "../hold";
 import { ChargeNote, CurrencySwitcher, Money } from "../currency";
 import { BankDetails, CloudBadges, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet } from "../components";
 
@@ -52,9 +54,28 @@ function Pick({ label, name, options, d }: { label: string; name: string; option
   );
 }
 
+// Order summary. A timed price applies only while the server says this visitor's hold is active (Phase 5).
+function OrderTotal({ p }: { p: Programme }) {
+  const { active } = useHold(p);
+  const price = active && p.timedPrice != null ? p.timedPrice : p.price;
+  const was = active && p.timedPrice != null ? p.price : p.was;
+  return (
+    <div className="mt-6 space-y-2 border-t border-white/15 pt-5">
+      {was && <div className="flex justify-between text-white/70"><span>{active ? "Regular price" : "Original price"}</span><s>{naira(was)}</s></div>}
+      {was && <div className="flex justify-between text-brand-orange"><span>You save</span><span>{naira(was - price)}</span></div>}
+      <div className="flex items-end justify-between pt-2"><span className="text-white/80">Total</span><span className="font-display text-3xl font-extrabold">{naira(price)}</span></div>
+      <ChargeNote naira={price} className="text-right text-sm text-white/70" />
+    </div>
+  );
+}
+
 function Checkout() {
-  const id = useSearchParams().get("p");
+  const params = useSearchParams();
+  const id = params.get("p");
   const p = findProgramme(id);
+  const returnRef = params.get("ref");
+  const returnTrx = params.get("trxref") || params.get("reference") || "";
+  const backend = useBackend();
   const removed = !!id && REMOVED_SLUGS.includes(id);
   const router = useRouter();
   // Links to programmes that are no longer offered (see REMOVED_SLUGS) go to the home page with a short notice.
@@ -68,6 +89,7 @@ function Checkout() {
   const [err, setErr] = useState("");
   const [done, setDone] = useState<{ ref: string; kind: "paid" | "bank" } | null>(null);
   const [view, setView] = useState(false);
+  const [serverDone, setServerDone] = useState<Parameters<typeof BankDone>[0]["r"] | null>(null);
 
   const top = () => window.scrollTo({ top: 0, behavior: "smooth" });
   const grab = (e: FormEvent<HTMLFormElement>) => ({ ...d, ...(Object.fromEntries(new FormData(e.currentTarget)) as Data) });
@@ -124,6 +146,21 @@ function Checkout() {
   }
 
   const fullName = [d.firstName, d.middleName, d.surname].filter(Boolean).join(" ");
+
+  // Back from Paystack: show the confirmation for this order.
+  if (returnRef && /^SMA-(BT-)?[A-Z0-9]{12}$/.test(returnRef)) return <Confirming reference={returnRef} trx={returnTrx} p={p} />;
+
+  if (serverDone) {
+    return (
+      <div className="mx-auto max-w-xl rounded-[2rem] bg-paper p-6 shadow-xl shadow-indigo/10 sm:p-8">
+        <span className="brand-bg mx-auto grid h-16 w-16 place-items-center rounded-full text-3xl text-white">✓</span>
+        <BankDone r={serverDone} p={p} name={fullName} />
+        <p className="mt-5 rounded-2xl bg-cream px-4 py-3 text-center text-sm">Your reference: <b>{serverDone.reference}</b></p>
+        <p className="mt-3 text-center text-sm text-ink/70">We emailed these details to <b>{d.email}</b>. Check your spam folder if you do not see it.</p>
+        <div className="mt-5 text-center"><Link href="/" className="brand-bg inline-block rounded-full px-8 py-3 font-display font-semibold text-white">Back to home</Link></div>
+      </div>
+    );
+  }
 
   if (done) {
     const msg = `Hello Skill Mountain Academy, I have paid ${naira(p.price)} for ${p.name}. Name: ${fullName}. Reference: ${done.ref}. I am sending my teller.`;
@@ -218,7 +255,11 @@ function Checkout() {
           </form>
         )}
 
-        {step === 2 && (
+        {step === 2 && backend.mode === "checking" && <p className="py-10 text-center text-ink/70" role="status">Preparing payment options…</p>}
+        {step === 2 && backend.mode === "server" && (
+          <ServerPayment p={p} d={d} payments={backend.payments} onBack={() => { setStep(0); top(); }} onDone={(r) => { setServerDone(r); top(); }} />
+        )}
+        {step === 2 && backend.mode === "legacy" && (
           <div className="space-y-4">
             <h1 className="font-display text-2xl font-extrabold">Review and pay</h1>
             <div className="rounded-2xl bg-cream p-4 text-sm">
@@ -240,6 +281,7 @@ function Checkout() {
             </fieldset>
 
             {method === "bank" && <BankDetails />}
+            <p className="rounded-2xl bg-cream px-4 py-3 text-sm">Want to pay in 3 parts (50%, 30%, 20%)? <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(`Hello, I would like to pay for ${p.name} in 3 parts.`)}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-red underline">Message us on WhatsApp</a> and we will set it up for you.</p>
 
             <label className="flex items-start gap-3 rounded-2xl bg-cream px-4 py-3 text-sm">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#c8233a]" />
@@ -271,14 +313,10 @@ function Checkout() {
             <button type="button" onClick={() => setView(true)} className="mt-2 text-sm font-semibold text-brand-orange underline">View curriculum</button>
           </div>
         </div>
-        <div className="mt-6 space-y-2 border-t border-white/15 pt-5">
-          {p.was && <div className="flex justify-between text-white/70"><span>Original price</span><s>{naira(p.was)}</s></div>}
-          {p.was && <div className="flex justify-between text-brand-orange"><span>You save</span><span>{naira(p.was - p.price)}</span></div>}
-          <div className="flex items-end justify-between pt-2"><span className="text-white/80">Total</span><span className="font-display text-3xl font-extrabold">{naira(p.price)}</span></div>
-          <ChargeNote naira={p.price} className="text-right text-sm text-white/70" />
-        </div>
+        <OrderTotal p={p} />
         <ul className="mt-6 space-y-2 text-sm text-white/75">
           <li>✓ Pay with Paystack or by bank transfer</li>
+          <li>✓ Pay in full or in 3 parts (50%, 30%, 20%)</li>
           <li>✓ Welcome email with your curriculum</li>
           <li>✓ A link to book your class days and times</li>
         </ul>

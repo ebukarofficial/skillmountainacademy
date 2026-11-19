@@ -57,7 +57,7 @@ export default function Home() {
   const [step, setStep] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
   const [subbed, setSubbed] = useState(false);
-  const [notice, setNotice] = useState(false);
+  const [notice, setNotice] = useState<"" | "removed" | "pay-unavailable">("");
   const touch = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
 
@@ -70,11 +70,12 @@ export default function Home() {
   // Links to programmes that are no longer offered arrive here as /?notice=removed (see public/_redirects and the checkout page).
   useEffect(() => {
     const u = new URL(window.location.href);
-    if (u.searchParams.get("notice") !== "removed") return;
+    const n = u.searchParams.get("notice");
+    if (n !== "removed" && n !== "pay-unavailable") return;
     u.searchParams.delete("notice");
     window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     // Shown on the next tick: the URL is the external system here, and React state follows it.
-    const t = setTimeout(() => setNotice(true), 0);
+    const t = setTimeout(() => setNotice(n), 0);
     return () => clearTimeout(t);
   }, []);
 
@@ -133,8 +134,10 @@ export default function Home() {
       {notice && (
         <div className="mx-auto mt-2 max-w-6xl px-5">
           <div role="status" className="flex items-center justify-between gap-4 rounded-2xl bg-indigo px-5 py-3 text-white">
-            <p>IELTS Training and Data Analytics are no longer offered. <a href="#programmes" className="font-semibold underline">See our current programmes</a>.</p>
-            <button type="button" aria-label="Dismiss notice" onClick={() => setNotice(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15">✕</button>
+            {notice === "removed"
+              ? <p>IELTS Training and Data Analytics are no longer offered. <a href="#programmes" className="font-semibold underline">See our current programmes</a>.</p>
+              : <p>Online payment links are not available right now. Please <a href={`https://wa.me/${CFG.whatsapp}`} className="font-semibold underline">message us on WhatsApp</a> or email {BUSINESS.email} and we will help you pay.</p>}
+            <button type="button" aria-label="Dismiss notice" onClick={() => setNotice("")} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15">✕</button>
           </div>
         </div>
       )}
