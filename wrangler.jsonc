@@ -48,7 +48,8 @@
   "define": {
     "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "\"\"",
     "process.env.NEXT_PUBLIC_SHEET_URL": "\"\"",
-    "process.env.NEXT_PUBLIC_WHATSAPP": "\"\""
+    "process.env.NEXT_PUBLIC_WHATSAPP": "\"\"",
+    "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": "\"\""
   },
 
   "observability": { "enabled": true }

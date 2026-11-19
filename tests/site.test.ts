@@ -55,7 +55,7 @@ test("old IELTS and Data Analytics paths redirect home with the notice", () => {
   const firstSplat = sources.findIndex((s) => s.includes("*"));
   assert.ok(sources.slice(firstSplat).every((s) => s.includes("*")), "static redirects must come before wildcard ones");
   assert.match(read("app/checkout/page.tsx"), /router\.replace\("\/\?notice=removed"\)/, "checkout must redirect ?p=ielts");
-  assert.match(read("app/page.tsx"), /notice"\) !== "removed"/, "home page must read the notice");
+  assert.match(read("app/page.tsx"), /n !== "removed"/, "home page must read the notice");
 });
 
 // Brand colours: globals.css and the logos must be byte-identical to Phase 0, and every hex colour in the

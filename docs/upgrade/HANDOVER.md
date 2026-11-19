@@ -10,7 +10,8 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 | 3 Worker + D1 forms | done (backend; the checkout switches to it in Phase 6) |
 | 4 Currency | done |
 | 5 Timed price hold | done (dormant) |
-| 6 to 9 | see the phase log below |
+| 6 Checkout, payments, groups | done |
+| 7 to 9 | see the phase log below |
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
@@ -76,6 +77,25 @@ Every phase must end with `npm run build`, `npm run lint` and `npm test` all pas
   pressing back lets the visitor leave. No scarcity claims.
 - Checked visually with a temporary timed price through `wrangler dev` (then reverted).
 - Files: `app/hold.tsx` (new), `src/server/routes/hold.ts`, `app/programmes/[slug]/page.tsx`, `tests/phase5.test.ts`, `tests/worker-harness.ts` (config patching for tests).
+
+### Phase 6: checkout, Paystack, instalments, groups
+- Checkout asks `GET /api/status`. Server flow when the database + Turnstile (secret AND `NEXT_PUBLIC_TURNSTILE_SITE_KEY`) are ready;
+  card payments when `PAYSTACK_SECRET_KEY` is also set. Otherwise the ORIGINAL checkout (Google Form + Apps Script + Paystack popup)
+  runs unchanged, with a "pay in 3 parts? message us on WhatsApp" line. So deploying before setup changes nothing for learners.
+- Server flow: Pay in full / Pay in 3 parts (50/30/20) with amounts in naira plus the active currency, due dates (0/45/90 days;
+  0/30/60 for 3-month training), "You pay ₦X now… Paystack charges in NGN", and "Live-session access is paused if a payment is more
+  than 2 weeks late." The Worker computes the price (config + hold), saves everything, and initialises Paystack with the secret key;
+  the learner is redirected to Paystack's page and back to `/checkout/?p=..&ref=..`, which confirms via `GET /api/order`.
+- Webhook `POST /api/paystack/webhook`: HMAC-SHA512 signature check; payment recorded once per Paystack reference (D1 batch:
+  payment + instalment + order status); amount and currency must match the part; welcome/receipt emails; mirror to the sheet.
+- Instalments (cron, 06:00 Lagos): reminder 3 days before parts 2/3, signed `/api/pay?ref=..&t=..` link (redirects to a fresh
+  Paystack payment) on the due date, overdue marked the day after, owner digest of parts more than 14 days late. Max 20 emails per run
+  (free-plan limits). Bank-transfer orders are still confirmed by hand in the sheet, so they get no automatic reminders.
+- Groups: `FLAGS.GROUP_ENABLED` (off) AND a programme `groupPrice` (all null). When on: lead adds 1-2 friends (name, email); one price;
+  each friend gets their own registration row (role group_member, lead_id) and a welcome email.
+- Home page shows a notice for `?notice=pay-unavailable` (pay link clicked before Paystack is set up).
+- Files: `app/checkout/server-pay.tsx`, `app/turnstile.tsx` (new), `app/checkout/page.tsx`, `app/page.tsx`, `lib/config.ts` (turnstileSiteKey),
+  `src/server/routes/payments.ts`, `src/server/cron.ts`, `src/server/repo.ts`, `wrangler.jsonc` (define), `tests/phase6.test.ts`.
 
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.

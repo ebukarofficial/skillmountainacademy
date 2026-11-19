@@ -18,7 +18,7 @@ function bundle(patch = ""): Promise<string> {
     entryPoints: [join(ROOT, "src/worker.ts")], bundle: true, format: "esm", platform: "neutral", target: "es2022", outfile: out,
     plugins: [{ name: "patch-config", setup(b) { b.onLoad({ filter: /lib[\\/]config\.ts$/ }, (a) => (a.path === configPath ? { contents: readFileSync(configPath, "utf8") + "\n" + patch, loader: "ts" } : undefined)); } }],
     conditions: ["workerd", "worker", "browser"], logLevel: "silent",
-    define: { "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": '""', "process.env.NEXT_PUBLIC_SHEET_URL": '""', "process.env.NEXT_PUBLIC_WHATSAPP": '""' },
+    define: { "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": '""', "process.env.NEXT_PUBLIC_SHEET_URL": '""', "process.env.NEXT_PUBLIC_WHATSAPP": '""', "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": '""' },
   }).then(() => out);
   builds.set(patch, p);
   return p;
