@@ -6,18 +6,20 @@ import Link from "next/link";
 import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
 import banner from "@/assets/photos/banner-students.webp";
-import { AUDIENCE, BUSINESS, CFG, FAQ, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, type Programme } from "@/lib/config";
-import { CalendlyEmbed, Chevrons, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, naira, postSheet, useRate, usd } from "./components";
+import { AUDIENCE, BUSINESS, CFG, FAQ, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, duration, findProgramme, type Programme } from "@/lib/config";
+import { CalendlyEmbed, Chevrons, CloudBadges, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, naira, postSheet } from "./components";
 
 const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]].filter(([h]) => h !== "#reviews" || REVIEW_SHOTS.length > 0);
 
 type Slide = { id: string; name: string; tone: string; photo: StaticImageData; note: string; prog?: Programme };
 const SLIDES: Slide[] = [
-  ...PROGRAMMES.filter((p) => p.live).map((p) => ({
-    id: p.id, name: p.name, tone: p.tone, photo: PHOTO[p.id], prog: p,
-    note: `${naira(p.fee!)}${p.was ? ` · was ${naira(p.was)}` : ""}${p.months ? ` · ${p.months} months` : ""}`,
+  ...PROGRAMMES.map((p) => ({
+    id: p.slug, name: p.name, tone: p.tone, photo: PHOTO[p.slug], prog: p,
+    note: `${naira(p.price)}${p.was ? ` · was ${naira(p.was)}` : ""} · ${duration(p)}`,
   })),
 ];
+
+const CLOUD_TRACK = PROGRAMMES.filter((p) => p.track === "cloud");
 
 
 const USPS = [
@@ -37,7 +39,7 @@ function UspIcon({ i }: { i: number }) {
   return <svg {...c}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" /></svg>;
 }
 
-const regHref = (p: Programme) => `/checkout/?p=${p.id}`;
+const regHref = (p: Programme) => `/checkout/?p=${p.slug}`;
 
 export default function Home() {
   const [menu, setMenu] = useState(false);
@@ -52,15 +54,24 @@ export default function Home() {
   const [step, setStep] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
   const [subbed, setSubbed] = useState(false);
+  const [notice, setNotice] = useState(false);
   const touch = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
-  const rate = useRate();
 
   const cats = ["All", ...Array.from(new Set(PROGRAMMES.map((p) => p.tag)))];
   const term = q.trim().toLowerCase();
   const list = PROGRAMMES.filter((p) => (cat === "All" || p.tag === cat) && (!term || `${p.name} ${p.tag} ${p.blurb}`.toLowerCase().includes(term)));
-  const rec = PROGRAMMES.find((p) => p.id === GOALS[goal].id)!;
+  const rec = findProgramme(GOALS[goal].slug)!;
   const s = STEPS[step];
+
+  // Links to programmes that are no longer offered arrive here as /?notice=removed (see public/_redirects and the checkout page).
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get("notice") !== "removed") return;
+    setNotice(true);
+    u.searchParams.delete("notice");
+    window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+  }, []);
 
   useEffect(() => {
     if (paused) return;
@@ -111,6 +122,15 @@ export default function Home() {
         )}
       </header>
 
+      {notice && (
+        <div className="mx-auto mt-2 max-w-6xl px-5">
+          <div role="status" className="flex items-center justify-between gap-4 rounded-2xl bg-indigo px-5 py-3 text-white">
+            <p>IELTS Training and Data Analytics are no longer offered. <a href="#programmes" className="font-semibold underline">See our current programmes</a>.</p>
+            <button type="button" aria-label="Dismiss notice" onClick={() => setNotice(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15">✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <section id="top" className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-10 pt-6 lg:grid-cols-[.9fr_1.1fr] lg:pt-12">
         <div className="pointer-events-none absolute -bottom-10 -left-32 -z-10 hidden h-40 w-40 donut float lg:block" aria-hidden="true" />
@@ -121,7 +141,7 @@ export default function Home() {
           <p className="mt-3 max-w-md text-ink/70">You are welcome here. Learn the way a homeschool teaches: one teacher, one student, at your pace.</p>
           <form onSubmit={go} className="mt-7 flex max-w-md overflow-hidden rounded-2xl bg-white shadow-lg shadow-indigo/10">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your programme" aria-label="Find your programme" list="progs" className="min-w-0 flex-1 bg-transparent px-5 py-4 outline-none" />
-            <datalist id="progs">{PROGRAMMES.map((p) => <option key={p.id} value={p.name} />)}</datalist>
+            <datalist id="progs">{PROGRAMMES.map((p) => <option key={p.slug} value={p.name} />)}</datalist>
             <button aria-label="Search programmes" className="brand-bg px-7 font-display font-semibold text-white transition hover:brightness-110">Search</button>
           </form>
         </Reveal>
@@ -142,7 +162,6 @@ export default function Home() {
                       <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-ink">{sl.prog ? "Open for registration" : "SMA"}</span>
                       <h2 className="mt-3 font-display text-2xl font-extrabold sm:text-3xl">{sl.name}</h2>
                       <p className="text-white/85">{sl.note}</p>
-                      {sl.prog && <p className="text-sm text-white/70">≈ {usd(sl.prog.fee!, rate)}</p>}
                       {sl.prog && <Link href={regHref(sl.prog)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-block rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Register</Link>}
                     </div>
                   ) : (
@@ -185,44 +204,68 @@ export default function Home() {
       <section id="programmes" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-14 sm:pb-20">
         <Reveal className="text-center">
           <h2 className="font-display text-3xl font-extrabold sm:text-5xl">One mentor. One student<span className="text-brand-orange">.</span></h2>
-          <p className="mx-auto mt-3 max-w-xl text-ink/70">Choose a programme and register. More skills are coming.</p>
+          <p className="mx-auto mt-3 max-w-xl text-ink/70">Choose a programme and register.</p>
           <div className="mt-6 flex justify-start gap-2 overflow-x-auto pb-2 no-scrollbar sm:justify-center" role="tablist" aria-label="Categories">
             {cats.map((c) => (
               <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)} className={`shrink-0 border-b-2 px-4 py-2 font-medium transition ${cat === c ? "border-brand-red text-ink" : "border-transparent text-ink/70 hover:text-ink"}`}>{c}</button>
             ))}
           </div>
         </Reveal>
-        {list.length === 0 && <p className="mt-10 text-center text-ink/70">No match yet. That skill may be coming soon.</p>}
+        {list.length === 0 && <p className="mt-10 text-center text-ink/70">No match. Try another word, or <button type="button" onClick={() => { setQ(""); setCat("All"); }} className="font-semibold text-brand-red underline">see all programmes</button>.</p>}
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {list.map((p, i) => (
-            <Reveal key={p.id} delay={(i % 4) * 80} className="h-full">
+            <Reveal key={p.slug} delay={(i % 4) * 80} className="h-full">
               <article className="flex h-full flex-col rounded-[1.75rem] bg-paper p-3 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo/10">
-                <div className={`relative h-48 overflow-hidden rounded-[1.25rem] bg-gradient-to-br ${p.tone} ${p.live ? "" : "opacity-70 saturate-50"}`}>
-                  <Image src={PHOTO[p.id]} alt="" fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover" style={{ objectPosition: FOCUS[p.id] }} />
-                  {p.live && p.was && <span className="absolute left-3 top-3 rounded-full bg-brand-red px-3 py-1 text-xs font-bold text-white">{`${Math.round((1 - p.fee! / p.was) * 100)}% OFF`}</span>}
+                <div className={`relative h-48 overflow-hidden rounded-[1.25rem] bg-gradient-to-br ${p.tone}`}>
+                  <Image src={PHOTO[p.slug]} alt="" fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
+                  {p.was && <span className="absolute left-3 top-3 rounded-full bg-brand-red px-3 py-1 text-xs font-bold text-white">{`${Math.round((1 - p.price / p.was) * 100)}% OFF`}</span>}
                 </div>
                 <div className="flex flex-1 flex-col px-2 pb-2 pt-4">
                   <h3 className="font-display text-xl font-bold">{p.name}</h3>
-                  <p className="mt-1 text-sm text-ink/70">{p.live ? `${p.months ? `${p.months} months · ` : ""}one-on-one` : "Coming soon"}</p>
+                  {p.track === "cloud" && <CloudBadges className="mt-2" />}
+                  <p className="mt-1 text-sm text-ink/70">{duration(p)} · one-on-one</p>
                   <p className="mt-2 flex-1 text-ink/75">{p.blurb}</p>
-                  {p.live ? (
-                    <>
-                      <details className="group mt-3 rounded-2xl bg-cream px-4 py-3">
-                        <summary className="flex cursor-pointer list-none items-center justify-between font-display text-sm font-semibold">What you&apos;ll learn<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink/75">{p.learn.map((l) => <li key={l}>{l}</li>)}</ul>
-                      </details>
-                      <button onClick={() => setView(p)} className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum</button>
-                      <div className="mt-4"><Price p={p} /></div>
-                      <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register</Link>
-                    </>
-                  ) : (
-                    <p className="mt-4 rounded-full bg-cream py-3.5 text-center font-display font-semibold text-ink/70">Coming soon</p>
-                  )}
+                  <details className="group mt-3 rounded-2xl bg-cream px-4 py-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between font-display text-sm font-semibold">What you&apos;ll learn<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink/75">{p.learn.map((l) => <li key={l}>{l}</li>)}</ul>
+                  </details>
+                  <button onClick={() => setView(p)} className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum</button>
+                  <div className="mt-4"><Price p={p} /></div>
+                  <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register</Link>
                 </div>
               </article>
             </Reveal>
           ))}
         </div>
+
+        {/* Cloud track comparison */}
+        <Reveal className="mt-16">
+          <div id="cloud-track" className="scroll-mt-24 rounded-[2rem] bg-paper p-5 sm:p-8">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-brand-red">The Cloud track</p>
+                <h3 className="font-display text-2xl font-extrabold sm:text-3xl">Which one is right for me?</h3>
+                <p className="mt-2 max-w-2xl text-ink/75">Three cloud programmes, and all three teach both AWS and Azure. Pick the one that matches where you are today.</p>
+              </div>
+              <CloudBadges />
+            </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {CLOUD_TRACK.map((p) => (
+                <div key={p.slug} className="flex flex-col rounded-[1.5rem] bg-cream p-5">
+                  <h4 className="font-display text-xl font-bold">{p.name}</h4>
+                  <dl className="mt-3 flex-1 space-y-2 text-sm">
+                    <div><dt className="font-semibold">Level</dt><dd className="text-ink/75">{p.level}</dd></div>
+                    <div><dt className="font-semibold">Who it&apos;s for</dt><dd className="text-ink/75">{p.audience}</dd></div>
+                    <div><dt className="font-semibold">Duration</dt><dd className="text-ink/75">{duration(p)}</dd></div>
+                    <div><dt className="font-semibold">Platforms</dt><dd className="mt-1"><CloudBadges /></dd></div>
+                  </dl>
+                  <div className="mt-4"><Price p={p} /></div>
+                  <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3 text-center font-display font-semibold text-white transition hover:brightness-110">Register for {p.name}</Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal>
 
         <Reveal className="mt-20 text-center">
           <h3 className="font-display text-3xl font-extrabold sm:text-4xl"><span className="brand-text">The right place. The right way.</span></h3>
@@ -284,7 +327,7 @@ export default function Home() {
                   <p className="text-sm font-medium text-brand-red">We suggest</p>
                   <p className="font-display text-2xl font-extrabold">{rec.name}</p>
                   <p className="mt-1 text-ink/70">{GOALS[goal].why}</p>
-                  <p className="mt-2 font-display font-bold">{naira(rec.fee!)} <span className="text-sm font-normal text-ink/70">≈ {usd(rec.fee!, rate)}{rec.was ? ` · usual price ${naira(rec.was)}` : ""}</span></p>
+                  <p className="mt-2 font-display font-bold">{naira(rec.price)} <span className="text-sm font-normal text-ink/70">{duration(rec)}{rec.was ? ` · usual price ${naira(rec.was)}` : ""}</span></p>
                 </div>
                 <Link href={regHref(rec)} className="brand-bg rounded-full px-7 py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register for {rec.name}</Link>
               </div>

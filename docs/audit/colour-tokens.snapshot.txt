@@ -1,0 +1,54 @@
+# Colour token snapshot (Phase 0, 2026-11-19). Every later phase must diff empty against this.
+## app/globals.css (variables, theme, gradients)
+5:  --cream: #fcf9db;
+6:  --paper: #fffdf0;
+7:  --navy: #14296b;
+8:  --indigo: #1e0e6f;
+9:  --plum: #5b2270;
+10:  --red: #c8233a;
+11:  --orange: #f7892b;
+12:  --ink: #16163a;
+16:  --color-cream: var(--cream);
+17:  --color-paper: var(--paper);
+18:  --color-navy: var(--navy);
+19:  --color-indigo: var(--indigo);
+20:  --color-plum: var(--plum);
+21:  --color-brand-red: var(--red);
+22:  --color-brand-orange: var(--orange);
+23:  --color-ink: var(--ink);
+33:  background: linear-gradient(90deg, var(--navy), var(--plum) 40%, var(--red) 70%, #cf4a16);
+37:.brand-bg { background: linear-gradient(100deg, #b81f35, #cf4a16); }
+53:.orb { background: radial-gradient(circle at 30% 28%, #ffe0bf, var(--orange) 45%, var(--red)); box-shadow: inset -8px -10px 24px rgba(120,20,30,.35), 0 20px 40px rgba(200,35,58,.25); border-radius: 9999px; }
+54:.donut { border-radius: 9999px; border: 22px solid transparent; background: linear-gradient(var(--cream), var(--cream)) padding-box, linear-gradient(135deg, var(--navy), var(--plum), var(--red), var(--orange)) border-box; box-shadow: 0 20px 40px rgba(30,14,111,.2); }
+62:.skip-link { position: absolute; left: 1rem; top: -4rem; z-index: 100; background: var(--indigo); color: #fff; padding: .75rem 1.25rem; border-radius: 9999px; font-weight: 700; }
+## hardcoded colours in code
+app/checkout/page.tsx:229:[#1e0e6f]
+app/checkout/page.tsx:239:[#c8233a]
+app/globals.css:10:#c8233a
+app/globals.css:11:#f7892b
+app/globals.css:12:#16163a
+app/globals.css:33:#cf4a16
+app/globals.css:37:#b81f35
+app/globals.css:37:#cf4a16
+app/globals.css:53:#ffe0bf
+app/globals.css:5:#fcf9db
+app/globals.css:6:#fffdf0
+app/globals.css:7:#14296b
+app/globals.css:8:#1e0e6f
+app/globals.css:9:#5b2270
+app/layout.tsx:35:#fcf9db
+app/page.tsx:408:[#f7892b]
+app/page.tsx:427:[#25d366]
+docs/google-sheet-script.gs:190:#c8233a
+docs/google-sheet-script.gs:190:#ffffff
+lib/config.ts:76:[#ffb35c]
+## gradient tone classes per programme
+76:tone: "from-brand-red via-brand-orange to-[#ffb35c]"
+82:tone: "from-navy via-indigo to-plum"
+87:tone: "from-indigo via-navy to-brand-orange"
+92:tone: "from-ink via-navy to-brand-red"
+98:tone: "from-brand-orange via-brand-red to-plum"
+103:tone: "from-plum via-indigo to-navy"
+107:tone: "from-plum via-brand-red to-brand-orange"
+109:tone: "from-navy via-plum to-brand-red"
+111:tone: "from-indigo via-navy to-brand-orange"

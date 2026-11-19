@@ -1,27 +1,37 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { StaticImageData } from "next/image";
-import { BANK, CFG, CURRICULUM_LINKS, GFORM, type Programme } from "@/lib/config";
+import { BANK, CFG, CURRICULUM_LINKS, GFORM, duration, type Programme } from "@/lib/config";
 import pGraphics from "@/assets/photos/photo-graphics.webp";
 import pDevops from "@/assets/photos/photo-devops.webp";
 import pCloud from "@/assets/photos/photo-cloud.webp";
 import pMarketing from "@/assets/photos/photo-marketing.webp";
-import pIelts from "@/assets/photos/photo-ielts.webp";
 import pUiux from "@/assets/photos/photo-uiux.webp";
 import pCyber from "@/assets/photos/photo-cyber.webp";
 import pWeb from "@/assets/photos/photo-web.webp";
-import pData from "@/assets/photos/photo-data.webp";
+import pCloudDevops from "@/assets/photos/photo-data.webp";
 import pSma from "@/assets/photos/photo-sma.webp";
 
+// One photo per programme slug.
 export const PHOTO: Record<string, StaticImageData> = {
-  graphics: pGraphics, devops: pDevops, cloud: pCloud, cyber: pCyber, marketing: pMarketing, ielts: pIelts, uiux: pUiux, web: pWeb, data: pData,
+  graphics: pGraphics, uiux: pUiux, webdev: pWeb, marketing: pMarketing, cybersecurity: pCyber,
+  cloud: pCloud, devops: pDevops, "cloud-devops": pCloudDevops,
 };
 
 // Where each photo is anchored inside its card, so faces are never cropped out ("x% y%").
 export const FOCUS: Record<string, string> = {
-  graphics: "75% 0%", devops: "35% 0%", cloud: "50% 0%", cyber: "50% 0%", marketing: "60% 0%",
-  ielts: "45% 0%", uiux: "45% 0%", data: "50% 0%", web: "50% 0%",
+  graphics: "75% 0%", uiux: "45% 0%", webdev: "50% 0%", marketing: "60% 0%", cybersecurity: "50% 0%",
+  cloud: "50% 0%", devops: "35% 0%", "cloud-devops": "50% 0%",
 };
+
+// "AWS" and "Azure" text badges for Cloud track programmes (text only, no third-party logos).
+export function CloudBadges({ className = "" }: { className?: string }) {
+  return (
+    <span className={`flex flex-wrap gap-1.5 ${className}`}>
+      {["AWS", "Azure"].map((b) => <span key={b} className="rounded-full bg-indigo px-2.5 py-0.5 text-xs font-bold text-white">{b}</span>)}
+    </span>
+  );
+}
 export const SMA_PHOTO = pSma;
 
 export const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
@@ -80,23 +90,15 @@ export function CountUp({ to, suffix = "" }: { to: number; suffix?: string }) {
   return <span ref={ref}>{n}{suffix}</span>;
 }
 
-// Naira per US dollar. A fixed approximate rate set in lib/config.ts (no third-party request is made from visitors' browsers).
-export function useRate() {
-  return CFG.usdRate;
-}
-export const usd = (naira: number, rate: number) => "US$" + Math.round(naira / rate).toLocaleString("en-US");
-
 export function Price({ p, size = "md" }: { p: Programme; size?: "md" | "lg" }) {
-  const rate = useRate();
-  const save = p.was ? p.was - p.fee! : 0;
+  const save = p.was ? p.was - p.price : 0;
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         {p.was && <s className="text-ink/70 decoration-brand-red decoration-2">{naira(p.was)}</s>}
-        <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}>{naira(p.fee!)}</span>
+        <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}>{naira(p.price)}</span>
         {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save {naira(save)}</span>}
       </div>
-      <p className="mt-0.5 text-sm text-ink/70">≈ {usd(p.fee!, rate)}{p.was ? <span className="text-ink/70"> (was {usd(p.was, rate)})</span> : null}</p>
     </div>
   );
 }
@@ -137,7 +139,7 @@ export function SocialIcon({ name }: { name: string }) {
 
 // Curriculum viewer: shows what a learner will cover, with a download link when a Google Drive link is set.
 export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose: () => void; action?: ReactNode }) {
-  const link = CURRICULUM_LINKS[p.id];
+  const link = CURRICULUM_LINKS[p.slug];
   const closeBtn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     closeBtn.current?.focus();
@@ -154,7 +156,7 @@ export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose:
           <div>
             <p className="text-sm font-medium text-brand-red">Curriculum</p>
             <h2 className="font-display text-2xl font-extrabold">{p.name}</h2>
-            <p className="text-sm text-ink/70">{p.months ? `${p.months} months · ` : ""}one-on-one mentorship</p>
+            <p className="text-sm text-ink/70">{duration(p)} · one-on-one mentorship</p>
           </div>
           <button ref={closeBtn} type="button" aria-label="Close" onClick={onClose} className="h-10 w-10 shrink-0 rounded-full bg-cream">✕</button>
         </div>
@@ -172,7 +174,7 @@ export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose:
           {link ? (
             <a href={link} target="_blank" rel="noopener noreferrer" className="block rounded-full border-2 border-indigo py-3 text-center font-display font-semibold text-indigo transition hover:bg-indigo hover:text-white">Download the full curriculum</a>
           ) : (
-            <p className="rounded-2xl bg-cream px-4 py-3 text-sm text-ink/70">The full curriculum document is coming soon. Your welcome email will include it after you register.</p>
+            <p className="rounded-2xl bg-cream px-4 py-3 text-sm text-ink/70">Your welcome email includes the full curriculum document after you register.</p>
           )}
         </div>
         <div className="mt-5 border-t border-ink/10 pt-4"><Price p={p} /></div>

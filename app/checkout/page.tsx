@@ -1,13 +1,13 @@
 "use client";
-import { Suspense, useState, type FormEvent, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import logo from "@/assets/sma-logo.png";
-import { CFG, DURATIONS, EDUCATION, ENGLISH, GFORM, PROGRAMMES, type Programme } from "@/lib/config";
+import { CFG, EDUCATION, ENGLISH, GFORM, PROGRAMMES, REMOVED_SLUGS, duration, findProgramme, type Programme } from "@/lib/config";
 import { TERMS_VERSION } from "@/lib/terms";
-import { BankDetails, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet, useRate, usd } from "../components";
+import { BankDetails, CloudBadges, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet } from "../components";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global { interface Window { PaystackPop: any } }
@@ -52,8 +52,11 @@ function Pick({ label, name, options, d }: { label: string; name: string; option
 
 function Checkout() {
   const id = useSearchParams().get("p");
-  const p = PROGRAMMES.find((x) => x.id === id && x.live);
-  const rate = useRate();
+  const p = findProgramme(id);
+  const removed = !!id && REMOVED_SLUGS.includes(id);
+  const router = useRouter();
+  // Links to programmes that are no longer offered (see REMOVED_SLUGS) go to the home page with a short notice.
+  useEffect(() => { if (removed) router.replace("/?notice=removed"); }, [removed, router]);
   const [step, setStep] = useState(0);
   const [d, setD] = useState<Data>({});
   const [bg, setBg] = useState("");
@@ -90,10 +93,10 @@ function Checkout() {
     const terms = `Accepted v${TERMS_VERSION} on ${new Date().toISOString()}`;
     setBusy(true);
     await postForm({ name: fullName, email: d.email, phone: d.phone, programme: prog.name, reference, terms });
-    await postSheet({ action: "apply", reference, method: bank ? "Bank transfer" : "Paystack", programme: prog.name, fullName, terms, ...stripped(d) });
+    await postSheet({ action: "apply", reference, method: bank ? "Bank transfer" : "Paystack", programme: prog.name, fullName, terms, ...stripped(d), duration: duration(prog) });
     if (bank) { setBusy(false); setDone({ ref: reference, kind: "bank" }); top(); return; }
     window.PaystackPop.setup({
-      key: CFG.paystackKey, email: d.email, amount: prog.fee! * 100, currency: "NGN", ref: reference,
+      key: CFG.paystackKey, email: d.email, amount: prog.price * 100, currency: "NGN", ref: reference,
       channels: ["card", "bank_transfer"],
       metadata: { programme: prog.name, name: fullName, phone: d.phone },
       callback: () => { postSheet({ action: "verify", reference }); setBusy(false); setDone({ ref: reference, kind: "paid" }); top(); },
@@ -101,14 +104,16 @@ function Checkout() {
     }).openIframe();
   }
 
+  if (removed) return <p className="text-center text-ink/70">This programme is no longer offered. Taking you to our current programmes…</p>;
+
   if (!p) {
     return (
       <div className="mx-auto max-w-2xl">
         <h1 className="font-display text-3xl font-extrabold">Choose a programme to register for</h1>
         <div className="mt-6 grid gap-3">
-          {PROGRAMMES.filter((x) => x.live).map((x) => (
-            <Link key={x.id} href={`/checkout/?p=${x.id}`} className="flex items-center justify-between gap-4 rounded-2xl bg-paper px-5 py-4 transition hover:shadow-lg">
-              <span className="font-display font-bold">{x.name}</span><span className="font-display font-extrabold">{naira(x.fee!)}</span>
+          {PROGRAMMES.map((x) => (
+            <Link key={x.slug} href={`/checkout/?p=${x.slug}`} className="flex items-center justify-between gap-4 rounded-2xl bg-paper px-5 py-4 transition hover:shadow-lg">
+              <span><span className="block font-display font-bold">{x.name}</span><span className="text-sm text-ink/70">{duration(x)}</span></span><span className="font-display font-extrabold">{naira(x.price)}</span>
             </Link>
           ))}
         </div>
@@ -119,7 +124,7 @@ function Checkout() {
   const fullName = [d.firstName, d.middleName, d.surname].filter(Boolean).join(" ");
 
   if (done) {
-    const msg = `Hello Skill Mountain Academy, I have paid ${naira(p.fee!)} for ${p.name}. Name: ${fullName}. Reference: ${done.ref}. I am sending my teller.`;
+    const msg = `Hello Skill Mountain Academy, I have paid ${naira(p.price)} for ${p.name}. Name: ${fullName}. Reference: ${done.ref}. I am sending my teller.`;
     return (
       <div className="mx-auto max-w-xl rounded-[2rem] bg-paper p-6 shadow-xl shadow-indigo/10 sm:p-8">
         <span className="brand-bg mx-auto grid h-16 w-16 place-items-center rounded-full text-3xl text-white">✓</span>
@@ -131,7 +136,7 @@ function Checkout() {
         ) : (
           <>
             <h1 className="mt-5 text-center font-display text-3xl font-extrabold brand-text">Application received</h1>
-            <p className="mt-3 text-center text-ink/75">Thank you, {d.firstName}. Your place for <b>{p.name}</b> is reserved once we confirm your payment. Please pay the fee of <b>{naira(p.fee!)}</b> to the account below and send us your teller.</p>
+            <p className="mt-3 text-center text-ink/75">Thank you, {d.firstName}. Your place for <b>{p.name}</b> is reserved once we confirm your payment. Please pay the fee of <b>{naira(p.price)}</b> to the account below and send us your teller.</p>
             <div className="mt-5"><BankDetails /></div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" className="brand-bg rounded-full py-3 text-center font-display font-semibold text-white">Send teller on WhatsApp</a>
@@ -178,7 +183,6 @@ function Checkout() {
               <Text label="Email address" name="email" type="email" d={d} auto="email" />
             </div>
             <Choice label="Educational level" name="education" options={EDUCATION} d={d} />
-            <Choice label="Preferred programme duration" name="duration" options={DURATIONS} d={d} />
             <div className="rounded-2xl bg-cream p-4">
               <p className="font-display font-bold">Parent or guardian</p>
               <p className="text-sm text-ink/70">Required only if the learner is under 18. Leave blank if the learner is 18 or older.</p>
@@ -217,7 +221,7 @@ function Checkout() {
             <h1 className="font-display text-2xl font-extrabold">Review and pay</h1>
             <div className="rounded-2xl bg-cream p-4 text-sm">
               <p><b>{fullName}</b> · {d.email} · {d.phone}</p>
-              <p className="text-ink/70">{p.name} · {d.duration} · {d.education}</p>
+              <p className="text-ink/70">{p.name} · {duration(p)} · {d.education}</p>
               <button type="button" onClick={() => { setStep(0); top(); }} className="mt-1 font-semibold text-brand-red underline">Edit my details</button>
             </div>
 
@@ -244,7 +248,7 @@ function Checkout() {
             <div className="flex gap-3">
               <button type="button" onClick={() => { setStep(1); top(); }} className="rounded-full border-2 border-indigo px-6 py-4 font-display font-semibold text-indigo">Back</button>
               <button type="button" disabled={busy || !agreed} onClick={() => submit(p)} className="brand-bg flex-1 rounded-full py-4 font-display font-semibold text-white disabled:opacity-60">
-                {busy ? "Please wait…" : method === "bank" ? "Submit application" : `Pay ${naira(p.fee!)} with Paystack`}
+                {busy ? "Please wait…" : method === "bank" ? "Submit application" : `Pay ${naira(p.price)} with Paystack`}
               </button>
             </div>
             {!agreed && <p className="text-center text-sm text-ink/70">Tick the box above to continue.</p>}
@@ -256,20 +260,20 @@ function Checkout() {
         <p className="text-sm font-medium text-white/60">Your order</p>
         <div className="mt-4 flex gap-4">
           <div className={`relative h-24 w-20 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br ${p.tone}`}>
-            <Image src={PHOTO[p.id]} alt="" fill sizes="80px" className="object-cover" style={{ objectPosition: FOCUS[p.id] }} />
+            <Image src={PHOTO[p.slug]} alt="" fill sizes="80px" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
           </div>
           <div>
             <h2 className="font-display text-xl font-bold">{p.name}</h2>
-            <p className="text-white/70">{p.months ? `${p.months} months · ` : ""}one-on-one mentorship</p>
+            <p className="text-white/70">{duration(p)} · one-on-one mentorship</p>
+            {p.track === "cloud" && <CloudBadges className="mt-2" />}
             <button type="button" onClick={() => setView(true)} className="mt-2 text-sm font-semibold text-brand-orange underline">View curriculum</button>
           </div>
         </div>
         <div className="mt-6 space-y-2 border-t border-white/15 pt-5">
           {p.was && <div className="flex justify-between text-white/70"><span>Original price</span><s>{naira(p.was)}</s></div>}
-          {p.was && <div className="flex justify-between text-brand-orange"><span>You save</span><span>{naira(p.was - p.fee!)}</span></div>}
-          <div className="flex items-end justify-between pt-2"><span className="text-white/80">Total</span><span className="font-display text-3xl font-extrabold">{naira(p.fee!)}</span></div>
-          <p className="text-right text-sm text-white/70">≈ {usd(p.fee!, rate)} · discounted price for you</p>
-          <p className="text-right text-xs text-white/60">Dollar amount is approximate. You pay in naira (₦).</p>
+          {p.was && <div className="flex justify-between text-brand-orange"><span>You save</span><span>{naira(p.was - p.price)}</span></div>}
+          <div className="flex items-end justify-between pt-2"><span className="text-white/80">Total</span><span className="font-display text-3xl font-extrabold">{naira(p.price)}</span></div>
+          <p className="text-right text-sm text-white/70">You pay in naira (₦).</p>
         </div>
         <ul className="mt-6 space-y-2 text-sm text-white/75">
           <li>✓ Pay with Paystack or by bank transfer</li>

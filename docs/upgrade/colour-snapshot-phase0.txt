@@ -1,0 +1,64 @@
+== globals.css :root and @theme
+@import "tailwindcss";
+
+/* Skill Mountain Academy palette (brand posters) + SMA cream (from the logo animation) */
+:root {
+  --cream: #fcf9db;
+  --paper: #fffdf0;
+  --navy: #14296b;
+  --indigo: #1e0e6f;
+  --plum: #5b2270;
+  --red: #c8233a;
+  --orange: #f7892b;
+  --ink: #16163a;
+}
+
+@theme inline {
+  --color-cream: var(--cream);
+  --color-paper: var(--paper);
+  --color-navy: var(--navy);
+  --color-indigo: var(--indigo);
+  --color-plum: var(--plum);
+  --color-brand-red: var(--red);
+  --color-brand-orange: var(--orange);
+  --color-ink: var(--ink);
+  --font-sans: var(--font-carlito), Calibri, system-ui, sans-serif;
+  --font-display: var(--font-montserrat), system-ui, sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+body { background: var(--cream); color: var(--ink); font-size: 1.0625rem; }
+:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+
+.brand-text {
+  background: linear-gradient(90deg, var(--navy), var(--plum) 40%, var(--red) 70%, #cf4a16);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* Darkened so white text on buttons meets the WCAG AA contrast ratio (4.5:1) */
+.brand-bg { background: linear-gradient(100deg, #b81f35, #cf4a16); }
+== hex colours in code
+app/checkout/page.tsx:229:#1e0e6f
+app/checkout/page.tsx:239:#c8233a
+app/globals.css:10:#c8233a
+app/globals.css:11:#f7892b
+app/globals.css:12:#16163a
+app/globals.css:33:#cf4a16
+app/globals.css:37:#b81f35
+app/globals.css:37:#cf4a16
+app/globals.css:53:#ffe0bf
+app/globals.css:5:#fcf9db
+app/globals.css:62:#fff
+app/globals.css:6:#fffdf0
+app/globals.css:7:#14296b
+app/globals.css:8:#1e0e6f
+app/globals.css:9:#5b2270
+app/layout.tsx:35:#fcf9db
+app/page.tsx:408:#f7892b
+app/page.tsx:427:#25d366
+docs/google-sheet-script.gs:190:#c8233a
+docs/google-sheet-script.gs:190:#ffffff
+lib/config.ts:76:#ffb35c
+034abd6d38958d3b2fdfdff6b0990d0d833c9553afaad88ef665d6de37b20d34  app/globals.css
+6d373c29264561ecdf66d62df80556348078091268d4826b9b9116c2b520a9b6  assets/sma-logo-white.png
+0ebc48324435e48b6a515fb4dc2b04a1a6ecbe71d148bcac495ea85fe4bb4f15  assets/sma-logo.png
+c23d9e7c223656eb232c2f253596014ed2c6d49ee455c51fbd15a6c23e04848a  app/icon.png

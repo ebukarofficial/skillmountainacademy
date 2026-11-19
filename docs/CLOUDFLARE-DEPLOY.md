@@ -38,7 +38,7 @@ If you add or change one, trigger a new build (Deployments > Retry build, or pus
 | `NEXT_PUBLIC_WHATSAPP` | public, optional | Build variable | e.g. `2347061000472` (the code already has this as default) |
 | Paystack SECRET key (`sk_...`) | PRIVATE | NOT in Cloudflare and NOT in GitHub | Google Apps Script > Project Settings > Script Properties > `PAYSTACK_SECRET` |
 
-Set in code, not in Cloudflare (all public, in `lib/config.ts`): the Google Form address and question codes (`GFORM`), the Calendly link (`calendlyConsult`), the curriculum links (`CURRICULUM_LINKS`), the dollar rate (`usdRate`), business details.
+Set in code, not in Cloudflare (all public, in `lib/config.ts`): the Google Form address and question codes (`GFORM`), the Calendly link (`calendlyConsult`), the curriculum links (`CURRICULUM_LINKS`), business details.
 Later, if you add a Worker: secrets go in Settings > Variables and secrets as **Secret** (or `npx wrangler secret put NAME`), and the D1 database is a binding, not a variable.
 
 ## Custom domain and DNS (do this carefully: email depends on it)
@@ -70,7 +70,7 @@ Later, if you add a Worker: secrets go in Settings > Variables and secrets as **
 
 ## Files for headers, redirects and 404
 - `public/_headers` and `public/_redirects` are copied into `out/` by the build and read by Cloudflare.
-- `_redirects` cannot match query strings. The live address `/checkout/?p=ielts` is a working page and is NOT redirected. The rules redirect old-style paths such as `/ielts`, `/ielts-checkout` and `/checkout/ielts` to the home page. Tell me the exact old IELTS link if it looks different.
+- IELTS Training and Data Analytics are no longer offered. `_redirects` sends old paths such as `/ielts`, `/ielts-checkout`, `/checkout/ielts` and `/data-analytics` to `/?notice=removed`, where the home page shows a short notice. `_redirects` cannot match query strings, so `/checkout/?p=ielts` and `/checkout/?p=data` are sent to the same notice by the checkout page itself.
 - `app/not-found.tsx` becomes `out/404.html`. Cloudflare serves it with a real 404 status.
 
 ## Adding a backend later (not enabled)
@@ -80,7 +80,7 @@ Later, if you add a Worker: secrets go in Settings > Variables and secrets as **
 1. Build log ends with "Success" and shows the deploy URL (`skillmountainacademy.<account>.workers.dev`).
 2. Open `https://skillmountainacademy.com/`: home page loads with fonts, photos and the sliding cards. Hard refresh (Ctrl+Shift+R).
 3. Open `/checkout/?p=cloud`, `/terms/`, `/privacy/`, `/cookies/`, `/refunds/`: each loads. `/checkout` (no slash) goes to `/checkout/`.
-4. Open `/ielts-checkout` and `/ielts`: each goes to the home page. Open `/no-such-page/`: the 404 page appears.
+4. Open `/ielts-checkout`, `/ielts` and `/checkout/?p=ielts`: each goes to the home page and shows the "no longer offered" notice. Open `/no-such-page/`: the 404 page appears.
 5. `https://skillmountainacademy.com/robots.txt` and `/sitemap.xml` load.
 6. Paste the link in WhatsApp: the preview image shows (if cached from before, test with Facebook Sharing Debugger).
 7. Submit a test application with bank transfer: a new row appears in the "Form Responses 1" and "Applications" tabs, and the acknowledgement email arrives.

@@ -1,11 +1,26 @@
 # Cloudflare redirects (permanent, 301). One rule per line: source  destination  status
-# Old IELTS checkout / page links go to the home page.
-# NOTE: this file cannot match query strings. The current checkout address /checkout/?p=ielts is a live page and is NOT redirected.
-/ielts               /  301
-/ielts-checkout      /  301
-/checkout/ielts      /  301
-/programmes/ielts    /  301
-/ielts/*             /  301
-/ielts-checkout/*    /  301
-/checkout/ielts/*    /  301
-/programmes/ielts/*  /  301
+# IELTS Training and Data Analytics are no longer offered. Old links go to the home page,
+# which shows a short notice when the address ends in ?notice=removed.
+# NOTE: this file cannot match query strings, so /checkout/?p=ielts and /checkout/?p=data are
+# redirected by the checkout page itself (app/checkout/page.tsx) to the same notice.
+# Static rules first, then the wildcard (/*) rules, as Cloudflare requires.
+/ielts                        /?notice=removed  301
+/ielts-checkout               /?notice=removed  301
+/checkout/ielts               /?notice=removed  301
+/programmes/ielts             /?notice=removed  301
+/data                         /?notice=removed  301
+/data-analytics               /?notice=removed  301
+/checkout/data                /?notice=removed  301
+/checkout/data-analytics      /?notice=removed  301
+/programmes/data              /?notice=removed  301
+/programmes/data-analytics    /?notice=removed  301
+/ielts/*                      /?notice=removed  301
+/ielts-checkout/*             /?notice=removed  301
+/checkout/ielts/*             /?notice=removed  301
+/programmes/ielts/*           /?notice=removed  301
+/data/*                       /?notice=removed  301
+/data-analytics/*             /?notice=removed  301
+/checkout/data/*              /?notice=removed  301
+/checkout/data-analytics/*    /?notice=removed  301
+/programmes/data/*            /?notice=removed  301
+/programmes/data-analytics/*  /?notice=removed  301

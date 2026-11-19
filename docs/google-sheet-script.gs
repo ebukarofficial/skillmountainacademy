@@ -30,23 +30,28 @@ var APPS_SHEET = "Applications";                     // full application details
 var ADMIN_EMAIL = "skillmountainacademy@gmail.com";  // gets a notice for every confirmed payment
 
 // Fees in naira (the discounted price the learner pays). The server uses these, never the amount sent by the browser.
+// The names must match the programme names in lib/config.ts exactly.
 var FEES = {
   "Graphics Design": 350000,
-  "DevOps Engineering": 450000,
-  "Cloud Engineering": 450000,
-  "Cybersecurity": 650000,
+  "UI/UX Design (Product Design)": 400000,
+  "Web Development": 500000,
   "Digital Marketing": 300000,
-  "IELTS Training": 200000
+  "Cybersecurity": 650000,
+  "Cloud Engineering": 450000,
+  "DevOps Engineering": 500000,
+  "Cloud & DevOps Engineering": 650000
 };
 
 // Google Drive link to each curriculum (share as "Anyone with the link can view"). Replace the examples.
 var CURRICULUM = {
   "Graphics Design": "https://drive.google.com/REPLACE-graphics-curriculum",
-  "DevOps Engineering": "https://drive.google.com/REPLACE-devops-curriculum",
-  "Cloud Engineering": "https://drive.google.com/REPLACE-cloud-curriculum",
-  "Cybersecurity": "https://drive.google.com/REPLACE-cybersecurity-curriculum",
+  "UI/UX Design (Product Design)": "https://drive.google.com/REPLACE-uiux-curriculum",
+  "Web Development": "https://drive.google.com/REPLACE-webdev-curriculum",
   "Digital Marketing": "https://drive.google.com/REPLACE-marketing-curriculum",
-  "IELTS Training": "https://drive.google.com/REPLACE-ielts-curriculum"
+  "Cybersecurity": "https://drive.google.com/REPLACE-cybersecurity-curriculum",
+  "Cloud Engineering": "https://drive.google.com/REPLACE-cloud-curriculum",
+  "DevOps Engineering": "https://drive.google.com/REPLACE-devops-curriculum",
+  "Cloud & DevOps Engineering": "https://drive.google.com/REPLACE-cloud-devops-curriculum"
 };
 
 // Your Calendly link for booking class sessions (a 45-minute event type). Replace the example.
