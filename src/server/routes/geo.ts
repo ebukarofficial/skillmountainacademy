@@ -7,6 +7,7 @@ import type { AppEnv } from "../env";
 import { json } from "../http";
 
 const KEY = "fx:NGN";
+let lastTry = 0;
 
 export async function readRates(env: AppEnv): Promise<Rates | null> {
   if (!env.KV) return null;
@@ -60,7 +61,11 @@ export async function refreshRates(env: AppEnv): Promise<Rates | null> {
 export async function handleGeo(req: Request, env: AppEnv): Promise<Response> {
   const country = (req as Request & { cf?: { country?: string } }).cf?.country ?? null;
   let rates = await readRates(env);
-  if (!rates) rates = await refreshRates(env); // first visit after setup, before the cron has run
+  // First visit after setup, before the cron has run. At most one attempt per 10 minutes per Worker instance.
+  if (!rates && env.KV && Date.now() - lastTry > 600_000) {
+    lastTry = Date.now();
+    rates = await refreshRates(env);
+  }
   const currency: Currency = currencyForCountry(country);
   return json({ ok: true, country, currency, rates }, 200, { "cache-control": "private, max-age=600" });
 }

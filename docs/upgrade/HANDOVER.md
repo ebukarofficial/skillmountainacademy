@@ -8,7 +8,8 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 | 1 Cleanup | done, build-verified in chat 2 (19 Nov 2026) |
 | 2 Programme pages + message | done |
 | 3 Worker + D1 forms | done (backend; the checkout switches to it in Phase 6) |
-| 4 to 9 | see the phase log below |
+| 4 Currency | done |
+| 5 to 9 | see the phase log below |
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
@@ -48,6 +49,19 @@ Every phase must end with `npm run build`, `npm run lint` and `npm test` all pas
 - Tests: `tests/worker-harness.ts` bundles the Worker with esbuild and runs it in Miniflare (local D1/KV, every outbound call mocked);
   `tests/phase3.test.ts` (12 tests). `npm run lint` now also type-checks the Worker (`src/tsconfig.json`).
 - New dev dependencies: `miniflare`, `esbuild` (same versions Wrangler uses), `pdfjs-dist` (Phase 2).
+
+### Phase 4: currency
+- `GET /api/geo` returns Cloudflare's `request.cf.country`, the currency (NG→NGN, US→USD, GB→GBP, eurozone→EUR, else USD) and cached rates.
+  Browser fallback (time zone, then language) when the API is unreachable. Header currency switcher (home, programme pages, checkout)
+  overrides detection and is remembered in localStorage.
+- Rates: cron fetches `open.er-api.com/v6/latest/NGN` (free, no key; attribution link "Rates By Exchange Rate API" shown whenever a
+  converted price is on screen; data updates daily) with the CC0 jsDelivr currency-api as fallback, into KV key `fx:NGN`.
+  Last known rates are kept if both fail. Without rates only naira is shown (other currencies disabled in the switcher).
+- `lib/pricing.ts` (shared by site and Worker): whole-unit rounding, "≈" for non-NGN, Intl.NumberFormat, converted instalments that add up exactly.
+- Checkout states: "Paystack will charge ₦X in Nigerian naira (NGN)" plus the approximate converted amount. Orders store
+  `display_currency`, `fx_rate` and `fx_at`.
+- Files: `app/currency.tsx` (new), `lib/pricing.ts` (new), `src/server/routes/geo.ts`, `app/components.tsx` (Price uses Money; CloudBadges `dark`),
+  `app/page.tsx`, `app/site-parts.tsx`, `app/programmes/[slug]/page.tsx`, `app/checkout/page.tsx`, `tests/phase4.test.ts`.
 
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.

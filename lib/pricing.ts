@@ -1,6 +1,6 @@
 // Price, instalment and currency maths. Shared by the website (display) and the Worker (what is charged),
 // so both always agree. Paystack charges in NGN; other currencies are shown as "≈" guidance only.
-import { FLAGS, PAY_PLAN, finalPrice, type Programme } from "./config";
+import { FLAGS, PAY_PLAN, finalPrice, type Programme } from "./config.ts";
 
 export type Plan = "full" | "parts";
 export const CURRENCIES = ["NGN", "USD", "GBP", "EUR"] as const;
