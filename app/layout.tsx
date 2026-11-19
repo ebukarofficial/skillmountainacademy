@@ -18,17 +18,17 @@ const carlito = localFont({
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Skill Mountain Academy | One-on-one skill training",
+  title: "Skill Mountain Academy | Flexible, one-on-one learning",
   description:
-    "Learn in-demand skills online, one-on-one with a mentor, from Skill Mountain Academy in Abuja, Nigeria. Graphics, UI/UX, Web Development, Digital Marketing, Cybersecurity, Cloud and DevOps.",
+    "Flexible, one-on-one learning: one teacher, one student, online from Skill Mountain Academy in Abuja, Nigeria. Pick your day and time and pay in 3 parts. Graphics, UI/UX, Web Development, Digital Marketing, Cybersecurity, Cloud and DevOps.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Skill Mountain Academy | One-on-One Skill Academy for those made for more",
-    description: "Learn in-demand skills with structure, depth, and guidance, at your time, space, and pace.",
+    description: "Flexible, one-on-one learning. Learn in-demand skills with structure, depth, and guidance, at your time, space, and pace.",
     type: "website", url: SITE_URL, siteName: "Skill Mountain Academy",
     images: [{ url: "/og-share.jpg", width: 1200, height: 848, alt: "Skill Mountain Academy: One-on-One Skill Academy for those made for more" }],
   },
-  twitter: { card: "summary_large_image", title: "Skill Mountain Academy", description: "Learn in-demand skills one-on-one, at your time, space, and pace.", images: ["/og-share.jpg"] },
+  twitter: { card: "summary_large_image", title: "Skill Mountain Academy", description: "Flexible, one-on-one learning. Learn in-demand skills at your time, space, and pace.", images: ["/og-share.jpg"] },
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#fcf9db" };

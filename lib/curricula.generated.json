@@ -1,0 +1,34 @@
+{
+  "graphics": {
+    "pdf": false,
+    "headings": []
+  },
+  "uiux": {
+    "pdf": false,
+    "headings": []
+  },
+  "webdev": {
+    "pdf": false,
+    "headings": []
+  },
+  "marketing": {
+    "pdf": false,
+    "headings": []
+  },
+  "cybersecurity": {
+    "pdf": false,
+    "headings": []
+  },
+  "cloud": {
+    "pdf": false,
+    "headings": []
+  },
+  "devops": {
+    "pdf": false,
+    "headings": []
+  },
+  "cloud-devops": {
+    "pdf": false,
+    "headings": []
+  }
+}

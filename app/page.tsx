@@ -7,6 +7,8 @@ import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
 import banner from "@/assets/photos/banner-students.webp";
 import { AUDIENCE, BUSINESS, CFG, FAQ, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, duration, findProgramme, type Programme } from "@/lib/config";
+import { hasPdf } from "@/lib/curricula";
+import { PillarsBand } from "./site-parts";
 import { CalendlyEmbed, Chevrons, CloudBadges, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, naira, postSheet } from "./components";
 
 const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]].filter(([h]) => h !== "#reviews" || REVIEW_SHOTS.length > 0);
@@ -40,6 +42,7 @@ function UspIcon({ i }: { i: number }) {
 }
 
 const regHref = (p: Programme) => `/checkout/?p=${p.slug}`;
+const progHref = (p: Programme) => `/programmes/${p.slug}/`;
 
 export default function Home() {
   const [menu, setMenu] = useState(false);
@@ -68,9 +71,11 @@ export default function Home() {
   useEffect(() => {
     const u = new URL(window.location.href);
     if (u.searchParams.get("notice") !== "removed") return;
-    setNotice(true);
     u.searchParams.delete("notice");
     window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    // Shown on the next tick: the URL is the external system here, and React state follows it.
+    const t = setTimeout(() => setNotice(true), 0);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -136,9 +141,13 @@ export default function Home() {
         <div className="pointer-events-none absolute -bottom-10 -left-32 -z-10 hidden h-40 w-40 donut float lg:block" aria-hidden="true" />
         <Reveal className="relative">
           <p className="mb-4 w-fit rounded-full bg-paper px-4 py-1.5 text-sm font-medium">One-on-One Skill Academy</p>
-          <h1 className="font-display text-[2.6rem] font-extrabold leading-[1.04] sm:text-6xl xl:text-7xl"><span className="brand-text">For those made for more.</span></h1>
-          <p className="mt-5 max-w-md text-xl text-ink/70">Learn in-demand skills with structure, depth, and guidance, at your time, space, and pace.</p>
-          <p className="mt-3 max-w-md text-ink/70">You are welcome here. Learn the way a homeschool teaches: one teacher, one student, at your pace.</p>
+          {/* The brand message: the largest type on the site. "one-on-one" is brand orange on the indigo token for contrast. */}
+          <h1 data-hero-headline className="font-display text-[clamp(3.1rem,11vw,5.25rem)] font-extrabold leading-[1.02] tracking-tight lg:text-[clamp(3.25rem,5.4vw,4.75rem)]">
+            <span className="brand-text">Flexible,</span>{" "}
+            <span className="inline-block rounded-[0.25em] bg-indigo px-[0.16em] pb-[0.06em] font-black text-brand-orange [box-decoration-break:clone]">one-on-one</span>{" "}
+            <span className="brand-text">learning.</span>
+          </h1>
+          <p className="mt-5 max-w-md text-xl text-ink/70">Learn in-demand skills with structure, depth, and guidance, at your time, space, and pace. For those made for more.</p>
           <form onSubmit={go} className="mt-7 flex max-w-md overflow-hidden rounded-2xl bg-white shadow-lg shadow-indigo/10">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your programme" aria-label="Find your programme" list="progs" className="min-w-0 flex-1 bg-transparent px-5 py-4 outline-none" />
             <datalist id="progs">{PROGRAMMES.map((p) => <option key={p.slug} value={p.name} />)}</datalist>
@@ -178,6 +187,8 @@ export default function Home() {
           </div>
         </Reveal>
       </section>
+
+      <PillarsBand />
 
       {/* Our approach */}
       <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-10 px-5 py-14 sm:py-20 lg:grid-cols-2">
@@ -221,7 +232,7 @@ export default function Home() {
                   {p.was && <span className="absolute left-3 top-3 rounded-full bg-brand-red px-3 py-1 text-xs font-bold text-white">{`${Math.round((1 - p.price / p.was) * 100)}% OFF`}</span>}
                 </div>
                 <div className="flex flex-1 flex-col px-2 pb-2 pt-4">
-                  <h3 className="font-display text-xl font-bold">{p.name}</h3>
+                  <h3 className="font-display text-xl font-bold"><Link href={progHref(p)} className="hover:text-brand-red">{p.name}</Link></h3>
                   {p.track === "cloud" && <CloudBadges className="mt-2" />}
                   <p className="mt-1 text-sm text-ink/70">{duration(p)} · one-on-one</p>
                   <p className="mt-2 flex-1 text-ink/75">{p.blurb}</p>
@@ -229,7 +240,10 @@ export default function Home() {
                     <summary className="flex cursor-pointer list-none items-center justify-between font-display text-sm font-semibold">What you&apos;ll learn<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
                     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink/75">{p.learn.map((l) => <li key={l}>{l}</li>)}</ul>
                   </details>
-                  <button onClick={() => setView(p)} className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum</button>
+                  <Link href={progHref(p)} className="mt-3 text-sm font-semibold text-brand-red underline">Full programme details</Link>
+                  {hasPdf(p)
+                    ? <a href={p.curriculum} target="_blank" rel="noopener" className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 text-center font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum<span className="sr-only"> for {p.name} (PDF, opens in a new tab)</span></a>
+                    : <button onClick={() => setView(p)} className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum</button>}
                   <div className="mt-4"><Price p={p} /></div>
                   <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register</Link>
                 </div>

@@ -152,6 +152,35 @@ export const duration = (p: Programme) => `${months(p.trainingMonths)} training 
 // The price the learner pays. A timed price applies only while a hold is active (Phase 5).
 export const finalPrice = (p: Programme, holdActive = false) => (holdActive && p.timedPrice != null ? p.timedPrice : p.price);
 
+// Feature switches. Both stay OFF until the owner supplies prices (groups) or ages, programmes and pricing (children).
+// The Worker reads the same values, so turning one on here turns it on everywhere after the next deploy.
+export const FLAGS = { GROUP_ENABLED: false, CHILDREN_ENABLED: false };
+
+// The brand message. Repeated in the hero, the band under it, the page title, every programme page and the registration page.
+export const MESSAGE = {
+  headline: "Flexible, one-on-one learning.",
+  short: "Flexible, one-on-one learning. One teacher, one student.",
+  pillars: [
+    { title: "One teacher. One student.", text: "Your mentor teaches only you, live and online." },
+    { title: "Flexible", text: "Pick your day and time (weekday or Saturday), pay in 3 parts, learn online from anywhere." },
+  ],
+  group: { title: "Learn with 1 or 2 friends.", text: "Share one live class with up to two friends." },
+};
+export const pillars = () => (FLAGS.GROUP_ENABLED ? [...MESSAGE.pillars, MESSAGE.group] : MESSAGE.pillars);
+
+// Career Launch Package, shown on every programme page. It helps learners prepare; it never promises a job or income.
+export const TECH_SLUGS = ["cloud", "devops", "cloud-devops", "webdev", "cybersecurity"];
+export function careerPackage(p: Programme): string[] {
+  return [
+    "LinkedIn profile setup and positioning",
+    "Professional CV/resume development",
+    TECH_SLUGS.includes(p.slug) ? "GitHub profile setup and project documentation" : "Portfolio setup and project documentation",
+    "Job-search strategies and application techniques",
+    "Interview preparation and feedback on practical projects",
+    `A ${p.internshipMonths}-month internship`,
+  ];
+}
+
 // 3-month fast track at 35% off. Kept as an option but switched OFF for every programme.
 export const FAST_TRACK = { enabled: false, months: 3, discount: 0.35 };
 

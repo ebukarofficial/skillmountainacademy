@@ -1,16 +1,41 @@
 # Upgrade handover: read this first
 
 This ZIP is the live skillmountainacademy.com project, upgraded by Claude following `docs/upgrade/SPEC.md`.
-Phase 0 (audit) and Phase 1 (cleanup and restructure) are done. Phases 2 to 9 have not started yet.
+## Status
+| Phase | State |
+|---|---|
+| 0 Audit | done |
+| 1 Cleanup | done, build-verified in chat 2 (19 Nov 2026) |
+| 2 Programme pages + message | done |
+| 3 to 9 | see the phase log below |
 
-**Phase 1 was NOT build-tested.** Package installs were blocked in that chat, so `npm ci` and `npm run build` could not run.
-The edited files were type-checked against stand-in React/Next types and `npm test` passes (13 tests). Before Phase 2, the next
-chat must run `npm ci`, `npm run build`, `npm run lint` and `npm test`, and fix anything they report.
+Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
+
+## Phase log (chat 2)
+### Phase 1 verification
+- `npm ci` OK. Build failed on a Next.js security advisory (16.4.2): upgraded `next` and `eslint-config-next` to 16.4.6 (same minor line). `npm audit`: 0 vulnerabilities.
+- Lint error fixed in `app/page.tsx` (the removed-programme notice now sets state on the next tick).
+
+### Phase 2: programme pages and the louder message
+- Hero headline is now "Flexible, one-on-one learning." (fluid, bold, largest type on the site). "one-on-one" is `text-brand-orange`
+  on an `bg-indigo` highlight, because orange on cream is only about 2.3:1 contrast; orange on indigo is about 6.9:1. No new colours.
+- Full-width indigo pillars band directly under the hero (`PillarsBand`). The group pillar appears only if `FLAGS.GROUP_ENABLED`.
+- The message is repeated in the page title, meta description, OG/Twitter descriptions, a strip at the top of every programme page and of checkout.
+- "homeschool": the hero mention was removed; two remain (Our approach section, first FAQ).
+- New `/programmes/<slug>/` pages (8): title, description, Course JSON-LD, price, duration, What you'll learn, View curriculum (new tab) +
+  Download, Career Launch Package, trust lines with a Refunds link, Register buttons. Home cards link to them. Sitemap lists them.
+- Curriculum: `scripts/curricula.mts` runs before every build (`prebuild`). It warns for each missing `public/curricula/<slug>.pdf`
+  (button disabled with a short note) and reads PDF bookmarks as the "What you'll learn" headings (no bookmarks: the list in `lib/config.ts`).
+- The 404 page's "404" numeral went from text-6xl to text-5xl so the hero stays the largest type everywhere.
+- Files: `lib/config.ts` (FLAGS, MESSAGE, careerPackage), `lib/curricula.ts`, `lib/curricula.generated.json`, `lib/photos.ts`, `lib/format.ts`,
+  `scripts/curricula.mts`, `app/site-parts.tsx`, `app/programmes/[slug]/page.tsx`, `app/page.tsx`, `app/components.tsx`, `app/layout.tsx`,
+  `app/checkout/page.tsx`, `app/not-found.tsx`, `app/sitemap.ts`, `public/_redirects`, `tsconfig.json`, `package.json`, tests (`tests/helpers.ts`,
+  `tests/phase2.test.ts`, `tests/fixtures/*.pdf`, `tests/site.test.ts`).
 
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.
 2. Upload this ZIP and paste:
-   "Continue the SMA website upgrade. Read docs/upgrade/HANDOVER.md and docs/upgrade/SPEC.md, run npm ci and npm run build, then start Phase 1."
+   "Continue the SMA website upgrade. Read docs/upgrade/HANDOVER.md and docs/upgrade/SPEC.md, run npm ci, npm run build, npm run lint and npm test, then start the next phase in the Status table."
 
 ## Owner decisions (these override the spec)
 1. BRAND COLOURS: never change or add colours. The spec's mentions of "sage green" and "peach" are wrong. The only colours are
@@ -67,7 +92,11 @@ blurb and learn list as in `lib/config.ts`.
   same files as Phase 0 (line numbers are allowed to move, because editing a file shifts them).
 - Colour diff: empty. `app/globals.css` was not touched.
 
-## Owner to-do after Phase 1 (before deploying it)
+## Owner to-do (running list)
+Phase 2 adds: 7. Put the eight curriculum PDFs in `public/curricula/` named `graphics.pdf`, `uiux.pdf`, `webdev.pdf`, `marketing.pdf`,
+`cybersecurity.pdf`, `cloud.pdf`, `devops.pdf`, `cloud-devops.pdf`. Add PDF bookmarks for the module headings if you want them shown.
+
+### From Phase 1
 1. Copy the updated `docs/google-sheet-script.gs` FEES and CURRICULUM blocks into the live Apps Script and deploy a New
    version. Until then, applications for UI/UX, Web Development and Cloud & DevOps are silently dropped by the script.
 2. Confirm the Web Development price (₦500,000 is a placeholder).

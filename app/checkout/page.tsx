@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import logo from "@/assets/sma-logo.png";
 import { CFG, EDUCATION, ENGLISH, GFORM, PROGRAMMES, REMOVED_SLUGS, duration, findProgramme, type Programme } from "@/lib/config";
 import { TERMS_VERSION } from "@/lib/terms";
+import { MessageStrip } from "../site-parts";
 import { BankDetails, CloudBadges, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet } from "../components";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -290,6 +291,7 @@ function Checkout() {
 export default function CheckoutPage() {
   return (
     <main className="min-h-screen overflow-x-clip pb-16">
+      <MessageStrip />
       <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
         <Link href="/" aria-label="Skill Mountain Academy home"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" /></Link>

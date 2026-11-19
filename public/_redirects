@@ -4,6 +4,10 @@
 # NOTE: this file cannot match query strings, so /checkout/?p=ielts and /checkout/?p=data are
 # redirected by the checkout page itself (app/checkout/page.tsx) to the same notice.
 # Static rules first, then the wildcard (/*) rules, as Cloudflare requires.
+# Old short programme names go to their programme pages; the bare /programmes address goes to the list.
+/programmes                   /#programmes  301
+/programmes/cyber             /programmes/cybersecurity/  301
+/programmes/web               /programmes/webdev/  301
 /ielts                        /?notice=removed  301
 /ielts-checkout               /?notice=removed  301
 /checkout/ielts               /?notice=removed  301

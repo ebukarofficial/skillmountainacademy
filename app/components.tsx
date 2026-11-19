@@ -1,28 +1,10 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { StaticImageData } from "next/image";
 import { BANK, CFG, CURRICULUM_LINKS, GFORM, duration, type Programme } from "@/lib/config";
-import pGraphics from "@/assets/photos/photo-graphics.webp";
-import pDevops from "@/assets/photos/photo-devops.webp";
-import pCloud from "@/assets/photos/photo-cloud.webp";
-import pMarketing from "@/assets/photos/photo-marketing.webp";
-import pUiux from "@/assets/photos/photo-uiux.webp";
-import pCyber from "@/assets/photos/photo-cyber.webp";
-import pWeb from "@/assets/photos/photo-web.webp";
-import pCloudDevops from "@/assets/photos/photo-data.webp";
-import pSma from "@/assets/photos/photo-sma.webp";
-
-// One photo per programme slug.
-export const PHOTO: Record<string, StaticImageData> = {
-  graphics: pGraphics, uiux: pUiux, webdev: pWeb, marketing: pMarketing, cybersecurity: pCyber,
-  cloud: pCloud, devops: pDevops, "cloud-devops": pCloudDevops,
-};
-
-// Where each photo is anchored inside its card, so faces are never cropped out ("x% y%").
-export const FOCUS: Record<string, string> = {
-  graphics: "75% 0%", uiux: "45% 0%", webdev: "50% 0%", marketing: "60% 0%", cybersecurity: "50% 0%",
-  cloud: "50% 0%", devops: "35% 0%", "cloud-devops": "50% 0%",
-};
+import { naira } from "@/lib/format";
+import { hasPdf } from "@/lib/curricula";
+export { FOCUS, PHOTO, SMA_PHOTO } from "@/lib/photos";
+export { naira } from "@/lib/format";
 
 // "AWS" and "Azure" text badges for Cloud track programmes (text only, no third-party logos).
 export function CloudBadges({ className = "" }: { className?: string }) {
@@ -32,9 +14,6 @@ export function CloudBadges({ className = "" }: { className?: string }) {
     </span>
   );
 }
-export const SMA_PHOTO = pSma;
-
-export const naira = (n: number) => "₦" + n.toLocaleString("en-NG");
 
 // Sends data to the Google Apps Script (payment check). no-cors: we cannot read the reply, and do not need to.
 export function postSheet(data: object) {
@@ -139,7 +118,9 @@ export function SocialIcon({ name }: { name: string }) {
 
 // Curriculum viewer: shows what a learner will cover, with a download link when a Google Drive link is set.
 export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose: () => void; action?: ReactNode }) {
-  const link = CURRICULUM_LINKS[p.slug];
+  // The PDF in public/curricula/ wins; otherwise the Google Drive link in lib/config.ts, if any.
+  const pdf = hasPdf(p);
+  const link = pdf ? p.curriculum : CURRICULUM_LINKS[p.slug];
   const closeBtn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     closeBtn.current?.focus();
@@ -172,7 +153,10 @@ export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose:
         </ol>
         <div className="mt-5">
           {link ? (
-            <a href={link} target="_blank" rel="noopener noreferrer" className="block rounded-full border-2 border-indigo py-3 text-center font-display font-semibold text-indigo transition hover:bg-indigo hover:text-white">Download the full curriculum</a>
+            <>
+              <a href={link} target="_blank" rel={pdf ? "noopener" : "noopener noreferrer"} className="block rounded-full border-2 border-indigo py-3 text-center font-display font-semibold text-indigo transition hover:bg-indigo hover:text-white">{pdf ? "View the full curriculum (PDF)" : "Download the full curriculum"}</a>
+              {pdf && <a href={link} download className="mt-2 block text-center text-sm font-semibold text-brand-red underline">Download PDF</a>}
+            </>
           ) : (
             <p className="rounded-2xl bg-cream px-4 py-3 text-sm text-ink/70">Your welcome email includes the full curriculum document after you register.</p>
           )}
