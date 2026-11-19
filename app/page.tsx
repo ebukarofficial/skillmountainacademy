@@ -9,15 +9,15 @@ import banner from "@/assets/photos/banner-students.webp";
 import { AUDIENCE, BUSINESS, CFG, FAQ, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, duration, findProgramme, type Programme } from "@/lib/config";
 import { hasPdf } from "@/lib/curricula";
 import { PillarsBand } from "./site-parts";
-import { CalendlyEmbed, Chevrons, CloudBadges, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, naira, postSheet } from "./components";
+import { CurrencySwitcher, FxNote, Money } from "./currency";
+import { CalendlyEmbed, Chevrons, CloudBadges, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, postSheet } from "./components";
 
 const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]].filter(([h]) => h !== "#reviews" || REVIEW_SHOTS.length > 0);
 
-type Slide = { id: string; name: string; tone: string; photo: StaticImageData; note: string; prog?: Programme };
+type Slide = { id: string; name: string; tone: string; photo: StaticImageData; prog: Programme };
 const SLIDES: Slide[] = [
   ...PROGRAMMES.map((p) => ({
     id: p.slug, name: p.name, tone: p.tone, photo: PHOTO[p.slug], prog: p,
-    note: `${naira(p.price)}${p.was ? ` · was ${naira(p.was)}` : ""} · ${duration(p)}`,
   })),
 ];
 
@@ -116,8 +116,11 @@ export default function Home() {
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3" aria-label="Main">
           <a href="#top" aria-label="Skill Mountain Academy home"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" /></a>
           <div className="hidden items-center gap-6 font-medium xl:flex">{NAV.map(([h, t]) => <a key={h} href={h} className="transition hover:text-brand-red">{t}</a>)}</div>
+          <div className="flex items-center gap-2 sm:gap-3">
+          <CurrencySwitcher />
           <a href="#programmes" className="hidden rounded-full bg-indigo px-6 py-2.5 font-display text-sm font-semibold text-cream transition hover:bg-navy xl:block">Register now</a>
           <button aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)} className="grid h-11 w-11 place-items-center rounded-full bg-paper text-lg xl:hidden">{menu ? "✕" : "☰"}</button>
+          </div>
         </nav>
         {menu && (
           <div className="pop mx-5 mb-3 flex flex-col gap-1 rounded-3xl bg-paper p-3 xl:hidden" onClick={() => setMenu(false)}>
@@ -170,7 +173,7 @@ export default function Home() {
                     <div className="pop absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
                       <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-ink">{sl.prog ? "Open for registration" : "SMA"}</span>
                       <h2 className="mt-3 font-display text-2xl font-extrabold sm:text-3xl">{sl.name}</h2>
-                      <p className="text-white/85">{sl.note}</p>
+                      <p className="text-white/85"><Money naira={sl.prog.price} />{sl.prog.was ? <> · was <Money naira={sl.prog.was} /></> : null} · {duration(sl.prog)}</p>
                       {sl.prog && <Link href={regHref(sl.prog)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-block rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Register</Link>}
                     </div>
                   ) : (
@@ -341,7 +344,7 @@ export default function Home() {
                   <p className="text-sm font-medium text-brand-red">We suggest</p>
                   <p className="font-display text-2xl font-extrabold">{rec.name}</p>
                   <p className="mt-1 text-ink/70">{GOALS[goal].why}</p>
-                  <p className="mt-2 font-display font-bold">{naira(rec.price)} <span className="text-sm font-normal text-ink/70">{duration(rec)}{rec.was ? ` · usual price ${naira(rec.was)}` : ""}</span></p>
+                  <p className="mt-2 font-display font-bold"><Money naira={rec.price} /> <span className="text-sm font-normal text-ink/70">{duration(rec)}{rec.was ? <> · usual price <Money naira={rec.was} /></> : null}</span></p>
                 </div>
                 <Link href={regHref(rec)} className="brand-bg rounded-full px-7 py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register for {rec.name}</Link>
               </div>
@@ -475,6 +478,7 @@ export default function Home() {
                 <Link href="/refunds/" className="underline hover:text-white">Refunds</Link>
               </nav>
               <p className="text-sm text-white/60">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
+              <FxNote className="text-white/60" />
               <p className="text-sm text-white/60">© Skill Mountain Academy 2021–{new Date().getFullYear()}{IMAGE_CREDIT ? ` · ${IMAGE_CREDIT}` : ""}</p>
             </div>
           </div>

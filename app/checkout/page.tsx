@@ -8,6 +8,7 @@ import logo from "@/assets/sma-logo.png";
 import { CFG, EDUCATION, ENGLISH, GFORM, PROGRAMMES, REMOVED_SLUGS, duration, findProgramme, type Programme } from "@/lib/config";
 import { TERMS_VERSION } from "@/lib/terms";
 import { MessageStrip } from "../site-parts";
+import { ChargeNote, CurrencySwitcher, Money } from "../currency";
 import { BankDetails, CloudBadges, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet } from "../components";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -114,7 +115,7 @@ function Checkout() {
         <div className="mt-6 grid gap-3">
           {PROGRAMMES.map((x) => (
             <Link key={x.slug} href={`/checkout/?p=${x.slug}`} className="flex items-center justify-between gap-4 rounded-2xl bg-paper px-5 py-4 transition hover:shadow-lg">
-              <span><span className="block font-display font-bold">{x.name}</span><span className="text-sm text-ink/70">{duration(x)}</span></span><span className="font-display font-extrabold">{naira(x.price)}</span>
+              <span><span className="block font-display font-bold">{x.name}</span><span className="text-sm text-ink/70">{duration(x)}</span></span><span className="font-display font-extrabold"><Money naira={x.price} /></span>
             </Link>
           ))}
         </div>
@@ -266,7 +267,7 @@ function Checkout() {
           <div>
             <h2 className="font-display text-xl font-bold">{p.name}</h2>
             <p className="text-white/70">{duration(p)} · one-on-one mentorship</p>
-            {p.track === "cloud" && <CloudBadges className="mt-2" />}
+            {p.track === "cloud" && <CloudBadges className="mt-2" dark />}
             <button type="button" onClick={() => setView(true)} className="mt-2 text-sm font-semibold text-brand-orange underline">View curriculum</button>
           </div>
         </div>
@@ -274,7 +275,7 @@ function Checkout() {
           {p.was && <div className="flex justify-between text-white/70"><span>Original price</span><s>{naira(p.was)}</s></div>}
           {p.was && <div className="flex justify-between text-brand-orange"><span>You save</span><span>{naira(p.was - p.price)}</span></div>}
           <div className="flex items-end justify-between pt-2"><span className="text-white/80">Total</span><span className="font-display text-3xl font-extrabold">{naira(p.price)}</span></div>
-          <p className="text-right text-sm text-white/70">You pay in naira (₦).</p>
+          <ChargeNote naira={p.price} className="text-right text-sm text-white/70" />
         </div>
         <ul className="mt-6 space-y-2 text-sm text-white/75">
           <li>✓ Pay with Paystack or by bank transfer</li>
@@ -295,7 +296,7 @@ export default function CheckoutPage() {
       <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
         <Link href="/" aria-label="Skill Mountain Academy home"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" /></Link>
-        <span className="rounded-full bg-paper px-4 py-1.5 text-sm font-medium">🔒 Secure checkout</span>
+        <span className="flex items-center gap-2"><CurrencySwitcher /><span className="hidden rounded-full bg-paper px-4 py-1.5 text-sm font-medium sm:inline">🔒 Secure checkout</span></span>
       </header>
       <div className="px-5 pt-4">
         <Suspense fallback={<p className="text-center text-ink/70">Loading checkout…</p>}><Checkout /></Suspense>

@@ -7,6 +7,7 @@ import logoWhite from "@/assets/sma-logo-white.png";
 import { BUSINESS, MESSAGE, SOCIAL, careerPackage, pillars, type Programme } from "@/lib/config";
 import { hasPdf } from "@/lib/curricula";
 import { SocialIcon } from "./components";
+import { CurrencySwitcher, FxNote } from "./currency";
 
 // Slim strip that repeats the message at the top of programme pages and the registration page.
 export function MessageStrip() {
@@ -92,7 +93,8 @@ export function SiteHeader() {
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3" aria-label="Main">
         <Link href="/" aria-label="Skill Mountain Academy home"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" /></Link>
         <div className="flex items-center gap-3">
-          <Link href="/#programmes" className="rounded-full bg-indigo px-5 py-2.5 font-display text-sm font-semibold text-cream transition hover:bg-navy">All programmes</Link>
+          <CurrencySwitcher />
+          <Link href="/#programmes" className="rounded-full bg-indigo px-5 py-2.5 font-display text-sm font-semibold text-cream transition hover:bg-navy"><span className="hidden sm:inline">All </span>Programmes</Link>
         </div>
       </nav>
     </header>
@@ -118,6 +120,7 @@ export function SiteFooter() {
             <Link href="/cookies/" className="underline hover:text-white">Cookies</Link>
             <Link href="/refunds/" className="underline hover:text-white">Refunds</Link>
           </nav>
+          <FxNote className="text-white/60" />
           <p className="text-white/60">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
         </div>
       </div>

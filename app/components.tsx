@@ -1,16 +1,16 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BANK, CFG, CURRICULUM_LINKS, GFORM, duration, type Programme } from "@/lib/config";
-import { naira } from "@/lib/format";
 import { hasPdf } from "@/lib/curricula";
+import { Money } from "./currency";
 export { FOCUS, PHOTO, SMA_PHOTO } from "@/lib/photos";
 export { naira } from "@/lib/format";
 
 // "AWS" and "Azure" text badges for Cloud track programmes (text only, no third-party logos).
-export function CloudBadges({ className = "" }: { className?: string }) {
+export function CloudBadges({ className = "", dark = false }: { className?: string; dark?: boolean }) {
   return (
     <span className={`flex flex-wrap gap-1.5 ${className}`}>
-      {["AWS", "Azure"].map((b) => <span key={b} className="rounded-full bg-indigo px-2.5 py-0.5 text-xs font-bold text-white">{b}</span>)}
+      {["AWS", "Azure"].map((b) => <span key={b} className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${dark ? "bg-white/20" : "bg-indigo"}`}>{b}</span>)}
     </span>
   );
 }
@@ -74,9 +74,9 @@ export function Price({ p, size = "md" }: { p: Programme; size?: "md" | "lg" }) 
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        {p.was && <s className="text-ink/70 decoration-brand-red decoration-2">{naira(p.was)}</s>}
-        <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}>{naira(p.price)}</span>
-        {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save {naira(save)}</span>}
+        {p.was && <s className="text-ink/70 decoration-brand-red decoration-2"><Money naira={p.was} /></s>}
+        <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}><Money naira={p.price} /></span>
+        {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save <Money naira={save} /></span>}
       </div>
     </div>
   );
