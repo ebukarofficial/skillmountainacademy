@@ -23,7 +23,10 @@ const NOTICE = "IELTS Training and Data Analytics are no longer offered.";
 test("no IELTS, Data Analytics, dollar labels, 'coming soon' or '6 months' in the site code", () => {
   for (const f of SOURCE) {
     const src = read(f).replace(NOTICE, "");
-    for (const bad of [/IELTS/, /Data Analytics/, /US\$/, /≈/, /coming soon/i, /6 months/, /usdRate|useRate/, /waitlist|notify me/i]) {
+    // lib/pricing.ts is the one formatter allowed to write "≈" before a converted (non-naira) amount (Phase 4).
+    const banned = [/IELTS/, /Data Analytics/, /US\$/, /coming soon/i, /6 months/, /usdRate|useRate/, /waitlist|notify me/i];
+    if (f !== "lib/pricing.ts") banned.push(/≈/);
+    for (const bad of banned) {
       assert.doesNotMatch(src, bad, `${f} contains ${bad}`);
     }
   }
@@ -72,3 +75,15 @@ test("colour-token snapshot is unchanged since Phase 0", () => {
   assert.deepEqual([...now].filter((x) => !before.has(x)), [], "new colour values added");
   assert.deepEqual([...before].filter((x) => !now.has(x)), [], "existing colour values removed or moved to another file");
 });
+
+// New files added after Phase 0 (the Worker, scripts, data) may only reuse colours that already existed.
+test("new files use only existing brand colour values", () => {
+  const snap = read("docs/upgrade/colour-snapshot-phase0.txt");
+  const palette = new Set([...snap.matchAll(/^[\w./-]+:\d+:(#[0-9a-fA-F]{3,8})$/gm)].map((m) => m[1].toLowerCase()));
+  const extra = [...files("src", [".ts"]), ...files("scripts", [".mts", ".ts"])].filter((f) => !f.endsWith(".d.ts"));
+  if (statSafe("data")) extra.push(...files("data", [".json"]));
+  for (const f of extra) {
+    for (const m of read(f).matchAll(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g)) assert.ok(palette.has(m[0].toLowerCase()), `${f} uses ${m[0]}, which is not an existing brand colour`);
+  }
+});
+function statSafe(p: string) { try { return statSync(join(ROOT, p)).isDirectory(); } catch { return false; } }

@@ -7,7 +7,8 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 | 0 Audit | done |
 | 1 Cleanup | done, build-verified in chat 2 (19 Nov 2026) |
 | 2 Programme pages + message | done |
-| 3 to 9 | see the phase log below |
+| 3 Worker + D1 forms | done (backend; the checkout switches to it in Phase 6) |
+| 4 to 9 | see the phase log below |
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
@@ -31,6 +32,22 @@ Every phase must end with `npm run build`, `npm run lint` and `npm test` all pas
   `scripts/curricula.mts`, `app/site-parts.tsx`, `app/programmes/[slug]/page.tsx`, `app/page.tsx`, `app/components.tsx`, `app/layout.tsx`,
   `app/checkout/page.tsx`, `app/not-found.tsx`, `app/sitemap.ts`, `public/_redirects`, `tsconfig.json`, `package.json`, tests (`tests/helpers.ts`,
   `tests/phase2.test.ts`, `tests/fixtures/*.pdf`, `tests/site.test.ts`).
+
+### Phase 3: Worker, D1, forms
+- `wrangler.jsonc`: `main: src/worker.ts`, assets binding `ASSETS` with `run_worker_first: ["/api/*"]` (static pages still bypass the Worker),
+  D1 `DB` (skillmountainacademy-db, `migrations/`), KV `KV` (cache only), one cron `0 5,17 * * *`, public `vars`, `define` for lib/config.ts.
+- `migrations/0001_init.sql` (programmes, registrations, orders, instalments, payments, webhook_events, holds, children_enquiries,
+  rate_limits; money in kobo) and `0002_seed_programmes.sql` (generated from config by `npm run db:seed-sql` → `db/seed-programmes.sql`).
+- `src/server/repo.ts` is the only file with SQL (prepared statements; registration + order + instalments in one `batch()`).
+- Endpoints: `GET /api/status`, `POST /api/register`, `POST /api/children-enquiry` (plus Phase 4-6 routes, see below).
+  Each form: same-origin check, size limit, validation, Turnstile (`TURNSTILE_SECRET`), D1 rate limit (5 per 10 min per IP hash),
+  Resend emails (learner + owner), mirror to the Google Sheet (`SHEET_WEBHOOK_URL`). IPs are stored only as salted hashes.
+- Fails safely: no database, tables not migrated, or a missing secret → HTTP 503 with a plain "not set up yet, contact us" message.
+- `docs/google-sheet-script.gs`: honours `notify:false` (no duplicate bank-transfer email when Resend sent one) and logs
+  `payment` and `children` mirror posts to new tabs "Payments (from website)" and "Children enquiries".
+- Tests: `tests/worker-harness.ts` bundles the Worker with esbuild and runs it in Miniflare (local D1/KV, every outbound call mocked);
+  `tests/phase3.test.ts` (12 tests). `npm run lint` now also type-checks the Worker (`src/tsconfig.json`).
+- New dev dependencies: `miniflare`, `esbuild` (same versions Wrangler uses), `pdfjs-dist` (Phase 2).
 
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.
@@ -95,6 +112,9 @@ blurb and learn list as in `lib/config.ts`.
 ## Owner to-do (running list)
 Phase 2 adds: 7. Put the eight curriculum PDFs in `public/curricula/` named `graphics.pdf`, `uiux.pdf`, `webdev.pdf`, `marketing.pdf`,
 `cybersecurity.pdf`, `cloud.pdf`, `devops.pdf`, `cloud-devops.pdf`. Add PDF bookmarks for the module headings if you want them shown.
+
+Phase 3 adds (details and exact commands are in the final checklist): create D1 + KV and paste their ids into `wrangler.jsonc`,
+run `npm run db:migrate`, set the Worker secrets, redeploy the updated Apps Script.
 
 ### From Phase 1
 1. Copy the updated `docs/google-sheet-script.gs` FEES and CURRICULUM blocks into the live Apps Script and deploy a New

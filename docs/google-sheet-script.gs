@@ -70,6 +70,12 @@ var APP_FIELDS = [
   ["Goals", "goals"], ["Industry", "industry"], ["Terms accepted", "terms"]
 ];
 
+// Rows the website backend mirrors here (D1 is the main record; these tabs are for viewing only).
+var PAY_FIELDS = [["Order reference", "reference"], ["Paystack reference", "paystackReference"], ["Part", "part"], ["Parts", "parts"],
+  ["Amount (N)", "amountNaira"], ["Programme", "programme"], ["Email", "email"], ["Status", "status"]];
+var CHILD_FIELDS = [["Parent", "parent_name"], ["Email", "email"], ["Phone", "phone"], ["Child's age", "child_age"],
+  ["Programme interest", "programme_interest"], ["Message", "message"]];
+
 var EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 var REF_RE = /^SMA-(BT-)?[A-Z0-9]{8,24}$/;
 
@@ -118,6 +124,8 @@ function doPost(e) {
     if (d.action === "apply") { apply_(d); }
     else if (d.action === "verify") { verify_(String(d.reference || "")); }
     else if (d.action === "subscribe") { subscribe_(String(d.email || "")); }
+    else if (d.source === "worker" && d.action === "payment") { log_("Payments (from website)", PAY_FIELDS, d); }
+    else if (d.source === "worker" && d.action === "children") { log_("Children enquiries", CHILD_FIELDS, d); }
     else if (d.event === "charge.success" && d.data) { verify_(String(d.data.reference || "")); } // optional Paystack webhook
   } catch (err) { console.error(err); }
   finally { lock.releaseLock(); }
@@ -137,7 +145,8 @@ function apply_(d) {
   var s = ss.getSheetByName(APPS_SHEET) || ss.insertSheet(APPS_SHEET);
   if (s.getLastRow() === 0) s.appendRow(["Date"].concat(APP_FIELDS.map(function (f) { return f[0]; })));
   s.appendRow([new Date()].concat(APP_FIELDS.map(function (f) { return c[f[1]]; })));
-  if (c.method === "Bank transfer") {
+  // The new website backend (Cloudflare Worker) sends its own emails and sets notify=false; then this script only saves the row.
+  if (c.method === "Bank transfer" && d.notify !== false) {
     MailApp.sendEmail({
       to: c.email, name: "Skill Mountain Academy", replyTo: ADMIN_EMAIL,
       subject: "We received your application: " + c.programme,
@@ -236,6 +245,15 @@ function subscribe_(email) {
   if (s.getLastRow() === 0) s.appendRow(["Date", "Email", "Consent"]);
   var existing = s.getLastRow() > 1 ? s.getRange(2, 2, s.getLastRow() - 1, 1).getValues().map(function (r) { return String(r[0]).toLowerCase(); }) : [];
   if (existing.indexOf(email) === -1) s.appendRow([new Date(), email, "Ticked the consent box on the website"]);
+}
+
+// Appends a row to a viewing tab, creating it with headers the first time.
+function log_(tab, fields, d) {
+  if (!throttle_("l:" + tab + Math.floor(Date.now() / 60000), 60, 120)) return;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(tab) || ss.insertSheet(tab);
+  if (s.getLastRow() === 0) s.appendRow(["Date"].concat(fields.map(function (f) { return f[0]; })));
+  s.appendRow([new Date()].concat(fields.map(function (f) { return clean_(d[f[1]], 500); })));
 }
 
 function first_(name) { return esc_(String(name || "").trim().split(" ")[0] || "there"); }

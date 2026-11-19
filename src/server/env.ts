@@ -1,0 +1,32 @@
+// What the Worker receives from Cloudflare. Every binding and secret is optional on purpose: until the owner has
+// created the database and set the secrets, the API answers with a clear "not set up yet" message instead of crashing.
+export interface AppEnv {
+  ASSETS: Fetcher;
+  DB?: D1Database;
+  KV?: KVNamespace;
+  // Public settings (wrangler.jsonc "vars")
+  SITE_URL?: string;
+  EMAIL_FROM?: string;
+  ADMIN_EMAIL?: string;
+  CLASS_BOOKING_URL?: string;
+  // Secrets (npx wrangler secret put NAME)
+  TURNSTILE_SECRET?: string;
+  PAYSTACK_SECRET_KEY?: string;
+  RESEND_API_KEY?: string;
+  HOLD_SIGNING_KEY?: string;
+  SHEET_WEBHOOK_URL?: string;
+}
+
+export const siteUrl = (env: AppEnv) => (env.SITE_URL || "https://skillmountainacademy.com").replace(/\/$/, "");
+
+// Which features can run right now. Shown by GET /api/status and used by the website to pick a flow.
+export function readiness(env: AppEnv) {
+  return {
+    database: !!env.DB,
+    turnstile: !!env.TURNSTILE_SECRET,
+    payments: !!env.PAYSTACK_SECRET_KEY,
+    email: !!env.RESEND_API_KEY,
+    holds: !!env.HOLD_SIGNING_KEY && !!env.DB,
+    sheetMirror: !!env.SHEET_WEBHOOK_URL,
+  };
+}

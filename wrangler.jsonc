@@ -3,31 +3,53 @@
   "name": "skillmountainacademy",
   "compatibility_date": "2026-10-26",
 
-  // The website: the folder that `npm run build` creates (Next.js static export).
+  // One Worker: /api/* runs src/worker.ts; every other address is served straight from the static site (the
+  // "out" folder that `npm run build` creates), exactly as before. Static files do not use Worker requests or CPU.
+  "main": "src/worker.ts",
   "assets": {
     "directory": "./out",
+    "binding": "ASSETS",
     // /checkout -> /checkout/ (matches trailingSlash: true in next.config.ts)
     "html_handling": "auto-trailing-slash",
     // Unknown URLs show out/404.html with a real 404 status
-    "not_found_handling": "404-page"
-  }
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
 
-  // ------------------------------------------------------------------
-  // LATER, when you add a backend (leave all of this commented for now):
-  // 1. Copy src/worker.ts.example to src/worker.ts
-  // 2. Create the database:  npx wrangler d1 create skillmountainacademy-db
-  // 3. Paste the database_id it prints below, then remove the // marks.
-  //
-  // "main": "src/worker.ts",
-  // "assets": {
-  //   "directory": "./out",
-  //   "html_handling": "auto-trailing-slash",
-  //   "not_found_handling": "404-page",
-  //   "binding": "ASSETS",
-  //   "run_worker_first": ["/api/*"]   // only /api/* goes to your Worker; everything else stays static
-  // },
-  // "d1_databases": [
-  //   { "binding": "DB", "database_name": "skillmountainacademy-db", "database_id": "REPLACE-WITH-YOUR-DATABASE-ID" }
-  // ],
-  // "observability": { "enabled": true }
+  // D1 database (registrations, orders, payments...). Create it once and paste its id here:
+  //   npx wrangler d1 create skillmountainacademy-db
+  // (If database_id is left out, `wrangler deploy` looks for a database with this name and creates it if missing.)
+  // Then create the tables:  npx wrangler d1 migrations apply skillmountainacademy-db --remote
+  "d1_databases": [
+    { "binding": "DB", "database_name": "skillmountainacademy-db", "migrations_dir": "migrations" }
+  ],
+
+  // KV namespace, used ONLY as a cache (exchange rates). Create it once and paste its id here:
+  //   npx wrangler kv namespace create skillmountainacademy-cache
+  "kv_namespaces": [
+    { "binding": "KV" }
+  ],
+
+  // One schedule, twice a day (06:00 and 18:00 in Lagos): refresh exchange rates; the 06:00 run also sends
+  // instalment reminders and payment links and marks overdue parts.
+  "triggers": { "crons": ["0 5,17 * * *"] },
+
+  // Public settings (not secrets). Secrets are set with `npx wrangler secret put NAME`, never in this file:
+  //   TURNSTILE_SECRET, PAYSTACK_SECRET_KEY, RESEND_API_KEY, HOLD_SIGNING_KEY, SHEET_WEBHOOK_URL
+  "vars": {
+    "SITE_URL": "https://skillmountainacademy.com",
+    "EMAIL_FROM": "Skill Mountain Academy <admission@skillmountainacademy.com>",
+    "ADMIN_EMAIL": "admission@skillmountainacademy.com",
+    // Optional: your Calendly link for booking classes, put in the welcome email. Leave "" to say "we will send it".
+    "CLASS_BOOKING_URL": ""
+  },
+
+  // lib/config.ts reads these build-time website values; the Worker does not need them.
+  "define": {
+    "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "\"\"",
+    "process.env.NEXT_PUBLIC_SHEET_URL": "\"\"",
+    "process.env.NEXT_PUBLIC_WHATSAPP": "\"\""
+  },
+
+  "observability": { "enabled": true }
 }
