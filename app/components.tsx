@@ -98,7 +98,7 @@ export function Intro() {
   const skip = () => { setOut(true); setTimeout(() => setShow(false), 500); };
   return (
     <div className={`fixed inset-0 z-[70] grid place-items-center bg-cream transition-opacity duration-700 ${out ? "opacity-0" : "opacity-100"}`}>
-      <video src="/sma-intro.mp4" autoPlay muted playsInline preload="auto" className="w-full max-w-2xl" aria-label="Skill Mountain Academy" />
+      <video src="/sma-intro.mp4" poster="/sma-intro-poster.webp" autoPlay muted playsInline preload="auto" className="w-full max-w-2xl" aria-label="Skill Mountain Academy" />
       <button onClick={skip} className="absolute bottom-8 right-6 rounded-full bg-paper px-5 py-2 text-sm font-medium shadow">Skip</button>
     </div>
   );

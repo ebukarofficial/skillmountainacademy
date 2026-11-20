@@ -329,7 +329,7 @@ function Checkout() {
 
 export default function CheckoutPage() {
   return (
-    <main className="min-h-screen overflow-x-clip pb-16">
+    <main id="main" className="min-h-screen overflow-x-clip pb-16">
       <MessageStrip />
       <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">

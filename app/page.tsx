@@ -150,7 +150,8 @@ export default function Home() {
       {/* Hero */}
       <section id="top" className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-10 pt-6 lg:grid-cols-[.9fr_1.1fr] lg:pt-12">
         <div className="pointer-events-none absolute -bottom-10 -left-32 -z-10 hidden h-40 w-40 donut float lg:block" aria-hidden="true" />
-        <Reveal className="relative">
+        {/* The hero fades up with CSS alone (no wait for JavaScript), so the headline paints at once. */}
+        <div className="relative motion-safe:animate-[pop_.7s_cubic-bezier(.2,.7,.2,1)_both]">
           <p className="mb-4 w-fit rounded-full bg-paper px-4 py-1.5 text-sm font-medium">One-on-One Skill Academy</p>
           {/* The brand message: the largest type on the site. "one-on-one" is brand orange on the indigo token for contrast. */}
           <h1 data-hero-headline className="font-display text-[clamp(3.1rem,11vw,5.25rem)] font-extrabold leading-[1.02] tracking-tight lg:text-[clamp(3.25rem,5.4vw,4.75rem)]">
@@ -164,9 +165,9 @@ export default function Home() {
             <datalist id="progs">{PROGRAMMES.map((p) => <option key={p.slug} value={p.name} />)}</datalist>
             <button aria-label="Search programmes" className="brand-bg px-7 font-display font-semibold text-white transition hover:brightness-110">Search</button>
           </form>
-        </Reveal>
+        </div>
 
-        <Reveal delay={150}>
+        <div className="motion-safe:animate-[pop_.7s_cubic-bezier(.2,.7,.2,1)_.15s_both]">
           <div className="flex h-[26rem] gap-3 sm:h-[30rem] lg:h-[33rem]" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
             onTouchStart={(e) => { touch.current = e.touches[0].clientX; setPaused(true); }}
             onTouchEnd={(e) => { const dx = e.changedTouches[0].clientX - touch.current; if (Math.abs(dx) > 40) slide(dx < 0 ? 1 : -1); setPaused(false); }}>
@@ -175,7 +176,7 @@ export default function Home() {
               return (
                 <div key={sl.id} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} role="button" tabIndex={0} aria-label={sl.name} onKeyDown={(e) => e.key === "Enter" && setActive(i)}
                   className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${sl.tone} transition-all duration-700 ease-out ${on ? "flex-[6]" : "hidden flex-[1] cursor-pointer md:block"}`}>
-                  <Image src={sl.photo} alt={`A learner studying ${sl.name} online with Skill Mountain Academy`} fill sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[sl.id] }} />
+                  <Image src={sl.photo} alt={`A learner studying ${sl.name} online with Skill Mountain Academy`} fill priority={i === 0} sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[sl.id] }} />
                   <div className={`absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
                   {on ? (
                     <div className="pop absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
@@ -196,7 +197,7 @@ export default function Home() {
           <div className="mt-4 flex justify-center gap-2 md:hidden" aria-hidden="true">
             {SLIDES.map((sl, i) => <span key={sl.id} className={`h-2 rounded-full transition-all ${i === active ? "w-6 bg-brand-red" : "w-2 bg-ink/20"}`} />)}
           </div>
-        </Reveal>
+        </div>
       </section>
 
       <PillarsBand />

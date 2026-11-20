@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BANK, CFG, FLAGS, type Programme } from "@/lib/config";
-import { convertParts, display, dueDays, lagosDate, money, planParts, type Plan } from "@/lib/pricing";
+import { approx, convertParts, dueDays, lagosDate, money, planParts, type Plan } from "@/lib/pricing";
 import { TERMS_VERSION } from "@/lib/terms";
 import { BankDetails } from "../components";
 import { useCurrency, FxNote } from "../currency";
@@ -56,7 +56,8 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
   const shown = convertParts(parts, currency, rates);
   const days = dueDays(p);
   const today = new Date();
-  const amount = (i: number) => (shown && currency !== "NGN" ? `${money(parts[i], "NGN")} (${display(parts[i], currency, rates)})` : money(parts[i], "NGN"));
+  // Converted parts come from convertParts, so they add up exactly to the converted total shown below them.
+  const amount = (i: number) => (shown && currency !== "NGN" ? `${money(parts[i], "NGN")} (${approx(shown[i], currency)})` : money(parts[i], "NGN"));
 
   async function submit() {
     setErr("");
@@ -135,7 +136,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
                   <td className="py-1.5 text-right text-ink/70">{i === 0 ? "Today" : dateText(lagosDate(today, days[i]))}</td>
                 </tr>
               ))}
-              <tr><td className="pt-2 font-bold">Total</td><td className="pt-2 font-bold">{money(total, "NGN")}{shown && currency !== "NGN" ? ` (${display(total, currency, rates)})` : ""}</td><td /></tr>
+              <tr><td className="pt-2 font-bold">Total</td><td className="pt-2 font-bold">{money(total, "NGN")}{shown && currency !== "NGN" ? ` (${approx(shown.reduce((a, b) => a + b, 0), currency)})` : ""}</td><td /></tr>
             </tbody>
           </table>
           <p className="mt-3">We email a secure Paystack link for parts 2 and 3 on their due dates, with a reminder 3 days before.</p>
@@ -157,7 +158,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
 
       <div className="rounded-2xl bg-indigo px-4 py-3 text-sm text-white" data-charge>
         You pay <b>{money(parts[0], "NGN")}</b> now{plan === "parts" ? " (part 1 of 3)" : ""}. {method === "paystack" ? "Paystack charges in Nigerian naira (NGN)." : "Transfer the amount in naira (NGN)."}
-        {shown && currency !== "NGN" ? <> That is {display(parts[0], currency, rates)} at today&apos;s rate; your bank converts it at its own rate.</> : null}
+        {shown && currency !== "NGN" ? <> That is {approx(shown[0], currency)} at today&apos;s rate; your bank converts it at its own rate.</> : null}
         <FxNote className="mt-1 text-white/70" />
       </div>
 
