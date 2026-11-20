@@ -72,7 +72,7 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
   let cached: unknown;
   const c = {
     req, env, exec, url, params: found.params, user: user as User, db, ipHash,
-    body: async <T,>() => (cached ??= await readJson(req, 64_000)) as T,
+    body: async <T,>() => (cached ??= await readJson(req, 160_000)) as T, // fits a 60,000-character material text
     audit: (action: string, target_type?: string, target_id?: string, detail?: unknown) => audit(db, { actor_id: user?.id ?? null, action, target_type, target_id, detail, ip_hash: ipHash }),
   } as Ctx;
   try {
