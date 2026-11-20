@@ -235,11 +235,20 @@ export const FAQ: [string, string][] = [
   ["Can I learn around my job, school or family?", "Yes. You choose training times that suit your life, so learning fits around your other commitments."],
   ["Which skills are in demand in the world job market?", "Companies everywhere need people who can build and run cloud systems, automate software delivery, defend against cyber threats, build websites and apps, grow brands online and design. Those are the skills our programmes teach. You can use them in a job, as a freelancer or in your own business, in Nigeria or abroad."],
   ["Will I have something real to show employers or clients?", "Yes. You learn by doing, through hands-on projects, real-world scenarios and industry tools. You build a portfolio and get career guidance along the way."],
-  ["I am outside Nigeria. Can I register?", "Yes. Prices show in naira (₦). You pay through Paystack in naira, and your bank converts the amount at its own rate."],
-  ["How do I pay, and what happens next?", "Fill in the application, accept the terms and choose Paystack (card or bank transfer) or a manual transfer to our UBA account. When your payment is confirmed, we email you a welcome message with your curriculum link and a link to book your classes."],
+  ["Do the Cloud programmes teach AWS or Azure?", "Both. Cloud Engineering, DevOps Engineering and Cloud & DevOps Engineering all teach Amazon Web Services (AWS) and Microsoft Azure, with hands-on projects on each, so you can work with either platform."],
+  ["What is the internship?", "Every programme ends with an internship after the training: 2 months for most programmes and 3 months for Digital Marketing. You work on practical projects with guidance and feedback from your mentor, and add the work to your portfolio. It is part of your learning, not a paid job, and it is not a promise of employment."],
+  ["Can I pay in instalments?", "Yes. You can pay in full, or in 3 parts: 50% when you register, 30% and 20% later (usually 45 and 90 days after registering, or 30 and 60 days for 3-month training). We email a secure payment link for each part on its due date, with a reminder 3 days before. Live-session access is paused if a payment is more than 2 weeks late."],
+  ["Will I get a certificate?", "Yes. When you complete your programme's requirements you receive a Skill Mountain Academy certificate. It is an SMA certificate, not a university degree or a government or professional qualification."],
+  ["Do you teach children?", "Yes, through our children's package. Children learn only through a parent or guardian's account and with the parent's consent, with a customised curriculum and one-on-one teaching. Visit the children's package page to send us an enquiry."],
+  ["I am outside Nigeria. Can I register?", "Yes. You can view prices in naira, US dollars, pounds or euros using the currency selector at the top of the page. Amounts in other currencies are approximate: you pay in naira (₦) through Paystack, and your bank converts the amount at its own rate."],
+  ["How do I pay, and what happens next?", "Fill in the application, accept the terms and choose to pay in full or in 3 parts, by Paystack (card or bank transfer) or a manual transfer to our UBA account. When your payment is confirmed, we email you a welcome message with your curriculum link and a link to book your classes."],
   ["I paid by bank transfer. What do I do now?", "Send us your teller (proof of payment) on WhatsApp or email, quoting your reference. We confirm it and then send your welcome email. Please send it on or before the scheduled date for your programme."],
   ["How do I choose my class days and times?", "After payment, your welcome email has a booking link. Pick the days and time that suit you, for example three days a week for 45 minutes at 9 am. Each booking comes with a link to your virtual class."],
 ];
+
+// Shown in the FAQ only when group classes are switched on (FLAGS.GROUP_ENABLED).
+export const FAQ_GROUP: [string, string] = ["Can I learn with friends?", "Yes. You can learn with 1 or 2 friends in one shared live class, for one group price. The person registering adds the others by name and email, and each learner keeps their own record, grades and attendance."];
+export const faqList = (): [string, string][] => (FLAGS.GROUP_ENABLED ? [...FAQ, FAQ_GROUP] : FAQ);
 
 // Screenshots of real posts about SMA. Upload each image to the public/reviews folder in GitHub,
 // then add a line here, for example: { file: "review-1.png", platform: "Instagram", alt: "Post by a learner" }

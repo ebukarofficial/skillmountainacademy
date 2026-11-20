@@ -12,7 +12,8 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 | 5 Timed price hold | done (dormant) |
 | 6 Checkout, payments, groups | done |
 | 7 Children's package | done |
-| 8 to 9 | see the phase log below |
+| 8 Trust and content | done |
+| 9 Quality | see the phase log below |
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
@@ -108,6 +109,19 @@ Every phase must end with `npm run build`, `npm run lint` and `npm test` all pas
 - New "Parents and children" card (6th) in "Who it's for" links to /children/. Sitemap lists /children/.
 - Files: `app/children/page.tsx`, `app/children/enquiry-form.tsx` (new), `lib/config.ts` (CHILDREN, AUDIENCE links), `app/page.tsx`,
   `app/sitemap.ts`, `src/server/routes/children.ts`, `tests/phase7.test.ts`.
+
+### Phase 8: trust and content
+- `data/reviews.json` (Reviews section appears at 3+ valid entries) and `data/mentors.json` (Mentors section appears at 1+). Both empty:
+  no invented reviews or mentors. Format in `data/README.md`; validation in `lib/content-rules.ts` (bad entries skipped, unsafe file names dropped).
+- FAQ: new answers for AWS and Azure, the internship (no employment promise), instalments, certificates, the children's package and
+  other currencies; the group-classes answer appears only when `GROUP_ENABLED` is on.
+- Structured data: EducationalOrganization on every page (layout), FAQPage on the home page, Course on programme pages.
+- Descriptive alt text on programme photos (hero slides, cards, checkout). Home footer now shows the contact email and phone.
+- Legal text updated to match what the site now does (please have your lawyer review): Privacy (Resend, Cloudflare database and
+  Turnstile, hashed IPs, instalment/currency/group/children data), Cookies (session/local storage items and the two hold cookies,
+  which only exist when a timed offer is on), Terms v2026-11a (3-part payments and the 2-week pause; time-limited offers).
+- Files: `data/*.json`, `data/README.md`, `lib/content.ts`, `lib/content-rules.ts` (new), `lib/config.ts` (FAQ, FAQ_GROUP, faqList),
+  `app/page.tsx`, `app/layout.tsx`, `app/checkout/page.tsx`, `lib/legal.ts`, `lib/terms.ts`, `tests/phase8.test.ts`.
 
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.
