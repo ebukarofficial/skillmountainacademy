@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { PROGRAMMES } from "@/lib/config";
 import { api, Badge, Btn, Card, Empty, Field, inputCls, Msg, naira, useAction, useLoad, when } from "./ui";
+import { MaterialsManager } from "./shared";
 
-const TABS = ["Overview", "Users", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Materials", "Platform"] as const;
+const TABS = ["Overview", "Users", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Courses", "Materials", "Platform"] as const;
 type Tab = (typeof TABS)[number];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 type U = { id: string; email: string; role: string; status: string; fullName: string; studentNo: string | null; lastLoginAt: string | null };
@@ -186,30 +187,31 @@ function Instructors() {
 }
 
 function Materials() {
-  const { data, reload } = useLoad<{ resources: { id: string; programmeName: string; title: string; kind: string; approved: boolean; url: string | null; file: string | null; hasText: boolean }[] }>("/api/app/resources");
+  return <MaterialsManager admin programmes={PROGRAMMES.map((p) => ({ slug: p.slug, name: p.name }))} />;
+}
+
+function Courses() {
+  const [slug, setSlug] = useState(PROGRAMMES[0].slug);
+  const { data, reload } = useLoad<{ courses: { id: string; title: string; position: number; lessons: { id: string; title: string; position: number }[] }[] }>(`/api/app/programmes/${slug}/courses`);
   const { busy, msg, run } = useAction();
   return (
-    <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
-      <Card title="Learning materials">
-        <ul className="space-y-1 text-sm">{data?.resources.map((r) => (
-          <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-cream p-2"><span><b>{r.title}</b> · {r.programmeName} · {r.kind}{r.hasText ? " · used by the assistant" : ""}</span>
-            <span className="flex gap-1">{r.approved ? <Badge s="active" /> : <Btn small disabled={busy} onClick={() => run(() => api(`/api/app/resources/${r.id}`, { method: "PATCH", body: { approved: true } }), "Approved.", reload)}>Approve</Btn>}
-              <Btn small kind="ghost" disabled={busy} onClick={() => { if (confirm("Delete this material?")) run(() => api(`/api/app/resources/${r.id}`, { method: "DELETE" }), "Deleted.", reload); }}>Delete</Btn></span></li>
-        ))}</ul>
-        <Msg text={msg.text} kind={msg.kind} />
-      </Card>
-      <Card title="Add material">
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api("/api/app/resources", { method: "POST", body: f }), "Added.", () => { form.reset(); reload(); }); }}>
-          <Field label="Programme"><select name="programme" className={inputCls}>{PROGRAMMES.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Field>
-          <Field label="Title"><input name="title" required className={inputCls} /></Field>
-          <Field label="Type"><select name="kind" className={inputCls}><option>document</option><option>video</option><option>link</option><option>exercise</option></select></Field>
-          <Field label="Link (https://…, optional)"><input name="url" className={inputCls} /></Field>
-          <Field label="Text for the AI assistant (optional)"><textarea name="textContent" rows={5} className={inputCls} placeholder="Paste the key content of this material" /></Field>
-          <Btn type="submit" disabled={busy}>Add</Btn>
-        </form>
-        <p className="mt-2 text-xs text-ink/60">To attach a file, add the material first, then upload from the instructor or admin tools (PUT /api/app/resources/:id/file).</p>
-      </Card>
-    </div>
+    <Card title="Courses and lessons" action={<select aria-label="Programme" value={slug} onChange={(e) => setSlug(e.target.value)} className="rounded-xl border border-ink/15 px-2 py-1 text-sm">{PROGRAMMES.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select>}>
+      <p className="mb-3 text-xs text-ink/60">Lessons drive each student&apos;s progress bar. Students and instructors see the courses of their programme.</p>
+      <ol className="space-y-3">{data?.courses.map((c) => (
+        <li key={c.id} className="rounded-xl bg-cream p-3 text-sm">
+          <b className="font-display">{c.title}</b>
+          <ol className="ml-5 mt-1 list-decimal">{c.lessons.map((l) => <li key={l.id}>{l.title}</li>)}</ol>
+          <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api(`/api/app/admin/courses/${c.id}/lessons`, { method: "POST", body: { title: f.title, position: c.lessons.length + 1 } }), "Lesson added.", () => { form.reset(); reload(); }); }}>
+            <input name="title" required aria-label="New lesson title" placeholder="New lesson title" className={`${inputCls} mt-0`} /><Btn small type="submit" disabled={busy}>Add lesson</Btn>
+          </form>
+        </li>
+      ))}</ol>
+      {data && !data.courses.length && <Empty>No courses yet for this programme.</Empty>}
+      <form className="mt-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api("/api/app/admin/courses", { method: "POST", body: { programme: slug, title: f.title, position: (data?.courses.length ?? 0) + 1 } }), "Course added.", () => { form.reset(); reload(); }); }}>
+        <input name="title" required aria-label="New course title" placeholder="New course title" className={`${inputCls} mt-0`} /><Btn type="submit" disabled={busy}>Add course</Btn>
+      </form>
+      <Msg text={msg.text} kind={msg.kind} />
+    </Card>
   );
 }
 
@@ -245,6 +247,7 @@ export function AdminDashboard() {
       {tab === "Academics" && <Academics />}
       {tab === "Finance" && <Finance />}
       {tab === "Instructors" && <Instructors />}
+      {tab === "Courses" && <Courses />}
       {tab === "Materials" && <Materials />}
       {tab === "Platform" && <Platform />}
     </>

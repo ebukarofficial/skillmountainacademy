@@ -30,7 +30,7 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 | 4 Messaging, ratings, admin reports, finance | done |
 | 5 AI assistant | done |
 | 6 Screens | done |
-| 7 Security review, docs, final ZIP | next |
+| 7 Security review, docs, final ZIP | done. LMS BACKEND + SCREENS COMPLETE |
 
 ### LMS 1: accounts, sign-in, roles, audit
 - `migrations/0003_lms.sql`: the whole LMS schema (users, auth_tokens, auth_sessions, audit_log, courses, lessons, enrolments, timetables,
@@ -128,6 +128,23 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
   Run `npx wrangler login` first, or remove the "ai" line in a local copy of the config for offline previews.
 - Files: `app/app/*` (layout, page, ui, shared, student, instructor, admin, login, login/confirm), footer links in `app/page.tsx` and
   `app/site-parts.tsx`; `tests/lms6.test.ts`.
+
+### LMS 7: security review and docs
+- `tests/lms7.test.ts` reads EVERY route from the source and checks: signed-out requests get 401 (only the 3 sign-in routes are public),
+  changes from other websites get 403 even when signed in, and admin/instructor/student routes refuse the other roles.
+- `docs/lms/API.md` is generated from the routes (`node scripts/api-docs.mts`); a test fails if it is out of date.
+- Gaps closed after the review: admin Courses tab (courses and lessons), file attach/replace for materials, instructors can add
+  materials (pending approval). JSON body limit raised to 160 KB for long material texts.
+- Privacy/Cookies text updated for platform data (accounts, coursework, messages, AI chats, uploads, `sma_session` cookie).
+- Owner steps: `docs/upgrade/OWNER-CHECKLIST.md` section E. Limits: `docs/upgrade/LIMITS.md` (learning platform section).
+
+### Known limits (honest list)
+- Video and whiteboard are Google Meet's own (Meet cannot be embedded); the platform stores and protects the instructor's link.
+- The AI assistant reads the "text" of materials, not PDF files, and the free Workers AI allowance is small (account-wide).
+- Website traffic and SEO rankings are not in the admin dashboard (use Cloudflare Web Analytics / Google Search Console).
+- Notifications are in-app + email; WhatsApp is not built (the spec lists it as a future option).
+- Real-time updates are by reload/polling, not live push.
+- Bank-transfer orders still get no automatic instalment reminders (admins record each part in Orders).
 
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)

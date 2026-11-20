@@ -121,3 +121,34 @@ None of them is in the repository.
 22. Decide on the intro video if you want the home page above 90 in Lighthouse (see `docs/upgrade/LIMITS.md`).
 23. Optional clean-up: `.github/workflows/deploy.yml` still deploys to GitHub Pages on every push. If you no longer use GitHub Pages,
     delete that file (Cloudflare Workers Builds does the real deploy).
+
+## E. Learning platform (dashboards at /app/)
+
+It uses the same database, secrets and Turnstile/Resend setup as above. Sign-in needs **Turnstile (A5)** and **Resend (A6)**.
+
+24. **Tables.** `npm run db:migrate` also creates the learning-platform tables (migration `0003_lms.sql`). If you already ran it
+    before this update, run it again; only the new migration is applied.
+25. **Your admin address.** In `wrangler.jsonc` > `vars` > `ADMIN_EMAILS`, list the email(s) that should become admins on first sign-in
+    (comma-separated; default `admission@skillmountainacademy.com`). Push to deploy.
+26. **First sign-in.** Open `https://skillmountainacademy.com/app/login/`, enter that address, open the email, press **Sign in**.
+27. **Instructors.** Admin > **Users** > Add a user > role *instructor*. They get a sign-in email.
+28. **Students.** Learners who pay online get an account and enrolment automatically. For bank transfers: Admin > **Orders** >
+    *Confirm bank payment* (this records the payment and creates the account). You can also add students by hand in **Users**,
+    then enrol them in **Enrolments**.
+29. **Each enrolment.** Admin > **Enrolments** > Manage: choose the instructor, then set the **fixed weekly class time**
+    (day, start time in Lagos time, 45 or 60 minutes). The next 14 days of classes are created and both are notified.
+30. **Courses and lessons.** Admin > **Courses**: add each programme's courses and lessons (they drive the progress bars).
+31. **Materials.** Admin > **Materials**: add links/documents; paste the key text into "Text for the AI assistant" so the assistant
+    can use it. Instructors can add materials too; you approve them before students see them.
+32. **File uploads (R2).** Cloudflare dashboard > **R2 Object Storage** > turn it on (asks for a payment method; the free tier
+    includes 10 GB). Then:
+    ```
+    npx wrangler r2 bucket create skillmountainacademy-files
+    ```
+    In `wrangler.jsonc`, remove the `//` in front of the `"r2_buckets"` line. Push. Until then, students can still type answers.
+33. **AI assistant.** Works on the free plan, but the free allowance (10,000 neurons/day for the whole account) is roughly
+    15-25 answers a day. For regular use: Workers & Pages > Plans > **Workers Paid** ($5/month, then $0.011 per 1,000 neurons).
+    To change model: `npx wrangler ai models list`, then set `AI_MODEL` in `wrangler.jsonc`.
+34. **Website traffic.** Cloudflare dashboard > **Web Analytics** > Add a site (free). Search rankings: Google Search Console.
+35. **Local preview.** `npx wrangler dev` now needs `npx wrangler login` first (the AI binding only runs on Cloudflare).
+36. **Lawyer review.** The Privacy and Cookies pages now describe the learning-platform data (messages, uploads, AI chats, sign-in cookie).

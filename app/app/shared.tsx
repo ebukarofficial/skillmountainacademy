@@ -91,3 +91,34 @@ export function ProgressView({ p }: { p: Progress }) {
     </div>
   );
 }
+
+// Materials: list, add (with optional file and AI text), approve (admins), delete. Instructors' additions wait for approval.
+export function MaterialsManager({ admin, programmes }: { admin: boolean; programmes: { slug: string; name: string }[] }) {
+  const { data, reload } = useLoad<{ resources: { id: string; programmeName: string; title: string; kind: string; approved: boolean; url: string | null; file: string | null; fileName: string | null; hasText: boolean }[] }>("/api/app/resources");
+  const { busy, msg, run } = useAction();
+  return (
+    <Card title="Learning materials">
+      <ul className="space-y-2 text-sm">{data?.resources.map((r) => (
+        <li key={r.id} className="rounded-xl bg-cream p-2">
+          <div className="flex flex-wrap items-center justify-between gap-2"><span><b>{r.title}</b> · {r.programmeName} · {r.kind}{r.hasText ? " · used by the assistant" : ""}{r.file ? <> · <a href={r.file} className="underline">{r.fileName}</a></> : null}</span>
+            <span className="flex flex-wrap gap-1">{r.approved ? <span className="rounded-full bg-indigo px-2 py-0.5 text-xs font-bold text-white">approved</span> : admin ? <Btn small disabled={busy} onClick={() => run(() => api(`/api/app/resources/${r.id}`, { method: "PATCH", body: { approved: true } }), "Approved.", reload)}>Approve</Btn> : <span className="rounded-full bg-brand-orange/20 px-2 py-0.5 text-xs font-bold">awaiting approval</span>}
+              <label className="cursor-pointer rounded-full border-2 border-indigo/30 px-3 py-1 text-xs font-semibold text-indigo">{r.file ? "Replace file" : "Attach file"}<input type="file" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => upload(`/api/app/resources/${r.id}/file`, f), "File attached.", reload); }} /></label>
+              <Btn small kind="ghost" disabled={busy} onClick={() => { if (confirm("Delete this material?")) run(() => api(`/api/app/resources/${r.id}`, { method: "DELETE" }), "Deleted.", reload); }}>Delete</Btn></span></div>
+        </li>
+      ))}</ul>
+      {data && !data.resources.length && <Empty>No materials yet.</Empty>}
+      <details className="mt-3"><summary className="cursor-pointer text-sm font-semibold text-brand-red">Add a material</summary>
+        <form className="mt-2 space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api("/api/app/resources", { method: "POST", body: f }), admin ? "Added." : "Added. An admin will approve it before students see it.", () => { form.reset(); reload(); }); }}>
+          <Field label="Programme"><select name="programme" className={inputCls}>{programmes.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Field>
+          <Field label="Title"><input name="title" required className={inputCls} /></Field>
+          <Field label="Type"><select name="kind" className={inputCls}><option>document</option><option>video</option><option>link</option><option>exercise</option></select></Field>
+          <Field label="Link (https://…, optional)"><input name="url" className={inputCls} /></Field>
+          <Field label="Text for the AI assistant (optional)"><textarea name="textContent" rows={4} className={inputCls} placeholder="Paste the key content so the assistant can use it" /></Field>
+          <Btn type="submit" disabled={busy || !programmes.length}>Add</Btn>
+          <p className="text-xs text-ink/60">Attach a file after adding (PDF, Office, zip or images, up to 25 MB).</p>
+        </form>
+      </details>
+      <Msg text={msg.text} kind={msg.kind} />
+    </Card>
+  );
+}

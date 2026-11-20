@@ -45,3 +45,19 @@ as it is). What was improved: the hero now appears without waiting for JavaScrip
 priority, and the video has a poster of its own first frame. Largest Contentful Paint went from 13.5 s (original) to 4-10 s.
 To reach 90+ on the home page, the owner would need to choose one: show the intro only on desktop, shorten it to about 2 seconds,
 or let the page show underneath it instead of a full cover.
+
+## Learning platform (added 20 Nov 2026)
+
+| What | Cost on the free plan |
+|---|---|
+| Cron every 5 minutes | 288 Worker invocations a day; each run is a few D1 queries; at most 24 emails per run |
+| Class records | one `INSERT ... SELECT` per day for ALL students (14 statements when a timetable is set) |
+| Dashboards | each dashboard load is about 6-8 API calls; each call is a handful of D1 queries |
+| Admin reports | one aggregate query per report (overview, academics, finance, platform, instructors) |
+| Uploads | streamed into R2 without buffering (almost no Worker CPU); 25 MB max (3 MB photos) |
+| AI assistant | 1 Workers AI call per question; 20 questions per student per day; the account-wide free allowance is 10,000 neurons/day |
+| Sign-in | no password hashing (email links), so it fits the 10 ms CPU limit |
+
+At about 50 active students: roughly 2,000-5,000 Worker requests a day (well under 100,000), and D1 writes well under 100,000/day.
+Resend's free tier is 3,000 emails/month (100/day): class reminders (up to 6 emails per class across 24 h, 1 h, 15 min) mean
+a paid Resend plan is likely needed above about 15 classes a day.

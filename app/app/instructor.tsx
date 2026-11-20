@@ -3,7 +3,7 @@
 // attendance still to record, set work, marking queue, messages. Right: profile and performance.
 import { useMemo, useState } from "react";
 import type { Me } from "./page";
-import { Messages, ProfileEditor, ProgressView, type Progress } from "./shared";
+import { MaterialsManager, Messages, ProfileEditor, ProgressView, type Progress } from "./shared";
 import { api, Avatar, Badge, Btn, Card, Empty, Field, inputCls, Msg, useAction, useLoad, useNow, when } from "./ui";
 
 type S = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetNotifiedAt: string | null; needsOutcome: boolean; student: { id: string; fullName: string; photo: string | null } };
@@ -186,6 +186,7 @@ export function InstructorDashboard({ me }: { me: Me }) {
           <Schedule />
           <Marking />
           <SetWork students={st.data?.students ?? []} />
+          <MaterialsManager admin={false} programmes={[...new Map((st.data?.students ?? []).map((s) => [s.programme, { slug: s.programme, name: s.programmeName }])).values()]} />
           <Messages />
         </div>
         <div className="order-3 space-y-5">
