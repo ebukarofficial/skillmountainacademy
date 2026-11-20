@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { BANK, CFG, CURRICULUM_LINKS, GFORM, duration, type Programme } from "@/lib/config";
-import { hasPdf } from "@/lib/curricula";
+import { hasPdf, learnList } from "@/lib/curricula";
 import { Money } from "./currency";
 export { FOCUS, PHOTO, SMA_PHOTO } from "@/lib/photos";
 export { naira } from "@/lib/format";
@@ -132,39 +132,49 @@ export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose:
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-ink/60 sm:place-items-center sm:p-5" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={`${p.name} curriculum`} onClick={(e) => e.stopPropagation()}
-        className="pop max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-paper p-6 sm:rounded-[2rem]">
+        className="pop max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-paper p-6 sm:rounded-xl sm:p-8">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-brand-red">Curriculum</p>
-            <h2 className="font-display text-2xl font-extrabold">{p.name}</h2>
-            <p className="text-sm text-ink/70">{duration(p)} · one-on-one mentorship</p>
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Curriculum</p>
+            <h2 className="mt-2 font-(family-name:--font-serif) text-3xl font-medium leading-tight">{p.name}</h2>
+            <p className="mt-1 text-sm text-ink/70">{duration(p)} · one-on-one instruction</p>
           </div>
-          <button ref={closeBtn} type="button" aria-label="Close" onClick={onClose} className="h-10 w-10 shrink-0 rounded-full bg-cream">✕</button>
+          <button ref={closeBtn} type="button" aria-label="Close" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-ink/15">✕</button>
         </div>
-        <p className="mt-3 text-ink/75">{p.blurb}</p>
-        <h3 className="mt-5 font-display font-bold">What you will cover</h3>
-        <ol className="mt-3 space-y-2">
-          {p.learn.map((l, i) => (
-            <li key={l} className="flex gap-3 rounded-2xl bg-cream px-4 py-3 text-sm">
-              <span className="brand-bg grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white">{i + 1}</span>
+        <h3 className="mt-6 font-display text-sm font-semibold">What the programme covers</h3>
+        <ol className="mt-2">
+          {learnList(p).map((l, i) => (
+            <li key={l} className="flex gap-4 border-t border-ink/10 py-3 text-[0.95rem]">
+              <span className="w-6 shrink-0 font-(family-name:--font-serif) text-lg leading-6 text-brand-red">{String(i + 1).padStart(2, "0")}</span>
               <span>{l}</span>
             </li>
           ))}
         </ol>
         <div className="mt-5">
           {link ? (
-            <>
-              <a href={link} target="_blank" rel={pdf ? "noopener" : "noopener noreferrer"} className="block rounded-full border-2 border-indigo py-3 text-center font-display font-semibold text-indigo transition hover:bg-indigo hover:text-white">{pdf ? "View the full curriculum (PDF)" : "Download the full curriculum"}</a>
-              {pdf && <a href={link} download className="mt-2 block text-center text-sm font-semibold text-brand-red underline">Download PDF</a>}
-            </>
+            <div className="flex flex-wrap items-center gap-4">
+              <a href={link} target="_blank" rel={pdf ? "noopener" : "noopener noreferrer"} className="rounded-full bg-indigo px-6 py-3 text-center font-display text-sm font-semibold text-cream transition hover:bg-navy">{pdf ? "Open the full curriculum (PDF)" : "Open the full curriculum"}</a>
+              {pdf && <a href={link} download className="text-sm font-semibold text-brand-red underline">Download PDF</a>}
+            </div>
           ) : (
-            <p className="rounded-2xl bg-cream px-4 py-3 text-sm text-ink/70">Your welcome email includes the full curriculum document after you register.</p>
+            <p className="border-t border-ink/10 pt-4 text-sm text-ink/70">The detailed curriculum document is sent with your welcome email after enrolment. The topics above are the programme&apos;s official outline.</p>
           )}
         </div>
-        <div className="mt-5 border-t border-ink/10 pt-4"><Price p={p} /></div>
-        {action && <div className="mt-4">{action}</div>}
+        {action && <div className="mt-5">{action}</div>}
       </div>
     </div>
+  );
+}
+
+// "View curriculum" button: opens the curriculum viewer above.
+export function CurriculumButton({ p, className = "", label = "View curriculum" }: { p: Programme; className?: string; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className={className}>{label}</button>
+      {open && <CurriculumModal p={p} onClose={close} />}
+    </>
   );
 }
 

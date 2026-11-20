@@ -15,9 +15,9 @@ type Quiz = { id: string; kind: string; title: string; instructions: string | nu
 function NextClass({ s }: { s: Session | null }) {
   if (!s) return <Card title="Your next live class"><Empty>No class scheduled yet. Your weekly time appears here once the academy sets it.</Empty></Card>;
   return (
-    <section className="rounded-[1.75rem] bg-indigo p-6 text-white">
+    <section className="rounded-lg bg-indigo p-6 text-white">
       <p className="text-sm text-white/70">Your next live class</p>
-      <h2 className="mt-1 font-display text-2xl font-extrabold">{s.programmeName}</h2>
+      <h2 className="mt-1 font-(family-name:--font-serif) text-3xl font-medium">{s.programmeName}</h2>
       <p className="mt-1 text-white/85">{s.lagosTime} · {s.durationMin} minutes{s.instructor ? ` · with ${s.instructor.fullName}` : ""}</p>
       {s.joinOpen && s.meetUrl
         ? <a href={s.meetUrl} target="_blank" rel="noopener noreferrer" className="brand-bg mt-4 inline-block rounded-full px-8 py-4 font-display text-lg font-bold text-white">Join live session</a>
@@ -132,7 +132,7 @@ export function StudentDashboard({ me }: { me: Me }) {
   return (
     <>
       <div className="py-5">
-        <h1 className="font-display text-2xl font-extrabold">Hi {me.fullName.split(" ")[0]}</h1>
+        <h1 className="font-(family-name:--font-serif) text-4xl font-medium">Welcome, {me.fullName.split(" ")[0]}</h1>
         <p className="text-sm text-ink/70">{(asg.data?.assignments ?? []).filter((a) => a.status === "pending" || a.status === "overdue").length} assignment(s) to do · {pendingQuizzes.length} quiz(zes) open{ov.data?.nextSession ? ` · next class ${ov.data.nextSession.lagosTime}` : ""}</p>
       </div>
       <div className="grid gap-5 lg:grid-cols-[1fr_1.6fr_1fr]">

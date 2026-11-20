@@ -61,3 +61,17 @@ or let the page show underneath it instead of a full cover.
 At about 50 active students: roughly 2,000-5,000 Worker requests a day (well under 100,000), and D1 writes well under 100,000/day.
 Resend's free tier is 3,000 emails/month (100/day): class reminders (up to 6 emails per class across 24 h, 1 h, 15 min) mean
 a paid Resend plan is likely needed above about 15 classes a day.
+
+## Admissions, capacity and verification (added 20 Nov 2026)
+
+- **Enforcement needs the server checkout.** Closed or full programmes are refused by `POST /api/register` before anything is
+  saved or charged. While the site still uses the original Google Sheet checkout (backend not set up), the website hides the
+  form but cannot enforce it on a server.
+- **Capacity is checked at registration.** Two people registering for the last place in the same second could both get
+  through. Enrolments are counted when the student account is created (first payment). Reserved places cover any margin.
+- **Later instalments are never blocked.** Students who registered while admissions were open can always pay their parts.
+- **An instructor's limit is per programme.** If one instructor teaches two programmes, set each limit so the total is
+  realistic.
+- **Currency.** Guide amounts in USD, GBP and EUR use the live exchange rate (owner's choice), not fixed price lists.
+  Payment is always charged in naira.
+- **Faculty photos** need R2 file storage; without it profiles show initials.

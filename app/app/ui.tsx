@@ -28,7 +28,7 @@ export function useNow(every = 30_000) {
 export function Avatar({ src, name, size = 40 }: { src: string | null; name: string; size?: number }) {
   return src
     ? <Image src={src} alt="" width={size} height={size} unoptimized className="rounded-full object-cover" style={{ width: size, height: size }} />
-    : <span className="brand-bg grid shrink-0 place-items-center rounded-full font-display font-bold text-white" style={{ width: size, height: size }}>{name[0]}</span>;
+    : <span className="grid shrink-0 place-items-center rounded-full bg-indigo font-(family-name:--font-serif) text-cream" style={{ width: size, height: size }}>{name[0]}</span>;
 }
 
 // Uploads a file as the raw request body (the server streams it to storage).
@@ -56,15 +56,15 @@ export function useLoad<T>(path: string | null) {
 
 export function Card({ title, children, action, className = "" }: { title?: ReactNode; children: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-[1.5rem] bg-paper p-5 shadow-sm ${className}`}>
-      {(title || action) && <div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-lg font-bold">{title}</h2>{action}</div>}
+    <section className={`rounded-lg border border-ink/10 bg-paper p-5 ${className}`}>
+      {(title || action) && <div className="mb-4 flex items-center justify-between gap-3 border-b border-ink/10 pb-3"><h2 className="font-(family-name:--font-serif) text-2xl font-medium leading-tight">{title}</h2>{action}</div>}
       {children}
     </section>
   );
 }
 
 export function Btn({ children, onClick, kind = "primary", type = "button", disabled, small }: { children: ReactNode; onClick?: () => void; kind?: "primary" | "ghost" | "dark"; type?: "button" | "submit"; disabled?: boolean; small?: boolean }) {
-  const k = kind === "primary" ? "brand-bg text-white" : kind === "dark" ? "bg-indigo text-white hover:bg-navy" : "border-2 border-indigo/30 text-indigo hover:bg-indigo hover:text-white";
+  const k = kind === "primary" ? "bg-indigo text-cream hover:bg-navy" : kind === "dark" ? "bg-ink text-white hover:bg-navy" : "border border-indigo/30 text-indigo hover:bg-indigo hover:text-white";
   return <button type={type} onClick={onClick} disabled={disabled} className={`rounded-full font-display font-semibold transition disabled:opacity-50 ${small ? "px-3 py-1.5 text-xs" : "px-5 py-2.5 text-sm"} ${k}`}>{children}</button>;
 }
 
@@ -73,10 +73,12 @@ const TONES: Record<string, string> = {
   submitted_late: "bg-brand-orange/25 text-ink", graded: "bg-indigo text-white", completed: "bg-indigo text-white", paid: "bg-indigo text-white", active: "bg-indigo text-white",
   overdue: "bg-brand-red/15 text-brand-red", missed: "bg-brand-red/15 text-brand-red", cancelled: "bg-ink/10 text-ink/70", rescheduled: "bg-ink/10 text-ink/70", suspended: "bg-brand-red/15 text-brand-red",
   part_paid: "bg-brand-orange/20 text-ink", due: "bg-brand-orange/20 text-ink", added: "bg-indigo/10 text-indigo",
+  approved: "bg-indigo text-white", rejected: "bg-brand-red/15 text-brand-red", application_received: "bg-ink/10 text-ink", under_review: "bg-indigo/10 text-indigo",
+  assessment_pending: "bg-brand-orange/20 text-ink", interview_pending: "bg-brand-orange/20 text-ink", upcoming: "bg-indigo/10 text-indigo", closed: "bg-ink/10 text-ink/70", full: "bg-brand-red/15 text-brand-red",
 };
 export const Badge = ({ s }: { s: string }) => <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${TONES[s] ?? "bg-ink/10 text-ink"}`}>{s.replace(/_/g, " ")}</span>;
 
-export const inputCls = "mt-1 w-full rounded-xl border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/40";
+export const inputCls = "mt-1 w-full rounded-md border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/40";
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-sm font-medium">{label}{children}</label>;
 }
@@ -86,7 +88,7 @@ export function Bar({ pct, label }: { pct: number | null; label: string }) {
   return (
     <div>
       <div className="flex justify-between text-xs"><span>{label}</span><span className="font-bold">{pct === null ? "n/a" : `${v}%`}</span></div>
-      <div className="mt-1 h-2 rounded-full bg-ink/10" role="progressbar" aria-label={label} aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}><div className="brand-bg h-2 rounded-full" style={{ width: `${Math.min(100, v)}%` }} /></div>
+      <div className="mt-1 h-2 rounded-full bg-ink/10" role="progressbar" aria-label={label} aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}><div className="h-2 rounded-full bg-indigo" style={{ width: `${Math.min(100, v)}%` }} /></div>
     </div>
   );
 }

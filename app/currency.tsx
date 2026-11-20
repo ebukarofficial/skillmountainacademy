@@ -1,17 +1,24 @@
 "use client";
-// Visitor currency. The Worker detects the country (GET /api/geo, from Cloudflare's request.cf.country); the
-// browser's time zone and language are the fallback. The header switcher overrides detection and is remembered.
-// Prices are always set and charged in naira; other currencies are shown as approximate guidance at the cached rate.
+// Visitor currency. The country decides it: first the country the Worker detects (GET /api/geo, from Cloudflare's
+// request.cf.country, or the browser's time zone and language as a fallback), then the country the student selects
+// at enrolment. Students are never asked to pick a currency. Prices are always set and charged in naira; other
+// currencies are shown as approximate guidance at the cached rate.
 import { useSyncExternalStore } from "react";
 import { CURRENCIES, currencyForCountry, display, guessCountry, type Currency, type Rates } from "@/lib/pricing";
+import { countries, countryCode, countryName } from "@/lib/countries";
 
-type State = { currency: Currency; rates: Rates | null; detected: Currency; ready: boolean };
-const SERVER: State = { currency: "NGN", rates: null, detected: "NGN", ready: false };
+type State = { currency: Currency; rates: Rates | null; detected: Currency; country: string | null; ready: boolean };
+const SERVER: State = { currency: "NGN", rates: null, detected: "NGN", country: null, ready: false };
 let state: State = SERVER;
 const subs = new Set<() => void>();
 let started = false;
 const emit = () => subs.forEach((f) => f());
 const KEY = "sma-currency";
+
+const COUNTRY_KEY = "sma-country";
+function readCountry(): string | null {
+  try { const v = localStorage.getItem(COUNTRY_KEY); return v && /^[A-Z]{2}$/.test(v) ? v : null; } catch { return null; }
+}
 
 function readOverride(): Currency | null {
   try {
@@ -25,20 +32,24 @@ async function start() {
   started = true;
   let detected: Currency = "NGN";
   let rates: Rates | null = null;
+  let country: string | null = null;
   try {
     const cached = sessionStorage.getItem("sma-geo");
     const j = cached ? JSON.parse(cached) : await fetch("/api/geo", { headers: { accept: "application/json" } }).then((r) => (r.ok ? r.json() : null));
     if (j?.ok) {
       try { if (!cached) sessionStorage.setItem("sma-geo", JSON.stringify(j)); } catch { /* storage may be blocked */ }
-      detected = j.currency ?? currencyForCountry(j.country);
+      country = typeof j.country === "string" && /^[A-Z]{2}$/.test(j.country) ? j.country : null;
+      detected = j.currency ?? currencyForCountry(country);
       rates = j.rates ?? null;
     } else throw new Error("no geo");
   } catch {
-    detected = currencyForCountry(guessCountry(Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.language));
+    country = guessCountry(Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.language);
+    detected = currencyForCountry(country);
   }
   const wanted = readOverride() ?? detected;
+  const chosen = readCountry();
   // Without exchange rates only naira can be shown.
-  state = { currency: rates || wanted === "NGN" ? wanted : "NGN", rates, detected, ready: true };
+  state = { currency: rates || wanted === "NGN" ? wanted : "NGN", rates, detected, country: chosen ?? country, ready: true };
   emit();
 }
 
@@ -56,6 +67,43 @@ export function setCurrency(c: Currency) {
   try { localStorage.setItem(KEY, c); } catch { /* ignore */ }
   state = { ...state, currency: state.rates || c === "NGN" ? c : "NGN" };
   emit();
+}
+
+// The student's country sets the display currency (NGN, USD, GBP or EUR; see currencyForCountry).
+export function setCountry(code: string) {
+  const c = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(c)) return;
+  const cur = currencyForCountry(c);
+  try { localStorage.setItem(COUNTRY_KEY, c); localStorage.setItem(KEY, cur); } catch { /* ignore */ }
+  state = { ...state, country: c, currency: state.rates || cur === "NGN" ? cur : "NGN" };
+  emit();
+}
+
+// Country picker. Used in the programme page's enrolment summary and in the application form, where its value
+// (the country's name) is submitted with the application.
+export function CountrySelect({ d, compact = false, dark = false }: { d?: Record<string, string>; compact?: boolean; dark?: boolean }) {
+  const { country, ready } = useCurrency();
+  const fromForm = countryCode(d?.country);
+  const value = countryName(fromForm ?? country) ?? "";
+  const cls = `mt-1 w-full rounded-md border px-4 py-3.5 text-base outline-none focus:ring-2 focus:ring-brand-orange/40 ${dark ? "border-white/25 bg-white/10 text-white" : "border-ink/15 bg-white focus:border-brand-orange"}`;
+  return (
+    <label className="block font-medium">
+      <span className={compact ? "font-display text-xs font-semibold uppercase tracking-[0.18em] opacity-70" : ""}>Country of residence</span>
+      <select key={ready ? "r" : "s"} name="country" required defaultValue={value} onChange={(e) => { const c = countryCode(e.target.value); if (c) setCountry(c); }} className={cls} autoComplete="country-name">
+        <option value="" disabled>Select your country…</option>
+        {/* Country names come from the browser's own region names, so the list is drawn only in the browser
+            (the server's names can differ slightly, which would break hydration). */}
+        {ready && countries().map((c) => <option key={c.code} value={c.name} className="text-ink">{c.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
+// Approximate amount in the student's currency (empty for naira or without rates).
+export function Approx({ naira, className = "" }: { naira: number; className?: string }) {
+  const { currency, rates } = useCurrency();
+  if (currency === "NGN" || !rates) return null;
+  return <span className={className} data-approx>{display(naira, currency, rates)}</span>;
 }
 
 // A naira amount. Prices on the site are always shown in naira; other currencies appear only at checkout
@@ -102,13 +150,14 @@ export function ChargeNote({ naira, className = "" }: { naira: number; className
   );
 }
 
-// Payment step: choose which currency to see the amounts in. Starts on the visitor's detected currency.
+// Payment step: which currency the guide amounts are shown in. Set by the country, never chosen separately.
 export function PayCurrency() {
-  const { currency } = useCurrency();
+  const { currency, country } = useCurrency();
+  const name = countryName(country);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-cream px-4 py-3" data-pay-currency>
-      <span className="text-sm"><b className="font-display">Show amounts in</b><span className="block text-ink/70">{currency === "NGN" ? "Nigerian naira" : "A guide only. You pay in naira (₦)."}</span></span>
-      <CurrencySwitcher />
+    <div className="rounded-md bg-cream px-4 py-3 text-sm" data-pay-currency>
+      <b className="font-display">{currency === "NGN" ? "Amounts in Nigerian naira (₦)" : `Amounts also shown in ${currency}`}</b>
+      <span className="block text-ink/70">{currency === "NGN" ? (name && name !== "Nigeria" ? `Exchange rates are unavailable right now, so amounts are shown in naira.` : "Payment is in naira.") : `Based on your country${name ? ` (${name})` : ""}. A guide only: you pay in naira (₦).`}</span>
     </div>
   );
 }

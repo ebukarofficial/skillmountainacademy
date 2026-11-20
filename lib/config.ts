@@ -159,8 +159,8 @@ export const FLAGS = { GROUP_ENABLED: false, CHILDREN_ENABLED: false };
 
 // The brand message. Repeated in the hero, the band under it, the page title, every programme page and the registration page.
 export const MESSAGE = {
-  headline: "Flexible, one-on-one learning.",
-  short: "Flexible, one-on-one learning. One teacher, one student.",
+  headline: "For those made for more.",
+  short: "Human mentorship. Intelligent learning. Practical mastery.",
   pillars: [
     { title: "One teacher. One student.", text: "Your mentor teaches only you, live and online." },
     { title: "Flexible", text: "Pick your day and time (weekday or Saturday), pay in 3 parts, learn online from anywhere." },
@@ -240,10 +240,11 @@ export const FAQ: [string, string][] = [
   ["Can I pay in instalments?", "Yes. You can pay in full, or in 3 parts: 50% when you register, 30% and 20% later (usually 45 and 90 days after registering, or 30 and 60 days for 3-month training). We email a secure payment link for each part on its due date, with a reminder 3 days before. Live-session access is paused if a payment is more than 2 weeks late."],
   ["Will I get a certificate?", "Yes. When you complete your programme's requirements you receive a Skill Mountain Academy certificate. It is an SMA certificate, not a university degree or a government or professional qualification."],
   ["Do you teach children?", "Yes, through our children's package. Children learn only through a parent or guardian's account and with the parent's consent, with a customised curriculum and one-on-one teaching. Visit the children's package page to send us an enquiry."],
-  ["I am outside Nigeria. Can I register?", "Yes. Prices are in naira (₦). At checkout, on the payment step, you can see the amount in US dollars, pounds or euros as a guide. You pay in naira through Paystack, and your bank converts the amount at its own rate."],
-  ["How do I pay, and what happens next?", "Fill in the application, accept the terms and choose to pay in full or in 3 parts, by Paystack (card or bank transfer) or a manual transfer to our UBA account. When your payment is confirmed, we email you a welcome message with your curriculum link and a link to book your classes."],
+  ["I am outside Nigeria. Can I enrol?", "Yes. Teaching is online, so you can study from anywhere. Programme fees are set in naira (₦). When you enrol, the country you select determines the currency in which we show an approximate equivalent: US dollars, pounds sterling or euros. Payment is processed in naira through Paystack, and your bank converts it at its own rate."],
+  ["Are admissions open all year?", "Admissions are managed in periods, and enrolment on each programme is matched to the number of verified instructors available to teach it. Each programme page shows whether admissions are currently open."],
+  ["How do I pay, and what happens next?", "Complete the enrolment form on the programme page, accept the terms and choose to pay in full or in 3 parts, by Paystack (card or bank transfer) or a manual transfer to our UBA account. When your payment is confirmed, we email your welcome message with your curriculum and a secure link to sign in to your student dashboard."],
   ["I paid by bank transfer. What do I do now?", "Send us your teller (proof of payment) on WhatsApp or email, quoting your reference. We confirm it and then send your welcome email. Please send it on or before the scheduled date for your programme."],
-  ["How do I choose my class days and times?", "After payment, your welcome email has a booking link. Pick the days and time that suit you, for example three days a week for 45 minutes at 9 am. Each booking comes with a link to your virtual class."],
+  ["How is my class time set?", "After enrolment you choose a preferred weekly day and time, for example Monday at 10:00. Once confirmed, that becomes your fixed weekly session with your instructor for the programme, and each week's Google Meet link appears in your dashboard. Any change to the timetable goes through Admissions."],
 ];
 
 // Shown in the FAQ only when group classes are switched on (FLAGS.GROUP_ENABLED).

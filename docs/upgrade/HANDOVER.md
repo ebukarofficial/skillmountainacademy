@@ -2,6 +2,9 @@
 
 This ZIP is the live skillmountainacademy.com project, upgraded by Claude following `docs/upgrade/SPEC.md`.
 ## Status
+
+**20 Nov 2026 (latest):** institutional transformation done (see the section below). Owner steps: OWNER-CHECKLIST section F.
+
 | Phase | State |
 |---|---|
 | 0 Audit | done |
@@ -145,6 +148,50 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 - Notifications are in-app + email; WhatsApp is not built (the spec lists it as a future option).
 - Real-time updates are by reload/polling, not live push.
 - Bank-transfer orders still get no automatic instalment reminders (admins record each part in Orders).
+
+## Institutional transformation (owner brief, 20 Nov 2026): `docs/transform/MASTER-BRIEF.md`
+
+The brief overrides earlier messaging decisions (hero headline, "one-on-one" orange highlight). Owner answers on its
+conflicts: **(1)** hero slider kept exactly; each slide's price removed and its Register button became "Explore Programme";
+**(2)** live-rate guide amounts kept (no fixed foreign price lists); the country chosen at enrolment sets the currency and
+students never pick one; **(3)** instructor recruitment is admin-entered (no public application form); **(4)** the Faculty
+page explains the selection standards and lists only approved instructors who opt in.
+
+**Design system.** Colours unchanged (tokens only; `globals.css`, logos and icon untouched). Added the editorial serif
+Cormorant Garamond (bundled from npm, `--font-serif`, class `SERIF` in `app/brand.tsx`) for headlines; sans-serif stays for
+body and controls. `app/brand.tsx`: Eyebrow, SectionHead, NumberedList, ProgrammeCard (no price, no topic list, one
+"Explore Programme"), PageHero, button styles. Hairline rules and smaller radii replace rounded cards and gradients on
+the public pages and dashboards.
+
+**Pages.** Shared header (`app/header.tsx`, nav in `lib/nav.ts`): Home, About, Programmes, Our Faculty, The Learning
+Experience, Admissions, Sign in. New: `/about/`, `/programmes/`, `/faculty/`, `/learning-experience/`, `/admissions/`.
+Home rebuilt around "For those made for more." Shared footer everywhere. Copy: `lib/institution.ts`,
+`lib/programme-content.ts` (per-programme discipline, intro, opportunities, mastery, outcomes). Catalogue, names, prices
+and durations unchanged (`lib/config.ts`).
+
+**Programme pages.** Nine sections in the brief's order, a sticky Investment panel (price, guide amount, country), View
+Curriculum (PDF in its own tab, or the curriculum viewer with the official outline), and **built-in enrolment** (#enrol):
+the same flow as before, moved to `app/checkout/flow.tsx` and used both inline and on `/checkout/` (old links and the page
+Paystack returns to).
+
+**Admissions and capacity** (migration `0004_admissions.sql`): `programme_admissions` (mode open/scheduled/closed, limit
+on/off, default students per instructor, reserved, listed), `admission_periods`, `instructor_programmes` (assignment and
+max students), new `users` columns for verification. Rules in `lib/admissions.ts`; data in
+`src/server/lms/data/admissions.ts`; logic in `src/server/lms/admissions.ts`; routes in `src/server/lms/routes/admissions.ts`.
+Public `GET /api/admissions` returns state only. `POST /api/register` refuses closed/upcoming/full (409) before saving or
+charging; fails open if the tables do not exist yet.
+
+**Verification.** New instructors start at `application_received`; they cannot sign in (`canSignIn`) or be assigned
+students (`isApproved`) until approved; approval requires identity, credentials and technical checks and sends the invite;
+suspended/rejected sign them out. Stage changes are audited. Public `GET /api/faculty` lists approved + active + opted-in
+instructors without contact details.
+
+**Admin UI.** New tabs Admissions (status, mode, capacity table, limits, assignments, periods) and Recruitment (candidates,
+checks, stages, faculty opt-in). Enrolment instructor choices list approved instructors only.
+
+**Tests.** `tests/admissions.test.ts` (8) and `tests/transform.test.ts` (8); older tests updated where the brief changed a
+decision (hero headline, title, enrolment link, curriculum fallback, files moved to `flow.tsx`). The colour snapshot lost
+two lines: the checkout accents moved to `flow.tsx` and use the existing tokens (no colour added).
 
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)

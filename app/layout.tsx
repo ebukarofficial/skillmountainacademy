@@ -15,27 +15,35 @@ const carlito = localFont({
   ],
   variable: "--font-carlito", display: "swap", adjustFontFallback: "Arial",
 });
+// Editorial serif for institutional headlines only (body text and the dashboards stay sans-serif).
+const serif = localFont({
+  src: [
+    { path: "../node_modules/@fontsource-variable/cormorant-garamond/files/cormorant-garamond-latin-wght-normal.woff2", weight: "300 700", style: "normal" },
+    { path: "../node_modules/@fontsource-variable/cormorant-garamond/files/cormorant-garamond-latin-wght-italic.woff2", weight: "300 700", style: "italic" },
+  ],
+  variable: "--font-serif", display: "swap", adjustFontFallback: "Times New Roman",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Skill Mountain Academy | Flexible, one-on-one learning",
+  title: "Skill Mountain Academy | For those made for more",
   description:
-    "Flexible, one-on-one learning: one teacher, one student, online from Skill Mountain Academy in Abuja, Nigeria. Pick your day and time and pay in 3 parts. Graphics, UI/UX, Web Development, Digital Marketing, Cybersecurity, Cloud and DevOps.",
+    "For those made for more. Skill Mountain Academy, based in Abuja, Nigeria and open to learners worldwide, teaches advanced digital skills through one-on-one instruction from an assigned instructor, AI-assisted learning and intensive practical training: design, web development, digital marketing, cybersecurity, cloud and DevOps.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "Skill Mountain Academy | One-on-One Skill Academy for those made for more",
-    description: "Flexible, one-on-one learning. Learn in-demand skills with structure, depth, and guidance, at your time, space, and pace.",
+    title: "Skill Mountain Academy | For those made for more",
+    description: "Human mentorship. Intelligent learning. Practical mastery. Advanced digital skills taught one-on-one by an assigned instructor.",
     type: "website", url: SITE_URL, siteName: "Skill Mountain Academy",
     images: [{ url: "/og-share.jpg", width: 1200, height: 848, alt: "Skill Mountain Academy: One-on-One Skill Academy for those made for more" }],
   },
-  twitter: { card: "summary_large_image", title: "Skill Mountain Academy", description: "Flexible, one-on-one learning. Learn in-demand skills at your time, space, and pace.", images: ["/og-share.jpg"] },
+  twitter: { card: "summary_large_image", title: "Skill Mountain Academy", description: "For those made for more. Human mentorship. Intelligent learning. Practical mastery.", images: ["/og-share.jpg"] },
 };
 
 // Organization structured data (https://schema.org/EducationalOrganization), on every page.
 const ORG_LD = {
   "@context": "https://schema.org", "@type": "EducationalOrganization", name: "Skill Mountain Academy", legalName: BUSINESS.name,
   url: SITE_URL, logo: `${SITE_URL}/icon.png`, email: BUSINESS.email, telephone: "+234 706 100 0472",
-  slogan: "Flexible, one-on-one learning.",
+  slogan: "For those made for more.",
   address: { "@type": "PostalAddress", streetAddress: "Suite C8, Zara Plaza, Life Camp", addressLocality: "Abuja", addressCountry: "NG" },
   sameAs: SOCIAL.map((s) => s.url),
 };
@@ -46,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head><meta httpEquiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'" /></head>
-      <body className={`${montserrat.variable} ${carlito.variable} font-sans antialiased`}>
+      <body className={`${montserrat.variable} ${carlito.variable} ${serif.variable} font-sans antialiased`}>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_LD).replace(/</g, "\\u003c") }} />
         <a href="#main" className="skip-link">Skip to main content</a>
         {children}

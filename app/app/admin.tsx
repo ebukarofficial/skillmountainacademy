@@ -4,14 +4,15 @@ import { useState } from "react";
 import { PROGRAMMES } from "@/lib/config";
 import { api, Badge, Btn, Card, Empty, Field, inputCls, Msg, naira, useAction, useLoad, when } from "./ui";
 import { MaterialsManager } from "./shared";
+import { AdmissionsAdmin, RecruitmentAdmin } from "./admissions-admin";
 
-const TABS = ["Overview", "Users", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Courses", "Materials", "Platform"] as const;
+const TABS = ["Overview", "Admissions", "Users", "Recruitment", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Courses", "Materials", "Platform"] as const;
 type Tab = (typeof TABS)[number];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 type U = { id: string; email: string; role: string; status: string; fullName: string; studentNo: string | null; lastLoginAt: string | null };
 
 const Stat = ({ label, value, hint }: { label: string; value: string | number | null; hint?: string }) => (
-  <div className="rounded-2xl bg-paper p-4"><p className="text-xs text-ink/60">{label}</p><p className="font-display text-2xl font-extrabold">{value ?? "n/a"}</p>{hint && <p className="text-xs text-ink/60">{hint}</p>}</div>
+  <div className="rounded-lg border border-ink/10 bg-paper p-4"><p className="font-display text-[0.7rem] font-semibold uppercase tracking-[0.16em] text-ink/55">{label}</p><p className="mt-1 font-(family-name:--font-serif) text-3xl font-medium">{value ?? "n/a"}</p>{hint && <p className="text-xs text-ink/60">{hint}</p>}</div>
 );
 
 function Overview() {
@@ -52,7 +53,7 @@ function Users() {
         <Msg text={msg.text} kind={msg.kind} />
       </Card>
       <Card title="Add a user">
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api("/api/app/admin/users", { method: "POST", body: f }), "Created. A sign-in link was emailed.", () => { form.reset(); reload(); }); }}>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api("/api/app/admin/users", { method: "POST", body: f }), f.role === "instructor" ? "Added as an instructor candidate. Approve them in Recruitment to send their sign-in link." : "Created. A sign-in link was emailed.", () => { form.reset(); reload(); }); }}>
           <Field label="Full name"><input name="fullName" required className={inputCls} /></Field>
           <Field label="Email"><input name="email" type="email" required className={inputCls} /></Field>
           <Field label="Role"><select name="role" className={inputCls}><option>student</option><option>instructor</option><option>admin</option></select></Field>
@@ -67,7 +68,9 @@ function Users() {
 function Enrolments() {
   const { data, reload } = useLoad<{ enrolments: { id: string; student_id: string; programme_slug: string; instructor_id: string | null; status: string; student_name: string; student_email: string; instructor_name: string | null }[] }>("/api/app/admin/enrolments?limit=100");
   const students = useLoad<{ users: U[] }>("/api/app/admin/users?role=student&limit=100");
-  const instructors = useLoad<{ users: U[] }>("/api/app/admin/users?role=instructor&status=active&limit=100");
+  // Only approved, active instructors can be assigned students.
+  const approved = useLoad<{ candidates: { id: string; fullName: string; status: string }[] }>("/api/app/admin/recruitment?stage=approved");
+  const instructors = { data: approved.data ? { users: approved.data.candidates.filter((c) => c.status === "active") } : null };
   const [open, setOpen] = useState<string | null>(null);
   const { busy, msg, run } = useAction();
   const name = (slug: string) => PROGRAMMES.find((p) => p.slug === slug)?.name ?? slug;
@@ -181,7 +184,7 @@ function Instructors() {
     <Card title="Instructors">
       <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-ink/60"><th className="py-1">Instructor</th><th>Active students</th><th>Completed</th><th>Missed</th><th>To record</th><th>Rating</th></tr></thead>
         <tbody>{data?.instructors.map((i) => <tr key={i.id} className="border-t border-ink/10"><td className="py-2"><b>{i.full_name}</b> <Badge s={i.status} /><span className="block text-xs text-ink/60">{i.email}</span></td><td>{i.students}</td><td>{i.completed}</td><td>{i.missed}</td><td>{i.pending_outcomes}</td><td>{i.avg_rating ?? "n/a"}</td></tr>)}</tbody></table></div>
-      {data && !data.instructors.length && <Empty>No instructors yet. Add them in Users.</Empty>}
+      {data && !data.instructors.length && <Empty>No instructors yet. Add and approve them in Recruitment.</Empty>}
     </Card>
   );
 }
@@ -238,10 +241,12 @@ export function AdminDashboard() {
   const [tab, setTab] = useState<Tab>("Overview");
   return (
     <>
-      <div className="py-5"><h1 className="font-display text-2xl font-extrabold">Admin</h1></div>
-      <nav aria-label="Admin sections" className="mb-5 flex gap-2 overflow-x-auto pb-1">{TABS.map((t) => <button key={t} onClick={() => setTab(t)} aria-current={tab === t ? "page" : undefined} className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab === t ? "bg-indigo text-white" : "bg-paper"}`}>{t}</button>)}</nav>
+      <div className="py-5"><p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Administration</p><h1 className="mt-1 font-(family-name:--font-serif) text-4xl font-medium">Academy overview</h1></div>
+      <nav aria-label="Admin sections" className="mb-5 flex gap-2 overflow-x-auto pb-1">{TABS.map((t) => <button key={t} onClick={() => setTab(t)} aria-current={tab === t ? "page" : undefined} className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab === t ? "bg-indigo text-white" : "border border-ink/10 bg-paper"}`}>{t}</button>)}</nav>
       {tab === "Overview" && <Overview />}
+      {tab === "Admissions" && <AdmissionsAdmin />}
       {tab === "Users" && <Users />}
+      {tab === "Recruitment" && <RecruitmentAdmin />}
       {tab === "Enrolments" && <Enrolments />}
       {tab === "Orders" && <Orders />}
       {tab === "Academics" && <Academics />}

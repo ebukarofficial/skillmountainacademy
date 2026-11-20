@@ -3,16 +3,16 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
-import logo from "@/assets/sma-logo.png";
-import logoWhite from "@/assets/sma-logo-white.png";
 import banner from "@/assets/photos/banner-students.webp";
-import { AUDIENCE, BUSINESS, CFG, faqList, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, duration, findProgramme, type Programme } from "@/lib/config";
-import { hasPdf } from "@/lib/curricula";
+import { AUDIENCE, BUSINESS, CFG, faqList, GOALS, PROGRAMMES, REVIEW_SHOTS, duration, findProgramme, type Programme } from "@/lib/config";
 import { MENTORS, REVIEWS, SHOW_MENTORS, SHOW_REVIEWS } from "@/lib/content";
-import { Money } from "./currency";
-import { CalendlyEmbed, Chevrons, CloudBadges, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, postSheet } from "./components";
+import { BRAND, JOURNEY, MODEL, STANDARDS } from "@/lib/institution";
+import { CalendlyEmbed, CloudBadges, FOCUS, Intro, PHOTO, Reveal, SMA_PHOTO, SocialIcon, postSheet } from "./components";
+import { Arrow, Eyebrow, NumberedList, ProgrammeGrid, Rule, SERIF, SectionHead, btnLight, btnOutline, btnOutlineLight, btnPrimary } from "./brand";
+import { useAdmission } from "./admissions-status";
+import { SiteHeader } from "./header";
+import { SiteFooter } from "./site-parts";
 
-const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]].filter(([h]) => h !== "#reviews" || SHOW_REVIEWS || REVIEW_SHOTS.length > 0);
 const FAQS = faqList();
 // FAQ structured data (https://schema.org/FAQPage), from the same list the page shows.
 const FAQ_LD = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: FAQS.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) };
@@ -26,50 +26,28 @@ const SLIDES: Slide[] = [
 ];
 
 const CLOUD_TRACK = PROGRAMMES.filter((p) => p.track === "cloud");
-
-
-const USPS = [
-  ["1-on-1 Personalized Training & Mentorship", "Individual attention tailored to each learner's goals, pace and learning style."],
-  ["Flexible Scheduling", "Choose training times that fit around your school, work or personal commitments."],
-  ["Beginner to Advanced Training", "Structured learning paths for complete beginners right through to advanced learners."],
-  ["Inclusive & Specialized Learning", "Customized curricula for children, including learners who need additional support, and for adults with little or no prior IT experience."],
-  ["Practical, Career-Focused Learning", "Learn by doing with hands-on projects, real-world scenarios, industry tools, portfolio development and career guidance, so you build skills you can actually use."],
-];
-
-function UspIcon({ i }: { i: number }) {
-  const c = { width: 26, height: 26, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
-  if (i === 0) return <svg {...c}><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-4 3-6 7-6s7 2 7 6" /></svg>;
-  if (i === 1) return <svg {...c}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
-  if (i === 2) return <svg {...c}><path d="M3 20h5v-5h5v-5h5V5h3" /></svg>;
-  if (i === 3) return <svg {...c}><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M3 19c0-3.5 2.7-5 6-5s6 1.5 6 5M15 14c3 0 6 1 6 4.5" /></svg>;
-  return <svg {...c}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18" /></svg>;
-}
-
-const regHref = (p: Programme) => `/checkout/?p=${p.slug}`;
 const progHref = (p: Programme) => `/programmes/${p.slug}/`;
 
+// The status line on the active slide (in place of the old price line).
+function SlideStatus({ slug }: { slug: string }) {
+  const a = useAdmission(slug);
+  return <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-ink">{a.ready ? a.title : "Skill Mountain Academy"}</span>;
+}
+
 export default function Home() {
-  const [menu, setMenu] = useState(false);
-  const [view, setView] = useState<Programme | null>(null);
-  const closeView = useCallback(() => setView(null), []);
-  const [cat, setCat] = useState("All");
-  const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [cat, setCat] = useState("All");
   const [goal, setGoal] = useState(0);
-  const [step, setStep] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
   const [subbed, setSubbed] = useState(false);
   const [notice, setNotice] = useState<"" | "removed" | "pay-unavailable">("");
   const touch = useRef(0);
-  const rail = useRef<HTMLDivElement>(null);
 
   const cats = ["All", ...Array.from(new Set(PROGRAMMES.map((p) => p.tag)))];
-  const term = q.trim().toLowerCase();
-  const list = PROGRAMMES.filter((p) => (cat === "All" || p.tag === cat) && (!term || `${p.name} ${p.tag} ${p.blurb}`.toLowerCase().includes(term)));
+  const list = PROGRAMMES.filter((p) => cat === "All" || p.tag === cat);
   const rec = findProgramme(GOALS[goal].slug)!;
-  const s = STEPS[step];
 
   // Links to programmes that are no longer offered arrive here as /?notice=removed (see public/_redirects and the checkout page).
   useEffect(() => {
@@ -102,39 +80,24 @@ export default function Home() {
     return () => document.removeEventListener("keydown", esc);
   }, [shot]);
 
-  const go = (e: FormEvent) => { e.preventDefault(); document.getElementById("programmes")?.scrollIntoView({ behavior: "smooth" }); };
   const slide = useCallback((d: number) => setActive((a) => (a + d + SLIDES.length) % SLIDES.length), []);
   const subscribe = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     await postSheet({ action: "subscribe", email: String(new FormData(e.currentTarget).get("email")).trim() });
     setSubbed(true);
   };
-  const partnerHref = `https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent("Hello, I would like to partner with Skill Mountain Academy.")}`;
+  const partnerHref = `https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent("Hello, I would like to discuss an institutional partnership with Skill Mountain Academy.")}`;
 
   return (
-    <main id="main" className="overflow-x-clip">
+    <>
       <Intro />
-      <div className="fixed left-0 top-0 z-50 h-1 brand-bg" style={{ width: `${progress * 100}%` }} aria-hidden="true" />
-
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-cream/90 backdrop-blur">
-        <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3" aria-label="Main">
-          <a href="#top" aria-label="Skill Mountain Academy home"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" /></a>
-          <div className="hidden items-center gap-6 font-medium xl:flex">{NAV.map(([h, t]) => <a key={h} href={h} className="transition hover:text-brand-red">{t}</a>)}</div>
-          <a href="#programmes" className="hidden rounded-full bg-indigo px-6 py-2.5 font-display text-sm font-semibold text-cream transition hover:bg-navy xl:block">Register now</a>
-          <button aria-label="Menu" aria-expanded={menu} onClick={() => setMenu(!menu)} className="grid h-11 w-11 place-items-center rounded-full bg-paper text-lg xl:hidden">{menu ? "✕" : "☰"}</button>
-        </nav>
-        {menu && (
-          <div className="pop mx-5 mb-3 flex flex-col gap-1 rounded-3xl bg-paper p-3 xl:hidden" onClick={() => setMenu(false)}>
-            {NAV.map(([h, t]) => <a key={h} href={h} className="rounded-2xl px-4 py-3.5 font-medium hover:bg-cream">{t}</a>)}
-            <a href="#programmes" className="brand-bg mt-1 rounded-2xl px-4 py-3.5 text-center font-display font-semibold text-white">Register now</a>
-          </div>
-        )}
-      </header>
+      <div className="fixed left-0 top-0 z-50 h-0.5 bg-brand-red" style={{ width: `${progress * 100}%` }} aria-hidden="true" />
+      <SiteHeader />
+      <main id="main" className="overflow-x-clip">
 
       {notice && (
-        <div className="mx-auto mt-2 max-w-6xl px-5">
-          <div role="status" className="flex items-center justify-between gap-4 rounded-2xl bg-indigo px-5 py-3 text-white">
+        <div className="mx-auto mt-3 max-w-6xl px-5">
+          <div role="status" className="flex items-center justify-between gap-4 rounded-lg bg-indigo px-5 py-3 text-white">
             {notice === "removed"
               ? <p>IELTS Training and Data Analytics are no longer offered. <a href="#programmes" className="font-semibold underline">See our current programmes</a>.</p>
               : <p>Online payment links are not available right now. Please <a href={`https://wa.me/${CFG.whatsapp}`} className="font-semibold underline">message us on WhatsApp</a> or email {BUSINESS.email} and we will help you pay.</p>}
@@ -143,24 +106,22 @@ export default function Home() {
         </div>
       )}
 
-      {/* Hero */}
-      <section id="top" className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-10 pt-6 lg:grid-cols-[.9fr_1.1fr] lg:pt-12">
-        <div className="pointer-events-none absolute -bottom-10 -left-32 -z-10 hidden h-40 w-40 donut float lg:block" aria-hidden="true" />
+      {/* Hero: the approved slider stays as it is; the message beside it carries the institution's identity. */}
+      <section id="top" className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-10 lg:grid-cols-[.95fr_1.05fr] lg:pb-24 lg:pt-16">
         {/* The hero fades up with CSS alone (no wait for JavaScript), so the headline paints at once. */}
         <div className="relative motion-safe:animate-[pop_.7s_cubic-bezier(.2,.7,.2,1)_both]">
-          <p className="mb-4 w-fit rounded-full bg-paper px-4 py-1.5 text-sm font-medium">One-on-One Skill Academy</p>
-          {/* The brand message: the largest type on the site. "one-on-one" is brand orange on the indigo token for contrast. */}
-          <h1 data-hero-headline className="font-display text-[clamp(3.1rem,11vw,5.25rem)] font-extrabold leading-[1.02] tracking-tight lg:text-[clamp(3.25rem,5.4vw,4.75rem)]">
-            <span className="brand-text">Flexible,</span>{" "}
-            <span className="inline-block rounded-[0.25em] bg-indigo px-[0.16em] pb-[0.06em] font-black text-brand-orange [box-decoration-break:clone]">one-on-one</span>{" "}
-            <span className="brand-text">learning.</span>
+          <Eyebrow>Skill Mountain Academy · Established 2021</Eyebrow>
+          {/* The brand message: the largest type on the site. */}
+          <h1 data-hero-headline className="mt-5 font-(family-name:--font-serif) text-[clamp(3.6rem,11vw,6rem)] font-medium leading-[0.98] lg:text-[clamp(3.6rem,5.4vw,5.1rem)] tracking-[-0.02em]">
+            For those{" "}
+            <em className="font-medium text-brand-red">made for more.</em>
           </h1>
-          <p className="mt-5 max-w-md text-xl text-ink/70">Learn in-demand skills with structure, depth, and guidance, at your time, space, and pace. For those made for more.</p>
-          <form onSubmit={go} className="mt-7 flex max-w-md overflow-hidden rounded-2xl bg-white shadow-lg shadow-indigo/10">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your programme" aria-label="Find your programme" list="progs" className="min-w-0 flex-1 bg-transparent px-5 py-4 outline-none" />
-            <datalist id="progs">{PROGRAMMES.map((p) => <option key={p.slug} value={p.name} />)}</datalist>
-            <button aria-label="Search programmes" className="brand-bg px-7 font-display font-semibold text-white transition hover:brightness-110">Search</button>
-          </form>
+          <p className="mt-7 max-w-lg font-display text-lg font-medium leading-snug text-ink">{BRAND.positioning}</p>
+          <p className="mt-4 max-w-lg text-lg leading-relaxed text-ink/70">Learn directly from experienced professionals through personalised one-on-one mentorship, intelligent learning assistance and intensive practical training, designed to turn knowledge into professional capability.</p>
+          <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
+            <a href="#programmes" className={btnPrimary}>Explore programmes <Arrow /></a>
+            <Link href="/learning-experience/" className="font-display text-sm font-semibold text-ink underline decoration-ink/30 underline-offset-[6px] transition hover:decoration-brand-red">The learning experience</Link>
+          </div>
         </div>
 
         <div className="motion-safe:animate-[pop_.7s_cubic-bezier(.2,.7,.2,1)_.15s_both]">
@@ -176,10 +137,10 @@ export default function Home() {
                   <div className={`absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
                   {on ? (
                     <div className="pop absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
-                      <span className="rounded-full bg-white/90 px-3 py-1 text-sm font-medium text-ink">{sl.prog ? "Open for registration" : "SMA"}</span>
+                      <SlideStatus slug={sl.id} />
                       <h2 className="mt-3 font-display text-2xl font-extrabold sm:text-3xl">{sl.name}</h2>
-                      <p className="text-white/85"><Money naira={sl.prog.price} />{sl.prog.was ? <> · was <Money naira={sl.prog.was} /></> : null} · {duration(sl.prog)}</p>
-                      {sl.prog && <Link href={regHref(sl.prog)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-block rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Register</Link>}
+                      <p className="text-white/85">{duration(sl.prog)} · one-on-one</p>
+                      <Link href={progHref(sl.prog)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-block whitespace-nowrap rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Explore Programme</Link>
                     </div>
                   ) : (
                     <span className="absolute inset-x-2.5 bottom-4 flex justify-center rounded-full bg-indigo py-4 text-white">
@@ -196,225 +157,200 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Our approach */}
-      <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-10 px-5 py-14 sm:py-20 lg:grid-cols-2">
+      {/* Three principles */}
+      <section aria-label="Our principles" className="border-y border-ink/10 bg-paper">
+        <div className="mx-auto grid max-w-6xl md:grid-cols-3">
+          {[["Human mentorship", "An assigned instructor teaches you one-on-one, live, every week."], ["Intelligent learning", "An AI assistant limited to your programme supports revision between sessions."], ["Practical mastery", "Assignments, assessed projects and an internship phase build demonstrable competence."]].map(([t, d], i) => (
+            <div key={t} className={`px-5 py-9 md:px-8 ${i ? "border-t border-ink/10 md:border-l md:border-t-0" : ""}`}>
+              <p className={`${SERIF} text-2xl`}>{t}<span className="text-brand-red">.</span></p>
+              <p className="mt-2 text-ink/70">{d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* The institution */}
+      <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-14 px-5 py-20 sm:py-28 lg:grid-cols-2">
         <Reveal>
-          <h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Learn without the crowd.</span></h2>
-          <p className="mt-4 max-w-lg text-lg text-ink/75">Some people learn best when they are not surrounded by everyone. Skill Mountain Academy is designed for learners who find it hard to learn in the middle of a crowd.</p>
-          <p className="mt-3 max-w-lg text-lg text-ink/75">It works like a homeschool: one teacher, one student. Your mentor&apos;s full attention, your pace, your goals. Better learning, and a better future.</p>
-          <ul className="mt-6 flex flex-wrap gap-2">
-            {["One teacher. One student.", "Your pace, your schedule", "Real skills for real careers"].map((t) => <li key={t} className="rounded-full bg-paper px-4 py-2 font-medium">{t}</li>)}
-          </ul>
+          <SectionHead eyebrow="An institution with standards" title={<>Taught by people who practise what they teach.</>}
+            lede="Skill Mountain Academy is not a marketplace where anyone uploads a course. Every student is taught by an instructor we have verified, in a live one-on-one session, every week." />
+          <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink/70">You are not left alone with prerecorded videos. Your instructor demonstrates, watches you work, corrects you and marks what you produce. Technology supports that relationship; it does not replace it.</p>
+          <div className="mt-8 flex flex-wrap gap-4">
+            <Link href="/about/" className={btnOutline}>About the Academy</Link>
+            <Link href="/faculty/" className="self-center font-display text-sm font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">How we select our faculty</Link>
+          </div>
         </Reveal>
         <Reveal delay={150} className="relative">
-          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-indigo via-plum to-brand-red pt-10 shadow-2xl shadow-indigo/20">
-            <Chevrons className="pointer-events-none absolute -right-8 top-2 h-48 w-64 text-white/15" />
-            <Image src={banner} alt="Five smiling students sitting together with their hands raised" className="relative mx-auto h-auto w-full max-w-[34rem] px-4" />
+          <div className="relative overflow-hidden rounded-lg bg-indigo pt-10">
+            <Image src={banner} alt="Five students sitting together with their hands raised" className="relative mx-auto h-auto w-full max-w-[34rem] px-4" />
           </div>
-          <div className="float absolute -bottom-5 -left-2 rounded-2xl bg-indigo px-5 py-3 text-white shadow-xl sm:-left-6">
-            <p className="text-sm text-white/70">Learning format</p><p className="font-display font-bold">One teacher, one student</p>
+          <div className="absolute -bottom-6 left-6 rounded-md bg-paper px-6 py-4 shadow-xl shadow-ink/10">
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-ink/55">Learning format</p>
+            <p className={`${SERIF} mt-1 text-xl`}>One instructor, one student</p>
           </div>
         </Reveal>
       </section>
 
       {/* Programmes */}
-      <section id="programmes" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-14 sm:pb-20">
-        <Reveal className="text-center">
-          <h2 className="font-display text-3xl font-extrabold sm:text-5xl">One mentor. One student<span className="text-brand-orange">.</span></h2>
-          <p className="mx-auto mt-3 max-w-xl text-ink/70">Choose a programme and register.</p>
-          <div className="mt-6 flex justify-start gap-2 overflow-x-auto pb-2 no-scrollbar sm:justify-center" role="tablist" aria-label="Categories">
+      <section id="programmes" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-28">
+        <div className="mx-auto max-w-6xl px-5">
+          <Reveal className="flex flex-wrap items-end justify-between gap-6">
+            <SectionHead eyebrow="Programmes" title="Disciplines of professional consequence." lede="Each programme combines one-on-one instruction, structured assessment and an intensive practical phase. Explore a programme to understand the experience before you enrol." />
+            <Link href="/programmes/" className="font-display text-sm font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">All programmes</Link>
+          </Reveal>
+          <div className="mt-10 flex gap-1 overflow-x-auto border-b border-ink/10 no-scrollbar" role="tablist" aria-label="Disciplines">
             {cats.map((c) => (
-              <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)} className={`shrink-0 border-b-2 px-4 py-2 font-medium transition ${cat === c ? "border-brand-red text-ink" : "border-transparent text-ink/70 hover:text-ink"}`}>{c}</button>
+              <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)} className={`-mb-px shrink-0 border-b-2 px-4 py-3 font-display text-sm font-medium transition ${cat === c ? "border-brand-red text-ink" : "border-transparent text-ink/60 hover:text-ink"}`}>{c}</button>
             ))}
           </div>
-        </Reveal>
-        {list.length === 0 && <p className="mt-10 text-center text-ink/70">No match. Try another word, or <button type="button" onClick={() => { setQ(""); setCat("All"); }} className="font-semibold text-brand-red underline">see all programmes</button>.</p>}
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {list.map((p, i) => (
-            <Reveal key={p.slug} delay={(i % 4) * 80} className="h-full">
-              <article className="flex h-full flex-col rounded-[1.75rem] bg-paper p-3 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo/10">
-                <div className={`relative h-48 overflow-hidden rounded-[1.25rem] bg-gradient-to-br ${p.tone}`}>
-                  <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name} online`} fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
-                  {p.was && <span className="absolute left-3 top-3 rounded-full bg-brand-red px-3 py-1 text-xs font-bold text-white">{`${Math.round((1 - p.price / p.was) * 100)}% OFF`}</span>}
-                </div>
-                <div className="flex flex-1 flex-col px-2 pb-2 pt-4">
-                  <h3 className="font-display text-xl font-bold"><Link href={progHref(p)} className="hover:text-brand-red">{p.name}</Link></h3>
-                  {p.track === "cloud" && <CloudBadges className="mt-2" />}
-                  <p className="mt-1 text-sm text-ink/70">{duration(p)} · one-on-one</p>
-                  <p className="mt-2 flex-1 text-ink/75">{p.blurb}</p>
-                  <details className="group mt-3 rounded-2xl bg-cream px-4 py-3">
-                    <summary className="flex cursor-pointer list-none items-center justify-between font-display text-sm font-semibold">What you&apos;ll learn<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink/75">{p.learn.map((l) => <li key={l}>{l}</li>)}</ul>
-                  </details>
-                  <Link href={progHref(p)} className="mt-3 text-sm font-semibold text-brand-red underline">Full programme details</Link>
-                  {hasPdf(p)
-                    ? <a href={p.curriculum} target="_blank" rel="noopener" className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 text-center font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum<span className="sr-only"> for {p.name} (PDF, opens in a new tab)</span></a>
-                    : <button onClick={() => setView(p)} className="mt-3 w-full rounded-full border-2 border-indigo/25 py-2.5 font-display text-sm font-semibold text-indigo transition hover:bg-indigo hover:text-white">View curriculum</button>}
-                  <div className="mt-4"><Price p={p} /></div>
-                  <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register</Link>
-                </div>
-              </article>
-            </Reveal>
-          ))}
-        </div>
+          <div className="mt-10"><ProgrammeGrid list={list} /></div>
 
-        {/* Cloud track comparison */}
-        <Reveal className="mt-16">
-          <div id="cloud-track" className="scroll-mt-24 rounded-[2rem] bg-paper p-5 sm:p-8">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-brand-red">The Cloud track</p>
-                <h3 className="font-display text-2xl font-extrabold sm:text-3xl">Which one is right for me?</h3>
-                <p className="mt-2 max-w-2xl text-ink/75">Three cloud programmes, and all three teach both AWS and Azure. Pick the one that matches where you are today.</p>
+          {/* Cloud track comparison */}
+          <Reveal className="mt-20">
+            <div id="cloud-track" className="scroll-mt-24 rounded-lg border border-ink/10 bg-paper p-6 sm:p-10">
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                  <Eyebrow>The Cloud track</Eyebrow>
+                  <h3 className={`${SERIF} mt-3 text-3xl sm:text-4xl`}>Which cloud programme is right for you?</h3>
+                  <p className="mt-3 max-w-2xl text-ink/70">All three teach both AWS and Azure. Choose by where you are today.</p>
+                </div>
+                <CloudBadges />
               </div>
-              <CloudBadges />
-            </div>
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {CLOUD_TRACK.map((p) => (
-                <div key={p.slug} className="flex flex-col rounded-[1.5rem] bg-cream p-5">
-                  <h4 className="font-display text-xl font-bold">{p.name}</h4>
-                  <dl className="mt-3 flex-1 space-y-2 text-sm">
-                    <div><dt className="font-semibold">Level</dt><dd className="text-ink/75">{p.level}</dd></div>
-                    <div><dt className="font-semibold">Who it&apos;s for</dt><dd className="text-ink/75">{p.audience}</dd></div>
-                    <div><dt className="font-semibold">Duration</dt><dd className="text-ink/75">{duration(p)}</dd></div>
-                    <div><dt className="font-semibold">Platforms</dt><dd className="mt-1"><CloudBadges /></dd></div>
-                  </dl>
-                  <div className="mt-4"><Price p={p} /></div>
-                  <Link href={regHref(p)} className="brand-bg mt-3 rounded-full py-3 text-center font-display font-semibold text-white transition hover:brightness-110">Register for {p.name}</Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-
-        <Reveal className="mt-20 text-center">
-          <h3 className="font-display text-3xl font-extrabold sm:text-4xl"><span className="brand-text">The right place. The right way.</span></h3>
-          <p className="mx-auto mt-3 max-w-xl text-ink/70">Every SMA programme comes with:</p>
-        </Reveal>
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-6">
-          {USPS.map(([t, d], i) => (
-            <Reveal key={t} delay={(i % 3) * 90} className={`h-full ${i < 3 ? "lg:col-span-2" : "lg:col-span-3"} ${i === 4 ? "sm:col-span-2" : ""}`}>
-              <div className={`h-full rounded-[1.75rem] p-6 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo/10 ${["bg-paper", "bg-brand-orange/25", "bg-indigo text-white", "bg-brand-red/15", "bg-paper"][i]}`}>
-                <span className={`grid h-12 w-12 place-items-center rounded-full ${i === 2 ? "bg-white/15 text-white" : "brand-bg text-white"}`}><UspIcon i={i} /></span>
-                <h4 className="mt-5 font-display text-xl font-bold">{t}</h4>
-                <p className={`mt-2 ${i === 2 ? "text-white/75" : "text-ink/75"}`}>{d}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </section>
-
-      {/* Who it's for */}
-      <section id="who" className="scroll-mt-20 pb-16 sm:pb-24">
-        <div className="mx-auto max-w-6xl px-5">
-          <Reveal className="flex items-end justify-between gap-4">
-            <h2 className="font-display text-3xl font-extrabold sm:text-5xl">Who it&apos;s for<span className="text-brand-orange">.</span></h2>
-            <div className="flex gap-2">
-              {[-1, 1].map((d) => <button key={d} aria-label={d < 0 ? "Previous" : "Next"} onClick={() => rail.current?.scrollBy({ left: d * 320, behavior: "smooth" })} className="grid h-11 w-11 place-items-center rounded-full bg-paper transition hover:bg-white">{d < 0 ? "←" : "→"}</button>)}
-            </div>
-          </Reveal>
-        </div>
-        <div ref={rail} className="no-scrollbar mx-auto mt-8 flex max-w-6xl snap-x gap-4 overflow-x-auto px-5">
-          {AUDIENCE.map(([t, d, href], i) => (
-            <div key={t} className={`min-w-[17rem] snap-start rounded-[1.75rem] p-6 transition hover:-translate-y-1 ${["bg-paper", "bg-brand-orange/25", "bg-indigo text-white", "bg-paper", "bg-brand-red/15", "bg-brand-orange/25"][i]}`}>
-              <span className="brand-text font-display text-4xl font-extrabold">0{i + 1}</span>
-              <h3 className="mt-6 font-display text-xl font-bold">{href ? <Link href={href} className="hover:text-brand-red">{t}</Link> : t}</h3>
-              <p className={`mt-2 ${i === 2 ? "text-white/75" : "text-ink/70"}`}>{d}</p>
-              {href && <Link href={href} className="mt-3 inline-block font-semibold text-brand-red underline">About the children&apos;s package</Link>}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Your path */}
-      <section id="how" className="relative scroll-mt-20 overflow-hidden bg-indigo py-16 text-white sm:py-24">
-        <Chevrons className="pointer-events-none absolute -right-16 top-0 h-80 w-[28rem] text-white/10" />
-        <div className="relative mx-auto max-w-6xl px-5">
-          <Reveal>
-            <h2 className="font-display text-3xl font-extrabold sm:text-5xl">Your path to getting started</h2>
-            <p className="mt-3 max-w-2xl text-white/75">Follow these steps, or tell us your goal and we will point you to the right programme.</p>
-          </Reveal>
-
-          <Reveal delay={80}>
-            <div id="goal" className="mt-8 scroll-mt-24 rounded-[1.75rem] bg-white/10 p-5 backdrop-blur sm:p-7">
-              <p className="font-display font-bold">What do you want to achieve?</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {GOALS.map((g, i) => (
-                  <button key={g.goal} onClick={() => setGoal(i)} aria-pressed={goal === i} className={`rounded-full px-4 py-2 font-medium transition ${goal === i ? "bg-white text-ink" : "bg-white/10 hover:bg-white/20"}`}>{g.goal}</button>
+              <div className="mt-8 grid md:grid-cols-3">
+                {CLOUD_TRACK.map((p, i) => (
+                  <div key={p.slug} className={`flex flex-col py-6 md:px-6 ${i ? "border-t border-ink/10 md:border-l md:border-t-0" : "md:pl-0"}`}>
+                    <h4 className="font-display text-lg font-semibold">{p.name}</h4>
+                    <dl className="mt-4 flex-1 space-y-3 text-sm">
+                      <div><dt className="font-semibold">Level</dt><dd className="text-ink/70">{p.level}</dd></div>
+                      <div><dt className="font-semibold">Who it&apos;s for</dt><dd className="text-ink/70">{p.audience}</dd></div>
+                      <div><dt className="font-semibold">Duration</dt><dd className="text-ink/70">{duration(p)}</dd></div>
+                    </dl>
+                    <Link href={progHref(p)} className="mt-5 inline-flex items-center gap-2 font-display text-sm font-semibold text-indigo">Explore Programme <Arrow /></Link>
+                  </div>
                 ))}
               </div>
-              <div className="mt-5 grid items-center gap-4 rounded-2xl bg-white p-5 text-ink sm:grid-cols-[1fr_auto]">
-                <div>
-                  <p className="text-sm font-medium text-brand-red">We suggest</p>
-                  <p className="font-display text-2xl font-extrabold">{rec.name}</p>
-                  <p className="mt-1 text-ink/70">{GOALS[goal].why}</p>
-                  <p className="mt-2 font-display font-bold"><Money naira={rec.price} /> <span className="text-sm font-normal text-ink/70">{duration(rec)}{rec.was ? <> · usual price <Money naira={rec.was} /></> : null}</span></p>
-                </div>
-                <Link href={regHref(rec)} className="brand-bg rounded-full px-7 py-3.5 text-center font-display font-semibold text-white transition hover:brightness-110">Register for {rec.name}</Link>
-              </div>
             </div>
           </Reveal>
 
-          <div className="mt-8 grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
-            <ol className="space-y-2">
-              {STEPS.map((st, i) => (
-                <li key={st.title}>
-                  <button onClick={() => setStep(i)} aria-current={step === i} className={`flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-left transition ${step === i ? "bg-white text-ink" : "bg-white/10 hover:bg-white/20"}`}>
-                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full font-display font-bold ${step === i ? "brand-bg text-white" : "bg-white/15"}`}>{i + 1}</span>
-                    <span className="font-medium">{st.title}</span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-            <div className="flex flex-col justify-between rounded-[1.75rem] bg-white p-6 text-ink sm:p-8">
-              <div>
-                <p className="text-sm font-medium text-brand-red">Step {step + 1} of {STEPS.length}</p>
-                <h3 className="mt-1 font-display text-2xl font-extrabold">{s.title}</h3>
-                <p className="mt-3 text-lg text-ink/75">{s.text}</p>
-                {s.cta && <a href={s.cta[1]} className="brand-bg mt-5 inline-block rounded-full px-6 py-3 font-display font-semibold text-white">{s.cta[0]}</a>}
+          {/* Goal finder */}
+          <Reveal className="mt-8">
+            <div id="goal" className="scroll-mt-24 rounded-lg bg-indigo p-6 text-white sm:p-10">
+              <Eyebrow light>Find your discipline</Eyebrow>
+              <p className={`${SERIF} mt-3 text-3xl`}>What do you want to be able to do?</p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                {GOALS.map((g, i) => (
+                  <button key={g.goal} onClick={() => setGoal(i)} aria-pressed={goal === i} className={`rounded-full border px-4 py-2 text-sm font-medium transition ${goal === i ? "border-cream bg-cream text-indigo" : "border-white/25 hover:border-white/60"}`}>{g.goal}</button>
+                ))}
               </div>
-              <div className="mt-8 flex justify-between">
-                <button onClick={() => setStep((x) => Math.max(0, x - 1))} disabled={step === 0} className="rounded-full bg-cream px-5 py-2.5 font-medium disabled:opacity-40">← Back</button>
-                <button onClick={() => setStep((x) => Math.min(STEPS.length - 1, x + 1))} disabled={step === STEPS.length - 1} className="rounded-full bg-indigo px-5 py-2.5 font-medium text-white disabled:opacity-40">Next →</button>
+              <div className="mt-8 grid items-end gap-6 border-t border-white/15 pt-6 sm:grid-cols-[1fr_auto]">
+                <div>
+                  <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-white/60">We suggest</p>
+                  <p className={`${SERIF} mt-2 text-3xl`}>{rec.name}</p>
+                  <p className="mt-2 max-w-2xl text-white/75">{GOALS[goal].why}</p>
+                </div>
+                <Link href={progHref(rec)} className={btnLight}>Explore Programme <Arrow /></Link>
               </div>
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* The learning experience */}
+      <section id="experience" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-28">
+        <Reveal className="grid gap-10 lg:grid-cols-[.8fr_1.2fr]">
+          <div>
+            <SectionHead eyebrow="The learning experience" title="Not a collection of videos." lede="Students learn through a structured relationship with an instructor, supported by technology and tested by practical work." />
+            <Link href="/learning-experience/" className={`${btnOutline} mt-8`}>How a programme works</Link>
+          </div>
+          <NumberedList items={MODEL} />
+        </Reveal>
+      </section>
+
+      {/* Practical mastery */}
+      <section className="relative overflow-hidden bg-indigo py-20 text-white sm:py-28">
+        <div className="relative mx-auto grid max-w-6xl gap-12 px-5 lg:grid-cols-2">
+          <Reveal>
+            <SectionHead light eyebrow="Practical mastery" title="Knowledge is demonstrated through application." lede="After the instructional phase, every programme continues into an intensive practical phase. Students work on structured projects, receive corrections and build a portfolio of completed work." />
+            <p className="mt-5 max-w-xl text-white/60">Where approved internship partners exist we may connect students with practical opportunities. We do not promise external placements, employment or income.</p>
+          </Reveal>
+          <Reveal delay={120}>
+            <ul className="grid gap-x-8 sm:grid-cols-2">
+              {["Practical assignments set and marked by your instructor", "Real or carefully structured simulated projects", "Corrections and written feedback", "A portfolio of completed, explainable work", "Assessment of demonstrated competence", "An SMA certificate on meeting the requirements"].map((t) => (
+                <li key={t} className="border-t border-white/15 py-4 text-white/85">{t}</li>
+              ))}
+            </ul>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Standards and faculty */}
+      <section className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
+        <Reveal className="grid gap-10 lg:grid-cols-[.8fr_1.2fr]">
+          <div>
+            <SectionHead eyebrow="Our standards" title="Selected with care. Held to account." lede="Instructors are verified and assessed before they teach. Every session is scheduled on a fixed timetable, every outcome is logged, and students rate their instructors." />
+            <Link href="/faculty/" className={`${btnOutline} mt-8`}>Our Faculty</Link>
+          </div>
+          <NumberedList items={STANDARDS} cols={1} />
+        </Reveal>
+      </section>
+
+      {/* Who we teach */}
+      <section id="who" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-24">
+        <div className="mx-auto max-w-6xl px-5">
+          <Reveal><SectionHead eyebrow="Who we teach" title="For people who intend to go further." /></Reveal>
+          <div className="mt-10 grid gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
+            {AUDIENCE.map(([t, d, href]) => (
+              <div key={t} className="border-t border-ink/10 py-6">
+                <h3 className="font-display text-base font-semibold">{href ? <Link href={href} className="hover:text-brand-red">{t}</Link> : t}</h3>
+                <p className="mt-1.5 text-ink/70">{d}</p>
+                {href && <Link href={href} className="mt-2 inline-block text-sm font-semibold text-brand-red underline">About the children&apos;s package</Link>}
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Reviews */}
+      {/* Admissions */}
+      <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-28">
+        <Reveal className="grid gap-10 lg:grid-cols-[.8fr_1.2fr]">
+          <div>
+            <SectionHead eyebrow="Admissions" title="An intentional path to enrolment." lede="Admissions are managed in periods, and enrolment on each programme is matched to the instructors available to teach it." />
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Link href="/admissions/" className={btnPrimary}>Admissions</Link>
+            </div>
+          </div>
+          <NumberedList items={JOURNEY} />
+        </Reveal>
+      </section>
+
       {/* Free consultation */}
-      <section id="book" className="mx-auto max-w-4xl scroll-mt-20 px-5 pb-16 pt-20 text-center sm:pb-24 sm:pt-32">
-        <Reveal>
-          <h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Not sure yet? Talk to us first.</span></h2>
-          <p className="mx-auto mt-3 max-w-xl text-ink/70">Book a free call. We will listen to your goals and help you choose the right programme before you pay anything.</p>
+      <section id="book" className="scroll-mt-20 border-t border-ink/10 px-5 py-20 text-center sm:py-24">
+        <Reveal className="mx-auto max-w-3xl">
+          <SectionHead center eyebrow="Speak with Admissions" title="Questions before you decide?" lede="Book a call. We will listen to your goals and help you choose the right programme before you pay anything." />
           <div className="mt-8"><CalendlyEmbed url={CFG.calendlyConsult} /></div>
         </Reveal>
       </section>
 
       {(SHOW_REVIEWS || REVIEW_SHOTS.length > 0) && (
-      <section id="reviews" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-16 sm:py-24">
-        <Reveal className="text-center">
-          <h2 className="font-display text-3xl font-extrabold sm:text-5xl">Real Learners. Real Transformation<span className="text-brand-orange">.</span></h2>
-          <p className="mx-auto mt-3 max-w-xl text-ink/70">What learners say about us.</p>
-        </Reveal>
+      <section id="reviews" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-24">
+        <Reveal><SectionHead center eyebrow="Students" title="In their own words." /></Reveal>
         {SHOW_REVIEWS && (
-          <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-reviews>
+          <ul className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3" data-reviews>
             {REVIEWS.map((r) => (
-              <li key={`${r.name}-${r.quote.slice(0, 20)}`} className="flex flex-col rounded-[1.75rem] bg-paper p-6">
-                <blockquote className="flex-1 text-lg text-ink/85">&ldquo;{r.quote}&rdquo;</blockquote>
-                <div className="mt-4 flex items-center gap-3">
+              <li key={`${r.name}-${r.quote.slice(0, 20)}`} className="flex flex-col border-t border-ink/15 pt-6">
+                <blockquote className={`${SERIF} flex-1 text-2xl leading-snug text-ink/85`}>&ldquo;{r.quote}&rdquo;</blockquote>
+                <div className="mt-5 flex items-center gap-3">
                   {r.photo && <img src={`/reviews/${r.photo}`} alt={`Photo of ${r.name}`} loading="lazy" width={48} height={48} className="h-12 w-12 rounded-full object-cover" />}
-                  <p className="text-sm"><b className="font-display">{r.name}</b><span className="block text-ink/70">{progName(r.programme)} · {r.year}</span></p>
+                  <p className="text-sm"><b className="font-display">{r.name}</b><span className="block text-ink/65">{progName(r.programme)} · {r.year}</span></p>
                 </div>
               </li>
             ))}
           </ul>
         )}
         {REVIEW_SHOTS.length ? (
-          <div className="mt-10 columns-1 gap-4 sm:columns-2 lg:columns-3">
+          <div className="mt-12 columns-1 gap-4 sm:columns-2 lg:columns-3">
             {REVIEW_SHOTS.map((r, i) => (
-              <button key={r.file} onClick={() => setShot(i)} className="mb-4 block w-full break-inside-avoid overflow-hidden rounded-2xl bg-white text-left shadow-md transition hover:-translate-y-1 hover:shadow-xl" aria-label={`Open ${r.alt}`}>
+              <button key={r.file} onClick={() => setShot(i)} className="mb-4 block w-full break-inside-avoid overflow-hidden rounded-lg border border-ink/10 bg-white text-left transition hover:shadow-xl hover:shadow-ink/10" aria-label={`Open ${r.alt}`}>
                 <img src={`/reviews/${r.file}`} alt={r.alt} loading="lazy" className="h-auto w-full" />
                 <span className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-ink/70"><SocialIcon name={r.platform} />{r.platform}</span>
               </button>
@@ -424,23 +360,23 @@ export default function Home() {
       </section>
       )}
       {shot !== null && (
-        <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/80 p-4" onClick={() => setShot(null)} role="dialog" aria-modal="true" aria-label="Learner post">
-          <img src={`/reviews/${REVIEW_SHOTS[shot].file}`} alt={REVIEW_SHOTS[shot].alt} className="max-h-[90dvh] max-w-full rounded-2xl bg-white object-contain" />
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/80 p-4" onClick={() => setShot(null)} role="dialog" aria-modal="true" aria-label="Student post">
+          <img src={`/reviews/${REVIEW_SHOTS[shot].file}`} alt={REVIEW_SHOTS[shot].alt} className="max-h-[90dvh] max-w-full rounded-lg bg-white object-contain" />
           <button aria-label="Close" className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white text-lg">✕</button>
         </div>
       )}
 
       {SHOW_MENTORS && (
-        <section id="mentors" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-16 sm:pb-24" data-mentors>
-          <Reveal className="text-center"><h2 className="font-display text-3xl font-extrabold sm:text-5xl">Meet our mentors<span className="text-brand-orange">.</span></h2></Reveal>
-          <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <section id="mentors" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-20" data-mentors>
+          <Reveal><SectionHead center eyebrow="Faculty" title="Members of our faculty." /></Reveal>
+          <ul className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {MENTORS.map((m) => (
-              <li key={m.name} className="rounded-[1.75rem] bg-paper p-6">
+              <li key={m.name} className="border-t border-ink/15 pt-6">
                 {m.photo && <img src={`/mentors/${m.photo}`} alt={`Photo of ${m.name}, ${m.role}`} loading="lazy" width={80} height={80} className="h-20 w-20 rounded-full object-cover" />}
-                <h3 className="mt-4 font-display text-xl font-bold">{m.name}</h3>
+                <h3 className={`${SERIF} mt-4 text-2xl`}>{m.name}</h3>
                 <p className="text-sm font-semibold text-brand-red">{m.role}</p>
-                {m.bio && <p className="mt-2 text-ink/75">{m.bio}</p>}
-                {m.programmes?.length ? <p className="mt-2 text-sm text-ink/70">Teaches: {m.programmes.map(progName).join(", ")}</p> : null}
+                {m.bio && <p className="mt-2 text-ink/70">{m.bio}</p>}
+                {m.programmes?.length ? <p className="mt-2 text-sm text-ink/65">Teaches: {m.programmes.map(progName).join(", ")}</p> : null}
               </li>
             ))}
           </ul>
@@ -448,81 +384,68 @@ export default function Home() {
       )}
 
       {/* FAQ */}
-      <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-5 pb-16 sm:pb-24">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD).replace(/</g, "\\u003c") }} />
-        <Reveal><h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Questions, answered</span></h2></Reveal>
-        <div className="mt-8 space-y-3">
-          {FAQS.map(([qq, a]) => (
-            <details key={qq} className="group rounded-2xl bg-paper px-5 py-4 open:shadow-md">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display font-semibold">{qq}<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
-              <p className="mt-3 text-ink/75">{a}</p>
-            </details>
-          ))}
+      <section id="faq" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-24">
+        <div className="mx-auto max-w-3xl px-5">
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD).replace(/</g, "\\u003c") }} />
+          <Reveal><SectionHead eyebrow="Questions" title="Frequently asked." /></Reveal>
+          <div className="mt-10">
+            {FAQS.map(([qq, a]) => (
+              <details key={qq} className="group border-t border-ink/10 py-5 last:border-b">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display font-semibold">{qq}<span className="text-xl font-light text-brand-red transition group-open:rotate-45" aria-hidden="true">+</span></summary>
+                <p className="mt-3 leading-relaxed text-ink/70">{a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Vision / partners */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-indigo via-navy to-plum pb-16 pt-16 text-white sm:pb-20 sm:pt-20 lg:pb-0">
-        <Chevrons className="pointer-events-none absolute -left-20 bottom-0 h-72 w-96 text-white/10" />
-        <div className="relative mx-auto grid max-w-5xl items-end gap-8 px-5 lg:grid-cols-[1.15fr_.85fr]">
-          <Reveal className="text-center lg:pb-20 lg:text-left">
-          <p className="text-sm font-medium uppercase tracking-widest text-brand-orange">Our vision</p>
-          <h2 className="mt-3 font-display text-3xl font-extrabold sm:text-5xl">A mentor beside every learner.</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-lg text-white/80 lg:mx-0">We believe the best education is personal. Our mission is to give every learner a teacher of their own and to open doors to careers and opportunities wherever they are. If you share this vision and would like to help us grow it, we would love to hear from you.</p>
-          <a href={partnerHref} target="_blank" rel="noopener noreferrer" className="brand-bg mt-8 inline-block rounded-full px-8 py-4 font-display font-semibold text-white transition hover:brightness-110">Partner with us</a>
-        </Reveal>
+      {/* Vision and partners */}
+      <section className="relative overflow-hidden bg-indigo pt-20 text-white sm:pt-24">
+        <div className="relative mx-auto grid max-w-6xl items-end gap-10 px-5 lg:grid-cols-[1.2fr_.8fr]">
+          <Reveal className="pb-20 sm:pb-24">
+            <Eyebrow light>Our ambition</Eyebrow>
+            <h2 className={`${SERIF} mt-4 text-4xl leading-tight sm:text-5xl`}>A globally respected institution for professional digital skills.</h2>
+            <p className="mt-5 max-w-2xl text-lg text-white/75">We are building, carefully, an institution that combines exceptional human instruction with intelligent learning support, for students wherever they are. If you represent an organisation that shares this ambition, we would welcome a conversation.</p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <a href={partnerHref} target="_blank" rel="noopener noreferrer" className={btnLight}>Institutional partnerships</a>
+              <Link href="/about/" className={btnOutlineLight}>About the Academy</Link>
+            </div>
+          </Reveal>
           <div className="hidden justify-center lg:flex">
-            <Image src={SMA_PHOTO} alt="A smiling learner wearing a Skill Mountain Academy t-shirt" className="h-auto max-h-[27rem] w-auto" />
+            <Image src={SMA_PHOTO} alt="A learner wearing a Skill Mountain Academy t-shirt" className="h-auto max-h-[25rem] w-auto" />
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer id="contact" className="bg-black text-white/75">
-        <div className="mx-auto max-w-6xl px-5">
-          <div className="grid gap-10 border-t border-white/10 py-12 md:grid-cols-2">
-            <div>
-              <Image src={logoWhite} alt="Skill Mountain Academy" unoptimized className="h-14 w-auto" />
-              <p className="mt-6 max-w-md text-lg">Skill Mountain Academy is a one-on-one skill academy where one teacher teaches one student.</p>
-              <div className="mt-6 flex items-center gap-5">
-                {SOCIAL.map((so) => <a key={so.name} href={so.url} target="_blank" rel="noopener noreferrer" aria-label={`Skill Mountain Academy on ${so.name}`} className="text-white/70 transition hover:text-brand-orange"><SocialIcon name={so.name} /></a>)}
-              </div>
-            </div>
-            <div className="flex flex-col gap-6 md:items-end md:text-right">
-              <p className="italic text-white/60">Learn deeply. Grow confidently. Graduate prepared.</p>
-              <div className="w-full max-w-sm">
-                <p className="font-display font-semibold text-white">Subscribe to our mailing list</p>
-                <p className="text-sm text-white/60">News, new programmes and offers.</p>
-                {subbed ? <p className="mt-3 font-semibold text-brand-orange">Thank you. You&apos;re subscribed.</p> : (
-                  <form onSubmit={subscribe} className="mt-3">
-                    <div className="flex overflow-hidden rounded-2xl bg-white text-ink">
-                      <input name="email" type="email" required maxLength={120} placeholder="Enter your email" aria-label="Email address" className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-left outline-none" />
-                      <button className="brand-bg px-6 font-display font-semibold text-white">Subscribe</button>
-                    </div>
-                    <label className="mt-3 flex items-start gap-2 text-left text-xs text-white/70">
-                      <input type="checkbox" name="consent" required className="mt-0.5 h-4 w-4 shrink-0 accent-[#f7892b]" />
-                      <span>I agree to receive emails from Skill Mountain Academy and can unsubscribe at any time. See our <Link href="/privacy/" className="underline hover:text-white">Privacy Policy</Link>.</span>
-                    </label>
-                  </form>
-                )}
-              </div>
-              <nav aria-label="Legal" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/70 md:justify-end">
-                <Link href="/terms/" className="underline hover:text-white">Terms</Link>
-                <Link href="/privacy/" className="underline hover:text-white">Privacy</Link>
-                <Link href="/cookies/" className="underline hover:text-white">Cookies</Link>
-                <Link href="/refunds/" className="underline hover:text-white">Refunds</Link>
-                <Link href="/app/login/" className="underline hover:text-white">Student &amp; staff sign-in</Link>
-              </nav>
-              <p className="text-sm text-white/75">Email: <a href={`mailto:${BUSINESS.email}`} className="font-semibold text-white underline">{BUSINESS.email}</a><br />Phone: <a href={`tel:${BUSINESS.phone.replace(/\s/g, "")}`} className="underline">{BUSINESS.phone}</a></p>
-              <p className="text-sm text-white/60">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
-              <p className="text-sm text-white/60">© Skill Mountain Academy 2021–{new Date().getFullYear()}{IMAGE_CREDIT ? ` · ${IMAGE_CREDIT}` : ""}</p>
-            </div>
+      {/* Mailing list */}
+      <section className="bg-black text-white/75">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 pt-12 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className={`${SERIF} text-2xl text-white`}>Correspondence from the Academy</p>
+            <p className="mt-1 text-sm text-white/60">Admission periods, new programmes and institutional news. Occasional, never noisy.</p>
+          </div>
+          <div className="w-full max-w-md">
+            {subbed ? <p className="font-semibold text-brand-orange">Thank you. You&apos;re subscribed.</p> : (
+              <form onSubmit={subscribe}>
+                <div className="flex overflow-hidden rounded-full bg-white text-ink">
+                  <input name="email" type="email" required maxLength={120} placeholder="Your email address" aria-label="Email address" className="min-w-0 flex-1 bg-transparent px-5 py-3.5 text-left outline-none" />
+                  <button className="bg-indigo px-6 font-display text-sm font-semibold text-cream">Subscribe</button>
+                </div>
+                <label className="mt-3 flex items-start gap-2 text-left text-xs text-white/65">
+                  <input type="checkbox" name="consent" required className="mt-0.5 h-4 w-4 shrink-0 accent-[#f7892b]" />
+                  <span>I agree to receive emails from Skill Mountain Academy and can unsubscribe at any time. See our <Link href="/privacy/" className="underline hover:text-white">Privacy Policy</Link>.</span>
+                </label>
+              </form>
+            )}
           </div>
         </div>
-      </footer>
+        <Rule light className="mx-auto mt-12 max-w-6xl" />
+      </section>
+      </main>
+      <SiteFooter />
 
       <a href={`https://wa.me/${CFG.whatsapp}`} aria-label="Chat with us on WhatsApp" className="fixed bottom-4 right-4 z-30 rounded-full bg-[#25d366] px-4 py-2.5 font-display text-sm font-semibold text-ink shadow-xl transition hover:scale-105">Chat</a>
-      {view && <CurriculumModal p={view} onClose={closeView} action={<Link href={regHref(view)} className="brand-bg block rounded-full py-3.5 text-center font-display font-semibold text-white">Register for {view.name}</Link>} />}
-    </main>
+    </>
   );
 }
+

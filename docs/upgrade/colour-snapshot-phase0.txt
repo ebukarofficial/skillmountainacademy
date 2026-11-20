@@ -1,3 +1,4 @@
+== note (20 Nov 2026): the two checkout accents (#1e0e6f, #c8233a) moved with the enrolment form to app/checkout/flow.tsx and now use the existing tokens accent-indigo and accent-brand-red, so they are no longer listed. No colour was added.
 == globals.css :root and @theme
 @import "tailwindcss";
 
@@ -37,8 +38,6 @@ body { background: var(--cream); color: var(--ink); font-size: 1.0625rem; }
 /* Darkened so white text on buttons meets the WCAG AA contrast ratio (4.5:1) */
 .brand-bg { background: linear-gradient(100deg, #b81f35, #cf4a16); }
 == hex colours in code
-app/checkout/page.tsx:229:#1e0e6f
-app/checkout/page.tsx:239:#c8233a
 app/globals.css:10:#c8233a
 app/globals.css:11:#f7892b
 app/globals.css:12:#16163a

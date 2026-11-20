@@ -41,9 +41,13 @@ export function lagosDate(from: Date, days = 0): string {
 // ---------- currency ----------
 const EUROZONE = ["AT", "BE", "BG", "HR", "CY", "EE", "FI", "FR", "DE", "GR", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PT", "SK", "SI", "ES", "AD", "MC", "SM", "VA", "ME", "XK"];
 
+// Market policy: countries shown in naira. Nigeria by default; add other African markets here if the Academy
+// decides to show them naira (for example "GH"). Everywhere else not listed below is shown in US dollars.
+export const NAIRA_MARKETS = ["NG"];
+
 export function currencyForCountry(cc: string | null | undefined): Currency {
   const c = String(cc || "").toUpperCase();
-  if (c === "NG") return "NGN";
+  if (NAIRA_MARKETS.includes(c)) return "NGN";
   if (c === "US") return "USD";
   if (c === "GB") return "GBP";
   if (EUROZONE.includes(c)) return "EUR";

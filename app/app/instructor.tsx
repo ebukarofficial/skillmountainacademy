@@ -166,7 +166,7 @@ export function InstructorDashboard({ me }: { me: Me }) {
   const p = perf.data?.performance;
   return (
     <>
-      <div className="py-5"><h1 className="font-display text-2xl font-extrabold">Welcome, {me.fullName.split(" ")[0]}</h1></div>
+      <div className="py-5"><p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Faculty</p><h1 className="mt-1 font-(family-name:--font-serif) text-4xl font-medium">Welcome, {me.fullName.split(" ")[0]}</h1></div>
       <div className="grid gap-5 lg:grid-cols-[1fr_1.6fr_1fr]">
         <div className="order-2 space-y-5 lg:order-1">
           <Card title="My programmes and students">

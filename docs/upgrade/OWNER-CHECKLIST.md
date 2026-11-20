@@ -152,3 +152,29 @@ It uses the same database, secrets and Turnstile/Resend setup as above. Sign-in 
 34. **Website traffic.** Cloudflare dashboard > **Web Analytics** > Add a site (free). Search rankings: Google Search Console.
 35. **Local preview.** `npx wrangler dev` now needs `npx wrangler login` first (the AI binding only runs on Cloudflare).
 36. **Lawyer review.** The Privacy and Cookies pages now describe the learning-platform data (messages, uploads, AI chats, sign-in cookie).
+
+## F. Institutional transformation (20 Nov 2026)
+
+37. **Run the new migration.** `npm run db:migrate` again (adds `0004_admissions.sql`: admissions, capacity and instructor
+    verification). It is safe on live data: every programme starts **open** with capacity limits **off**, and instructors you
+    already added count as **approved**. Until it runs, the site behaves as before (everything open).
+38. **Check your existing instructors meet the standard.** They were marked approved automatically. Open Admin >
+    **Recruitment** and record their checks (identity, credentials, technical assessment), so the public statement
+    "every instructor passes verification" is true for all of them.
+39. **New instructors go through Recruitment.** Admin > Recruitment > Add a candidate > record the checks > Approve. Approval
+    sends their sign-in invitation. Candidates cannot sign in or be assigned students before that.
+40. **Faculty page.** For each approved instructor who agrees, tick "Show on the public Faculty page". Ask them to complete
+    their profile (photo, biography, qualifications, LinkedIn) in their dashboard first. Photos need R2 (item 32).
+41. **Capacity.** Admin > **Admissions** > Manage: assign approved instructors to each programme with their maximum students.
+    Only turn **Limit** on for a programme once its instructors are assigned; with no instructors the capacity is 0 and the
+    programme shows as fully subscribed.
+42. **Admission periods.** To run intakes, set a programme's mode to "By admission period" and add periods (Lagos time).
+    "Closed" closes it immediately; "Open" ignores periods.
+43. **Review the new copy.** Please read and correct, especially facts only you can confirm: About (founded in Abuja in
+    2021; "not accredited by a government body"), programme pages (discipline text, "What you will master", outcomes and
+    the completion wording), the Faculty selection stages, and the FAQ answers on admissions and class times.
+44. **Currency markets.** Nigeria shows naira; the UK pounds; eurozone euros; everywhere else US dollars (guide amounts at
+    the live rate, payment always in naira). To show naira to other African countries, add their codes to `NAIRA_MARKETS`
+    in `lib/pricing.ts`.
+45. **Lawyer review.** The Privacy Policy now covers instructor verification records and public faculty profiles, and the
+    Cookie Policy covers the remembered country.
