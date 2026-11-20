@@ -115,7 +115,7 @@ export const PROGRAMMES: Programme[] = [
       "Securing web and cloud applications", "Monitoring, detecting and responding to incidents",
       "Ethical hacking and penetration testing basics", "Security policies, compliance and best practice"] },
   // Cloud track: all three teach BOTH AWS and Azure.
-  { slug: "cloud", name: "Cloud Engineering", tag: "Cloud", track: "cloud", price: 450000, was: 700000, trainingMonths: 4, internshipMonths: 2,
+  { slug: "cloud", name: "Cloud Engineering", tag: "Cloud", track: "cloud", price: 450000, trainingMonths: 4, internshipMonths: 2,
     level: "Beginner-friendly", audience: "Beginners, including people with little or no IT experience.", ...base("cloud"),
     tone: "from-indigo via-navy to-brand-orange",
     blurb: "Design, deploy and run applications on AWS and Azure, one-on-one with your mentor.",
@@ -240,7 +240,7 @@ export const FAQ: [string, string][] = [
   ["Can I pay in instalments?", "Yes. You can pay in full, or in 3 parts: 50% when you register, 30% and 20% later (usually 45 and 90 days after registering, or 30 and 60 days for 3-month training). We email a secure payment link for each part on its due date, with a reminder 3 days before. Live-session access is paused if a payment is more than 2 weeks late."],
   ["Will I get a certificate?", "Yes. When you complete your programme's requirements you receive a Skill Mountain Academy certificate. It is an SMA certificate, not a university degree or a government or professional qualification."],
   ["Do you teach children?", "Yes, through our children's package. Children learn only through a parent or guardian's account and with the parent's consent, with a customised curriculum and one-on-one teaching. Visit the children's package page to send us an enquiry."],
-  ["I am outside Nigeria. Can I register?", "Yes. You can view prices in naira, US dollars, pounds or euros using the currency selector at the top of the page. Amounts in other currencies are approximate: you pay in naira (₦) through Paystack, and your bank converts the amount at its own rate."],
+  ["I am outside Nigeria. Can I register?", "Yes. Prices are in naira (₦). At checkout, on the payment step, you can see the amount in US dollars, pounds or euros as a guide. You pay in naira through Paystack, and your bank converts the amount at its own rate."],
   ["How do I pay, and what happens next?", "Fill in the application, accept the terms and choose to pay in full or in 3 parts, by Paystack (card or bank transfer) or a manual transfer to our UBA account. When your payment is confirmed, we email you a welcome message with your curriculum link and a link to book your classes."],
   ["I paid by bank transfer. What do I do now?", "Send us your teller (proof of payment) on WhatsApp or email, quoting your reference. We confirm it and then send your welcome email. Please send it on or before the scheduled date for your programme."],
   ["How do I choose my class days and times?", "After payment, your welcome email has a booking link. Pick the days and time that suit you, for example three days a week for 45 minutes at 9 am. Each booking comes with a link to your virtual class."],

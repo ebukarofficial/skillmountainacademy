@@ -27,7 +27,7 @@ test("prices, crossed-out prices and durations match the spec and owner decision
     uiux: [400000, undefined, 4, 2],
     webdev: [500000, undefined, 4, 2],
     cybersecurity: [650000, undefined, 4, 2], // owner: no crossed-out price
-    cloud: [450000, 700000, 4, 2],            // owner: keep ₦700,000 crossed out
+    cloud: [450000, undefined, 4, 2],         // owner (20 Nov 2026): no crossed-out price, keep ₦450,000
     devops: [500000, undefined, 4, 2],
     "cloud-devops": [650000, undefined, 5, 2],
   };
@@ -38,7 +38,7 @@ test("prices, crossed-out prices and durations match the spec and owner decision
     assert.equal(p.trainingMonths, t, `${slug} training months`);
     assert.equal(p.internshipMonths, i, `${slug} internship months`);
   }
-  assert.equal(Math.round((1 - bySlug("cloud").price / 700000) * 100), 36, "Cloud shows 36% OFF");
+  assert.ok(PROGRAMMES.every((p) => p.was == null), "no crossed-out prices anywhere");
 });
 
 test("duration reads as training + internship", () => {

@@ -17,6 +17,16 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
+## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
+- The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)
+- Cloud Engineering: ₦450,000 with NO crossed-out price (the ₦700,000 strike, "36% OFF" badge and "Save" chip are gone).
+- No currency selector in any page header. Prices show in naira everywhere except checkout: the order summary uses the visitor's
+  detected currency for the "≈" guide, and the payment step has a "Show amounts in" selector (`PayCurrency` in `app/currency.tsx`).
+- Files: `lib/config.ts`, `app/page.tsx`, `app/site-parts.tsx`, `app/currency.tsx`, `app/programmes/[slug]/page.tsx`, `app/checkout/page.tsx`,
+  `app/checkout/server-pay.tsx`, `db/seed-programmes.sql` (regenerated), tests updated (programmes, phase2, phase4).
+- If you already ran `npm run db:migrate` with the old seed, refresh the programmes table:
+  `npx wrangler d1 execute skillmountainacademy-db --remote --file db/seed-programmes.sql`
+
 ## Phase log (chat 2)
 ### Phase 1 verification
 - `npm ci` OK. Build failed on a Next.js security advisory (16.4.2): upgraded `next` and `eslint-config-next` to 16.4.6 (same minor line). `npm audit`: 0 vulnerabilities.

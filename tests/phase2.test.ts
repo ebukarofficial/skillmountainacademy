@@ -30,11 +30,9 @@ test("acceptance 5: the hero headline is the message and the largest text on the
   assert.ok(heroMin > biggest, `hero minimum ${heroMin}rem must be larger than ${where} (${biggest}rem)`);
 });
 
-test("acceptance 5: the pillars band sits directly under the hero", () => {
+test("owner change (20 Nov 2026): no pillars band under the hero", () => {
   const home = read("app/page.tsx");
-  const heroEnd = home.indexOf("</section>", home.indexOf('id="top"'));
-  const next = home.slice(heroEnd + "</section>".length).trimStart();
-  assert.ok(next.startsWith("<PillarsBand />"), "PillarsBand must follow the hero section");
+  assert.doesNotMatch(home, /PillarsBand/, "the band was removed at the owner's request");
   assert.deepEqual(pillars().map((p) => p.title), ["One teacher. One student.", "Flexible"]);
   assert.match(pillars()[1].text, /weekday or Saturday.*pay in 3 parts.*online from anywhere/);
   assert.equal(FLAGS.GROUP_ENABLED, false);

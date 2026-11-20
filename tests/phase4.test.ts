@@ -45,14 +45,17 @@ test("acceptance 6/8: converted instalments add up exactly to the converted tota
   }
 });
 
-test("header switcher, approximate note with rate credit, and the checkout charge statement exist", () => {
+test("currency choice only at checkout (payment step); naira everywhere else; rate credit and charge statement exist", () => {
   const cur = read("app/currency.tsx");
   assert.match(cur, /fetch\("\/api\/geo"/);
   assert.match(cur, /guessCountry\(Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone, navigator\.language\)/);
   assert.match(cur, /Rates By Exchange Rate API/);
   assert.match(cur, /Paystack will charge <b>/);
-  assert.match(read("app/page.tsx"), /<CurrencySwitcher \/>/);
-  assert.match(read("app/site-parts.tsx"), /<CurrencySwitcher \/>/);
+  for (const f of ["app/page.tsx", "app/site-parts.tsx", "app/programmes/[slug]/page.tsx"]) assert.doesNotMatch(read(f), /CurrencySwitcher|FxNote/, `${f}: no currency selector outside checkout`);
+  assert.match(cur, /export function Money\(\{ naira \}: \{ naira: number \}\) \{\n  return <>\{display\(naira, "NGN", null\)\}<\/>;/, "Money shows naira");
+  assert.match(read("app/checkout/server-pay.tsx"), /<PayCurrency \/>/);
+  assert.match(read("app/checkout/page.tsx"), /<PayCurrency \/>/);
+  assert.doesNotMatch(read("app/checkout/page.tsx"), /<CurrencySwitcher/, "not in the checkout header");
   assert.match(read("app/checkout/page.tsx"), /<ChargeNote naira=/);
 });
 
