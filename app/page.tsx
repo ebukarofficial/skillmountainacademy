@@ -315,11 +315,12 @@ export default function Home() {
           </Reveal>
         </div>
         <div ref={rail} className="no-scrollbar mx-auto mt-8 flex max-w-6xl snap-x gap-4 overflow-x-auto px-5">
-          {AUDIENCE.map(([t, d], i) => (
-            <div key={t} className={`min-w-[17rem] snap-start rounded-[1.75rem] p-6 transition hover:-translate-y-1 ${["bg-paper", "bg-brand-orange/25", "bg-indigo text-white", "bg-paper", "bg-brand-red/15"][i]}`}>
+          {AUDIENCE.map(([t, d, href], i) => (
+            <div key={t} className={`min-w-[17rem] snap-start rounded-[1.75rem] p-6 transition hover:-translate-y-1 ${["bg-paper", "bg-brand-orange/25", "bg-indigo text-white", "bg-paper", "bg-brand-red/15", "bg-brand-orange/25"][i]}`}>
               <span className="brand-text font-display text-4xl font-extrabold">0{i + 1}</span>
-              <h3 className="mt-6 font-display text-xl font-bold">{t}</h3>
+              <h3 className="mt-6 font-display text-xl font-bold">{href ? <Link href={href} className="hover:text-brand-red">{t}</Link> : t}</h3>
               <p className={`mt-2 ${i === 2 ? "text-white/75" : "text-ink/70"}`}>{d}</p>
+              {href && <Link href={href} className="mt-3 inline-block font-semibold text-brand-red underline">About the children&apos;s package</Link>}
             </div>
           ))}
         </div>
