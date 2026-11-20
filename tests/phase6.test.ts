@@ -210,3 +210,9 @@ test("checkout: server flow only when the backend is ready; otherwise the origin
   assert.match(page, /backend\.mode === "legacy"/);
   assert.match(page, /window\.PaystackPop\.setup/, "original Paystack popup flow kept as the fallback");
 });
+
+test("checkout display: converted parts shown on the page are the exact-sum ones (regression: 155+93+62 ≠ 311)", () => {
+  const sp = read("app/checkout/server-pay.tsx");
+  assert.match(sp, /approx\(shown\[i\], currency\)/, "each part uses convertParts output");
+  assert.doesNotMatch(sp, /display\(parts\[i\]/, "parts must not be converted one by one");
+});

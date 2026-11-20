@@ -85,8 +85,9 @@ export function money(amount: number, cur: Currency): string {
   return new Intl.NumberFormat(LOCALE[cur], { style: "currency", currency: cur, maximumFractionDigits: 0, minimumFractionDigits: 0, currencyDisplay: "narrowSymbol" }).format(amount);
 }
 // "₦450,000", or for other currencies "≈" plus the amount. Non-naira amounts are approximate.
+export const approx = (amount: number, cur: Currency) => `≈ ${cur === "USD" ? "US" : ""}${money(amount, cur)}`;
 export function display(naira: number, cur: Currency, rates: Rates | null): string {
   const v = convert(naira, cur, rates);
   if (v == null || cur === "NGN") return money(naira, "NGN");
-  return `≈ ${cur === "USD" ? "US" : ""}${money(v, cur)}`;
+  return approx(v, cur);
 }

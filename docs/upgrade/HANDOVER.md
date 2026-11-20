@@ -13,7 +13,7 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 | 6 Checkout, payments, groups | done |
 | 7 Children's package | done |
 | 8 Trust and content | done |
-| 9 Quality | see the phase log below |
+| 9 Quality | done. ALL PHASES COMPLETE. Next: your manual steps in `docs/upgrade/OWNER-CHECKLIST.md` |
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
@@ -123,6 +123,36 @@ Every phase must end with `npm run build`, `npm run lint` and `npm test` all pas
 - Files: `data/*.json`, `data/README.md`, `lib/content.ts`, `lib/content-rules.ts` (new), `lib/config.ts` (FAQ, FAQ_GROUP, faqList),
   `app/page.tsx`, `app/layout.tsx`, `app/checkout/page.tsx`, `lib/legal.ts`, `lib/terms.ts`, `tests/phase8.test.ts`.
 
+### Phase 9: quality
+- Lighthouse mobile (local `wrangler dev`, simulated slow 4G): programme pages 90-94, checkout 95, children 92-94, terms 96-99 for
+  Performance; 96-100 for Accessibility, Best Practices and SEO everywhere. Home page Performance 61-80 (original site, same test: 66-70),
+  limited by the existing full-screen intro video; options for you in `docs/upgrade/LIMITS.md`.
+- Home improvements that keep the same look: hero fades up with CSS only (no wait for JavaScript), first slide image high priority,
+  intro video poster = its own first frame (`public/sma-intro-poster.webp`, cached a day in `_headers`). Checkout `<main id="main">` fixed
+  (the skip link had no target).
+- End-to-end browser run (Puppeteer + `wrangler dev` + local D1) of the new checkout: found and fixed a display bug where converted
+  parts did not add up to the converted total (155+93+62 vs 311). Regression test added.
+- Route-by-route free-plan review: `docs/upgrade/LIMITS.md`. Bundle ~60 KiB; cron capped at 20 learner emails per run.
+- Colour diff vs the original upload: `app/globals.css`, both logos, `app/icon.png` and `public/og-share.jpg` are byte-identical; every hex
+  value in the code is a Phase 0 brand value; new files use Tailwind tokens only (a test enforces this).
+- Tests: 74 in 11 files (`npm test`), Worker integration tests in Miniflare.
+
+## Acceptance tests (SPEC.md)
+| # | Test | Result | Evidence |
+|---|---|---|---|
+| 1 | IELTS and Data Analytics gone; old links redirect home | PASS | tests/site.test.ts; built HTML scan |
+| 2 | All eight programmes live with Register; no "Coming soon" | PASS | built HTML scan; tests/programmes.test.ts |
+| 3 | Cloud track: 3 programmes, prices, levels, AWS/Azure badges, comparison | PASS | tests/programmes.test.ts |
+| 4 | Durations as training + internship; Digital Marketing 3 + 3 | PASS | tests/programmes.test.ts; built HTML |
+| 5 | Hero headline largest text; band below it | PASS | tests/phase2.test.ts (font-size comparison across all pages) |
+| 6 | Currency switching NGN/USD/GBP/EUR; checkout states the charged amount | PASS in tests and local browser run; live check needs your deploy | tests/phase4.test.ts; e2e |
+| 7 | Checkout price = server calculation; tampering changes nothing | PASS | tests/phase5.test.ts, phase6.test.ts |
+| 8 | Instalments add up exactly; webhooks idempotent | PASS | tests/phase6.test.ts, phase4.test.ts |
+| 9 | Curriculum buttons open the right PDF in a new tab | PASS for the code; NEEDS YOUR STEP (upload the 8 PDFs) | tests/phase2.test.ts |
+| 10 | Group and children features invisible while flags off | PASS | tests/phase6.test.ts, phase7.test.ts, phase8.test.ts |
+| 11 | Forms reject submissions without a valid Turnstile token | PASS (Worker); live needs your Turnstile keys | tests/phase3.test.ts |
+| 12 | Colour-token diff empty | PASS | tests/site.test.ts; byte comparison with the original upload |
+
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.
 2. Upload this ZIP and paste:
@@ -183,7 +213,10 @@ blurb and learn list as in `lib/config.ts`.
   same files as Phase 0 (line numbers are allowed to move, because editing a file shifts them).
 - Colour diff: empty. `app/globals.css` was not touched.
 
-## Owner to-do (running list)
+## Owner to-do
+The complete, ordered list with exact settings and commands is `docs/upgrade/OWNER-CHECKLIST.md`. Items kept below for history.
+
+### Running list from earlier phases
 Phase 2 adds: 7. Put the eight curriculum PDFs in `public/curricula/` named `graphics.pdf`, `uiux.pdf`, `webdev.pdf`, `marketing.pdf`,
 `cybersecurity.pdf`, `cloud.pdf`, `devops.pdf`, `cloud-devops.pdf`. Add PDF bookmarks for the module headings if you want them shown.
 

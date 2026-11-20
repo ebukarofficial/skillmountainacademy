@@ -8,7 +8,7 @@
 | Package manager | npm (`package-lock.json` is committed; the build uses `npm ci`) |
 | Build command | `npm run build` (runs `next build`) |
 | Output directory | `out` (set in `wrangler.jsonc` as `assets.directory`) |
-| Hosting | Cloudflare Workers with static assets (assets-only Worker, no backend yet) |
+| Hosting | Cloudflare Workers with static assets. One Worker (`src/worker.ts`) answers `/api/*` only; every page is static |
 
 ## Build settings to enter in Cloudflare
 Workers & Pages > Create > Import a repository (GitHub) > pick this repo. Then, under the project's **Settings > Build**:
@@ -26,7 +26,7 @@ Workers & Pages > Create > Import a repository (GitHub) > pick this repo. Then, 
 Workers Builds installs packages itself from `package-lock.json` (like `npm ci`), so you do not add an install command.
 
 ## Variables: what the site needs and where to put it
-The website has NO runtime variables, because it is a static export. Next.js copies `NEXT_PUBLIC_*` values into the files at BUILD time,
+The website pages have no runtime variables (static export); the Worker has secrets (see "Backend" below). Next.js copies `NEXT_PUBLIC_*` values into the files at BUILD time,
 so they must be **build** variables: Settings > Build > **Variables and secrets** (the build section, not the Worker runtime section).
 If you add or change one, trigger a new build (Deployments > Retry build, or push a commit).
 
@@ -36,7 +36,8 @@ If you add or change one, trigger a new build (Deployments > Retry build, or pus
 | `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | public (the pk_ key) | Build variable | your Paystack public key, e.g. `pk_live_...` |
 | `NEXT_PUBLIC_SHEET_URL` | public | Build variable | your Google Apps Script web app address (`https://script.google.com/macros/s/.../exec`) |
 | `NEXT_PUBLIC_WHATSAPP` | public, optional | Build variable | e.g. `2347061000472` (the code already has this as default) |
-| Paystack SECRET key (`sk_...`) | PRIVATE | NOT in Cloudflare and NOT in GitHub | Google Apps Script > Project Settings > Script Properties > `PAYSTACK_SECRET` |
+| Paystack SECRET key (`sk_...`) | PRIVATE | Worker **secret** `PAYSTACK_SECRET_KEY` (never a build variable, never in GitHub) | also stays in Apps Script > Script Properties > `PAYSTACK_SECRET` for the original checkout |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | public | Build variable | Turnstile site key (see docs/upgrade/OWNER-CHECKLIST.md) |
 
 Set in code, not in Cloudflare (all public, in `lib/config.ts`): the Google Form address and question codes (`GFORM`), the Calendly link (`calendlyConsult`), the curriculum links (`CURRICULUM_LINKS`), business details.
 Later, if you add a Worker: secrets go in Settings > Variables and secrets as **Secret** (or `npx wrangler secret put NAME`), and the D1 database is a binding, not a variable.
@@ -73,8 +74,11 @@ Later, if you add a Worker: secrets go in Settings > Variables and secrets as **
 - IELTS Training and Data Analytics are no longer offered. `_redirects` sends old paths such as `/ielts`, `/ielts-checkout`, `/checkout/ielts` and `/data-analytics` to `/?notice=removed`, where the home page shows a short notice. `_redirects` cannot match query strings, so `/checkout/?p=ielts` and `/checkout/?p=data` are sent to the same notice by the checkout page itself.
 - `app/not-found.tsx` becomes `out/404.html`. Cloudflare serves it with a real 404 status.
 
-## Adding a backend later (not enabled)
-`wrangler.jsonc` has a commented block for `main: src/worker.ts`, `run_worker_first: ["/api/*"]` and a D1 database binding named `DB`. `src/worker.ts.example` is the starting Worker. Steps are written at the top of both files.
+## Backend (Worker, D1, KV, secrets)
+Since the Nov 2026 upgrade, `wrangler.jsonc` has `main: src/worker.ts`, `run_worker_first: ["/api/*"]`, a D1 binding `DB`, a KV binding `KV`
+and one cron. Setup steps, secrets and dashboard settings (Turnstile, Resend, Paystack) are in `docs/upgrade/OWNER-CHECKLIST.md`.
+New build variable: `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. Worker secrets: `TURNSTILE_SECRET`, `PAYSTACK_SECRET_KEY`, `RESEND_API_KEY`,
+`HOLD_SIGNING_KEY`, `SHEET_WEBHOOK_URL`. Free-plan limits per route: `docs/upgrade/LIMITS.md`.
 
 ## Test checklist after the first deploy
 1. Build log ends with "Success" and shows the deploy URL (`skillmountainacademy.<account>.workers.dev`).
