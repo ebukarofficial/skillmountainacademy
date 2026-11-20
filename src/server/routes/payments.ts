@@ -9,6 +9,7 @@ import { ApiError, clientIp, json, nowIso, randomCode, sha256 } from "../http";
 import { Repo, type InstalmentRow, type OrderRow } from "../repo";
 import { button, layout, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
+import { ensureStudentAccount } from "../lms/accounts";
 
 const PAYSTACK = "https://api.paystack.co";
 const progName = (slug: string) => PROGRAMMES.find((p) => p.slug === slug)?.name ?? slug;
@@ -84,12 +85,14 @@ async function afterPayment(env: AppEnv, repo: Repo, inst: InstalmentRow, amount
   const booking = env.CLASS_BOOKING_URL ? button(env.CLASS_BOOKING_URL, "Book my classes") : "<p>We will send you a link to choose your class days and times within one working day.</p>";
   const rest = left.length ? `<p>Still to pay: ${left.map((i) => `part ${i.seq}, ${ngn(i.amount_kobo)} due ${i.due_date}`).join("; ")}. We email a payment link on each due date, with a reminder 3 days before. Live sessions are paused if a payment is more than 2 weeks late.</p>` : "<p>Your programme is now fully paid.</p>";
   const welcome = inst.seq === 1;
+  // First payment: the learner gets a student account and enrolment on the learning platform.
+  if (welcome) await ensureStudentAccount(env, reg, order);
   await sendEmail(env, {
     to: reg.email,
     subject: welcome ? `Welcome to Skill Mountain Academy: ${name}` : `Payment received: ${name} (part ${inst.seq})`,
     html: layout(welcome ? `Welcome, ${reg.first_name}` : `Thank you, ${reg.first_name}`,
       `${welcome ? "<p><b>Your payment is confirmed and your place is secured.</b></p>" : "<p>We received your payment.</p>"}${table(rows)}${rest}
-       ${welcome ? `<h3>Step 1: Your curriculum</h3>${button(`${site}${p?.curriculum ?? "/"}`, "Open my curriculum")}<h3>Step 2: Choose your class days and time</h3>${booking}` : ""}`),
+       ${welcome ? `<p>Your learning dashboard is ready: sign in at <a href="${site}/app/login/">${site}/app/login/</a> with this email address.</p><h3>Step 1: Your curriculum</h3>${button(`${site}${p?.curriculum ?? "/"}`, "Open my curriculum")}<h3>Step 2: Choose your class days and time</h3>${booking}` : ""}`),
   });
   // Group members get their own welcome when the lead's first payment arrives.
   if (welcome && order.group_size > 1) {

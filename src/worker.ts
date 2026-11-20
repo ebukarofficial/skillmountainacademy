@@ -10,6 +10,7 @@ import { handleChildrenEnquiry } from "./server/routes/children";
 import { handleGeo } from "./server/routes/geo";
 import { handleHold } from "./server/routes/hold";
 import { handleOrderStatus, handlePayLink, handleWebhook } from "./server/routes/payments";
+import { handleLms } from "./server/lms";
 
 type Handler = (req: Request, env: AppEnv, ctx: ExecutionContext) => Promise<Response>;
 
@@ -36,10 +37,14 @@ export default {
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req); // safety net: the website
     const path = url.pathname.replace(/\/+$/, "");
     const route = ROUTES[path];
-    if (!route) return fail(new ApiError(404, "not_found", "Unknown address."));
-    const handler = route[req.method as "GET" | "POST"];
-    if (!handler) return fail(new ApiError(405, "method_not_allowed", "Method not allowed."));
+    const handler = route?.[req.method as "GET" | "POST"];
     try {
+      if (!route || !handler) {
+        // Learning platform routes (/api/auth/*, /api/me, /api/app/*).
+        const lms = await handleLms(req, env, ctx);
+        if (lms) return lms;
+        return fail(route ? new ApiError(405, "method_not_allowed", "Method not allowed.") : new ApiError(404, "not_found", "Unknown address."));
+      }
       return await handler(req, env, ctx);
     } catch (e) {
       if (e instanceof ApiError) return fail(e);

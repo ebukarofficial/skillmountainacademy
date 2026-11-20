@@ -17,6 +17,37 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
+## Learning platform (LMS) build, from 20 Nov 2026
+Owner request: build the backend in `docs/lms/LMS-REQUIREMENTS.md` (the attached spec), with basic screens.
+Owner choices: email sign-in links (no passwords), Cloudflare Workers AI for the assistant, the full backend in phases, backend + basic screens.
+This REPLACES the earlier rule "do not build dashboards or login". Video and whiteboard stay in Google Meet (Meet cannot be embedded in a page).
+
+| LMS phase | State |
+|---|---|
+| 1 Accounts, sign-in, roles, audit | done |
+| 2 Enrolments, timetables, sessions, Meet links, attendance, reminders | next |
+| 3 Resources, assignments, quizzes, grades, progress | |
+| 4 Messaging, ratings, admin reports, finance | |
+| 5 AI assistant | |
+| 6 Screens | |
+| 7 Security review, docs, final ZIP | |
+
+### LMS 1: accounts, sign-in, roles, audit
+- `migrations/0003_lms.sql`: the whole LMS schema (users, auth_tokens, auth_sessions, audit_log, courses, lessons, enrolments, timetables,
+  class_sessions, notifications, resources, assignments, submissions, quizzes, quiz_attempts, lesson_progress, messages,
+  instructor_ratings, ai_messages, resource_chunks (FTS5), error_log).
+- Sign-in: `POST /api/auth/request` (Turnstile, rate limits, same reply for unknown emails) emails a 15-minute single-use link to
+  `/app/login/confirm/?t=...`; that page POSTs `/api/auth/verify`, which sets an HttpOnly/Secure/SameSite=Lax session cookie (30 days,
+  sliding). Only SHA-256 hashes of tokens are stored. `POST /api/auth/logout`, `GET /api/me`, `PATCH /api/me`.
+- First admin: any address in `ADMIN_EMAILS` (wrangler.jsonc vars; default admission@) becomes admin on first sign-in.
+- Framework `src/server/lms/api.ts`: routes with :params, server-side role checks on every `/api/app/*` route, same-origin check on
+  every change, errors logged to `error_log`. SQL only in `src/server/lms/data/*`.
+- Admin: list/search/create/edit/suspend users, invite (sign-in link), audit log. Suspending or changing a role ends that user's sessions.
+- First Paystack payment creates the student account + enrolment (`src/server/lms/accounts.ts`); the welcome email links to /app/login/.
+- Cron is now every 5 minutes (needed for 15-minute class reminders); rates/instalments still run only at 06:00/18:00 Lagos.
+- `ai` binding added (Workers AI). R2 binding is commented out in wrangler.jsonc until you turn on R2 (a missing bucket would fail deploys).
+- Tests: `tests/lms1.test.ts`, helpers `tests/lms-helpers.ts`.
+
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)
 - Cloud Engineering: ₦450,000 with NO crossed-out price (the ₦700,000 strike, "36% OFF" badge and "Save" chip are gone).

@@ -30,9 +30,18 @@
     { "binding": "KV" }
   ],
 
-  // One schedule, twice a day (06:00 and 18:00 in Lagos): refresh exchange rates; the 06:00 run also sends
-  // instalment reminders and payment links and marks overdue parts.
-  "triggers": { "crons": ["0 5,17 * * *"] },
+  // One schedule, every 5 minutes: class reminders (24 h, 1 h, 15 min) and "Meet link missing" alerts.
+  // At 06:00 and 18:00 Lagos it also refreshes exchange rates; at 06:00 it creates the next 14 days of class
+  // sessions, sends instalment reminders and payment links, and marks overdue parts.
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  // Workers AI for the students' learning assistant (no setup needed; free daily allowance, then pay per use).
+  "ai": { "binding": "AI" },
+
+  // R2 bucket for uploads (assignment files, learning materials, profile photos). Turn R2 on in the Cloudflare
+  // dashboard, create the bucket, then REMOVE the two slashes in front of the next line:
+  //   npx wrangler r2 bucket create skillmountainacademy-files
+  // "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "skillmountainacademy-files" }],
 
   // Public settings (not secrets). Secrets are set with `npx wrangler secret put NAME`, never in this file:
   //   TURNSTILE_SECRET, PAYSTACK_SECRET_KEY, RESEND_API_KEY, HOLD_SIGNING_KEY, SHEET_WEBHOOK_URL
@@ -41,7 +50,11 @@
     "EMAIL_FROM": "Skill Mountain Academy <admission@skillmountainacademy.com>",
     "ADMIN_EMAIL": "admission@skillmountainacademy.com",
     // Optional: your Calendly link for booking classes, put in the welcome email. Leave "" to say "we will send it".
-    "CLASS_BOOKING_URL": ""
+    "CLASS_BOOKING_URL": "",
+    // These addresses become admins the first time they sign in at /app/login/ (comma-separated).
+    "ADMIN_EMAILS": "admission@skillmountainacademy.com",
+    // Workers AI model for the learning assistant.
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast"
   },
 
   // lib/config.ts reads these build-time website values; the Worker does not need them.

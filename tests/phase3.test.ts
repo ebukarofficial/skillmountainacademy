@@ -12,7 +12,7 @@ after(async () => { await w.dispose(); });
 
 test("GET /api/status reports what is set up", async () => {
   const j = await (await w.fetchApi("/api/status")).json() as { ready: Record<string, boolean>; flags: Record<string, boolean> };
-  assert.deepEqual(j.ready, { database: true, turnstile: true, payments: true, email: true, holds: true, sheetMirror: true });
+  assert.deepEqual(j.ready, { database: true, turnstile: true, payments: true, email: true, holds: true, sheetMirror: true, uploads: false, ai: false });
   assert.deepEqual(j.flags, { GROUP_ENABLED: false, CHILDREN_ENABLED: false });
 });
 

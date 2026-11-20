@@ -55,7 +55,7 @@ export async function startWorker(opts: { env?: Record<string, string>; db?: boo
     modules: true, scriptPath, compatibilityDate: "2026-10-01",
     d1Databases: opts.db === false ? undefined : { DB: "test-db-" + crypto.randomUUID() },
     kvNamespaces: opts.kv === false ? undefined : { KV: "test-kv-" + crypto.randomUUID() },
-    bindings: { SITE_URL: SITE, ADMIN_EMAIL: "admin@example.com", EMAIL_FROM: "SMA <admission@skillmountainacademy.com>", CLASS_BOOKING_URL: "", ...(opts.env ?? SECRETS) },
+    bindings: { SITE_URL: SITE, ADMIN_EMAILS: "owner@example.com", AI_MODEL: "@cf/test/model", ADMIN_EMAIL: "admin@example.com", EMAIL_FROM: "SMA <admission@skillmountainacademy.com>", CLASS_BOOKING_URL: "", ...(opts.env ?? SECRETS) },
     serviceBindings: { ASSETS: () => new Response("static site") },
     outboundService: async (req: Request) => {
       const body = await req.text();

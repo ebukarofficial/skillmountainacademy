@@ -1,6 +1,8 @@
-// The one scheduled job (wrangler.jsonc: "0 5,17 * * *", i.e. 06:00 and 18:00 Lagos time).
-// Every run refreshes exchange rates. The 06:00 run also handles instalments. Work per run is capped so the
-// job stays inside the Workers Free plan limits (50 external requests and 50 D1 queries per run).
+// The one scheduled job (wrangler.jsonc: every 5 minutes).
+//  - every run: class reminders and missing-Meet-link alerts (src/server/lms/schedule.ts)
+//  - 05:00 and 17:00 UTC (06:00 / 18:00 Lagos): exchange rates
+//  - 05:00 UTC: instalments, next 14 days of class sessions, clean-up
+// Work per run is capped so the job stays inside the Workers Free plan limits (50 external requests and 50 D1 queries per run).
 import { PROGRAMMES } from "../../lib/config.ts";
 import { lagosDate, money } from "../../lib/pricing.ts";
 import type { AppEnv } from "./env";
@@ -8,13 +10,17 @@ import { button, layout, sendEmail, table } from "./email";
 import { Repo } from "./repo";
 import { refreshRates } from "./routes/geo";
 import { payLink } from "./routes/payments";
+import { runLmsSchedule } from "./lms/schedule";
 
 export const MAX_NOTICES_PER_RUN = 20;
 
-export async function runSchedule(env: AppEnv, now = new Date(), cron = "0 5,17 * * *") {
-  const out = { rates: false, overdue: 0, links: 0, reminders: 0 };
-  out.rates = !!(await refreshRates(env));
-  const morning = cron.includes("5,17") ? now.getUTCHours() === 5 : true;
+export async function runSchedule(env: AppEnv, now = new Date(), _cron = "*/5 * * * *") {
+  void _cron;
+  const out = { rates: false, overdue: 0, links: 0, reminders: 0, lms: null as unknown };
+  const firstSlot = now.getUTCMinutes() < 5;
+  if (env.DB) out.lms = await runLmsSchedule(env, now, firstSlot && now.getUTCHours() === 5).catch((e) => { console.error("lms schedule", e); return null; });
+  if (firstSlot && (now.getUTCHours() === 5 || now.getUTCHours() === 17)) out.rates = !!(await refreshRates(env));
+  const morning = firstSlot && now.getUTCHours() === 5;
   if (!morning || !env.DB) return out;
   const repo = new Repo(env.DB);
   try {

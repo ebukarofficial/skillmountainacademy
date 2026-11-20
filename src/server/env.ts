@@ -9,6 +9,11 @@ export interface AppEnv {
   EMAIL_FROM?: string;
   ADMIN_EMAIL?: string;
   CLASS_BOOKING_URL?: string;
+  ADMIN_EMAILS?: string;   // comma-separated; these addresses become admins on their first sign-in
+  AI_MODEL?: string;       // Workers AI model for the learning assistant
+  // Learning platform bindings
+  BUCKET?: R2Bucket;       // uploads (assignments, resources, photos)
+  AI?: Ai;                 // Workers AI
   // Secrets (npx wrangler secret put NAME)
   TURNSTILE_SECRET?: string;
   PAYSTACK_SECRET_KEY?: string;
@@ -28,5 +33,7 @@ export function readiness(env: AppEnv) {
     email: !!env.RESEND_API_KEY,
     holds: !!env.HOLD_SIGNING_KEY && !!env.DB,
     sheetMirror: !!env.SHEET_WEBHOOK_URL,
+    uploads: !!env.BUCKET,
+    ai: !!env.AI,
   };
 }
