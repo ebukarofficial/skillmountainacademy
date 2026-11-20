@@ -11,14 +11,17 @@ import { ROOT, SITE_SOURCE, built, files, read } from "./helpers.ts";
 // Tailwind font sizes in rem.
 const TW: Record<string, number> = { xs: .75, sm: .875, base: 1, lg: 1.125, xl: 1.25, "2xl": 1.5, "3xl": 1.875, "4xl": 2.25, "5xl": 3, "6xl": 3.75, "7xl": 4.5, "8xl": 6, "9xl": 8 };
 
+// Owner brief (20 Nov 2026, "Master development prompt"): the hero message is "For those made for more.", set in
+// the editorial serif with "made for more." in the brand red. It replaces the earlier "Flexible, one-on-one learning."
 test("acceptance 5: the hero headline is the message and the largest text on the site", () => {
   const home = read("app/page.tsx");
   const h1 = home.match(/<h1 data-hero-headline className="([^"]+)">([\s\S]*?)<\/h1>/);
   assert.ok(h1, "hero h1 not found");
   const text = h1[2].replace(/<[^>]+>|\{" "\}/g, " ").replace(/\s+/g, " ").trim();
-  assert.equal(text, MESSAGE.headline.replace("one-on-one", "one-on-one"));
-  assert.match(h1[2], /bg-indigo[^"]*text-brand-orange[^>]*>one-on-one</, "one-on-one is brand orange (on the indigo token)");
-  assert.match(h1[1], /font-extrabold/);
+  assert.equal(text, MESSAGE.headline);
+  assert.equal(MESSAGE.headline, "For those made for more.");
+  assert.match(h1[2], /<em className="[^"]*text-brand-red[^"]*">made for more\.<\/em>/, "made for more. is the brand red token");
+  assert.match(h1[1], /--font-serif/);
   // The smallest the hero ever gets (clamp minimums) must beat the biggest fixed size anywhere else.
   const heroMin = Math.min(...[...h1[1].matchAll(/clamp\(([\d.]+)rem/g)].map((m) => Number(m[1])));
   let biggest = 0, where = "";
@@ -41,8 +44,8 @@ test("owner change (20 Nov 2026): no pillars band under the hero", () => {
 
 test("the message repeats in the title, description, programme pages and registration page", () => {
   const layout = read("app/layout.tsx");
-  assert.match(layout, /title: "[^"]*Flexible, one-on-one learning/);
-  assert.match(layout, /description:\s*\n?\s*"Flexible, one-on-one learning/);
+  assert.match(layout, /title: "[^"]*For those made for more/);
+  assert.match(layout, /description:\s*\n?\s*"For those made for more/);
   assert.match(read("app/programmes/[slug]/page.tsx"), /<MessageStrip \/>/);
   assert.match(read("app/checkout/page.tsx"), /<MessageStrip \/>/);
 });
@@ -71,15 +74,18 @@ test("no job placement, job guarantee or income claims anywhere", () => {
   }
 });
 
-test("programme pages: one per programme, with Course data, price, curriculum, career package, trust lines and Register", () => {
+test("programme pages: one per programme, with Course data, price, curriculum, career package, trust lines and built-in enrolment", () => {
   const page = read("app/programmes/[slug]/page.tsx");
-  for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<HoldPrice", "<CurriculumActions", "<CareerLaunch", "<TrustLines", "/checkout/?p=", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
+  for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<HoldPrice", "<CurriculumActions", "<CareerLaunch", "<TrustLines", 'href="#enrol"', "Proceed to enrolment", "<EnrolSection p={p} />", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
+  // The nine sections of the brief, in order.
+  const order = ["The discipline", "The learning experience", "What you will master", "Learning methodology", "Faculty and instruction", "Curriculum", "Programme outcomes", "Programme structure"].map((t) => page.indexOf(`title="${t}"`)).concat(page.indexOf("Investment and enrolment</h2>"));
+  assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `sections out of order: ${order}`);
   for (const p of PROGRAMMES) {
     const html = built(`programmes/${p.slug}/index.html`);
     if (!html) continue; // checked after a build
     assert.match(html, /"@type":"Course"/, p.slug);
-    assert.ok(html.includes(`href="/checkout/?p=${p.slug}"`), `${p.slug} Register link`);
-    assert.ok(html.includes(`<title>${p.name.replace("&", "&amp;")} | Flexible, one-on-one learning`), `${p.slug} title`);
+    assert.ok(html.includes(`href="#enrol"`), `${p.slug} enrolment link`);
+    assert.ok(html.includes(`<title>${p.name.replace("&", "&amp;")} | For those made for more`), `${p.slug} title`);
   }
   const map = built("sitemap.xml");
   if (map) for (const p of PROGRAMMES) assert.ok(map.includes(`/programmes/${p.slug}/`), `sitemap ${p.slug}`);
@@ -89,8 +95,8 @@ test("acceptance 9: curriculum buttons open the right PDF in a new tab, with a s
   const parts = read("app/site-parts.tsx");
   assert.match(parts, /<a href=\{p\.curriculum\} target="_blank" rel="noopener"/);
   assert.match(parts, /<a href=\{p\.curriculum\} download/);
-  assert.match(parts, /disabled/);
-  assert.match(read("app/page.tsx"), /href=\{p\.curriculum\} target="_blank" rel="noopener"/);
+  assert.match(parts, /<CurriculumButton p=\{p\}/, "without a PDF, the button opens the curriculum viewer");
+  assert.doesNotMatch(read("app/page.tsx"), /p\.learn\.map|<Price /, "discovery cards show no topic list and no price");
   for (const p of PROGRAMMES) assert.equal(p.curriculum, `/curricula/${p.slug}.pdf`);
 });
 

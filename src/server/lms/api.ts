@@ -2,7 +2,7 @@
 // /api/app/* call, same-origin checks on every change, JSON helpers and the audit trail.
 import type { AppEnv } from "../env";
 import { ApiError, clientIp, getCookie, json, nowIso, readJson, sameOrigin, sha256 } from "../http";
-import { audit, logError, sessionUser, touchSession, type Role, type User } from "./data/users";
+import { audit, canSignIn, logError, sessionUser, touchSession, type Role, type User } from "./data/users";
 
 export type Ctx = {
   req: Request; env: AppEnv; exec: ExecutionContext; url: URL; params: Record<string, string>;
@@ -29,7 +29,7 @@ export async function currentUser(req: Request, db: D1Database): Promise<User | 
   const hash = await sha256(`s|${token}`);
   const now = nowIso();
   const u = await sessionUser(db, hash, now);
-  if (!u) return null;
+  if (!u || !canSignIn(u)) return null;
   // Sliding expiry, written at most once a day per session to save database writes.
   if (Date.now() - Date.parse(u.s_last_seen_at) > 86400_000) await touchSession(db, hash, now, new Date(Date.now() + SESSION_DAYS * 86400_000).toISOString());
   const { s_expires_at: _e, s_last_seen_at: _l, ...user } = u;

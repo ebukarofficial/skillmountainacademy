@@ -5,4 +5,5 @@ import "./routes/teaching";
 import "./routes/coursework";
 import "./routes/admin";
 import "./routes/assistant";
+import "./routes/admissions";
 export { handleLms } from "./api";

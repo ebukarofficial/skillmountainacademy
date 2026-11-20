@@ -6,7 +6,12 @@ export type User = {
   id: string; email: string; role: Role; status: "active" | "suspended"; full_name: string; phone: string | null; bio: string | null;
   photo_key: string | null; student_no: string | null; specialization: string | null; qualifications: string | null; links: string | null;
   registration_id: string | null; created_at: string; last_login_at: string | null;
+  verification?: string | null; verification_checks?: string | null; highest_qualification?: string | null; experience?: string | null; public_profile?: number;
 };
+// Instructors can sign in only once their verification is approved (see lib/admissions.ts). If migration 0004 has
+// not run yet the column does not exist (undefined), and instructors keep working as before.
+export const isApproved = (u: Pick<User, "verification">) => u.verification === undefined || u.verification === "approved";
+export const canSignIn = (u: Pick<User, "status" | "role" | "verification">) => u.status === "active" && (u.role !== "instructor" || isApproved(u));
 
 export const getUser = (db: DB, id: string) => one<User>(db, "SELECT * FROM users WHERE id = ?1", id);
 export const getUserByEmail = (db: DB, email: string) => one<User>(db, "SELECT * FROM users WHERE email = ?1", email.toLowerCase());

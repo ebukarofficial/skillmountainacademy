@@ -10,7 +10,7 @@ import {
   programmeCourses, programmeLessons, reassignFutureSessions, replaceTimetable, runBatch, sessionsForDateStmt, timetableHistory, unreadCount, updateCourse,
   updateLesson, updateSession, type SessionRow,
 } from "../data/teaching";
-import { getUser, type User } from "../data/users";
+import { getUser, isApproved, type User } from "../data/users";
 import { notify, type Recipient } from "../notify";
 import { DAYS, addDays, isDate, isTime, lagosDate, lagosText, lagosToIso, weekdayOf } from "../time";
 import { instructorPublic } from "../views";
@@ -91,6 +91,7 @@ async function validInstructor(c: Ctx, v: unknown): Promise<string | null> {
   if (v === null || v === undefined || v === "") return null;
   const u = await getUser(c.db, String(v));
   if (!u || u.role !== "instructor" || u.status !== "active") throw new ApiError(400, "invalid", "That user is not an active instructor.");
+  if (!isApproved(u)) throw new ApiError(400, "not_approved", "Only approved instructors can be assigned students. Approve them in Recruitment first.");
   return u.id;
 }
 

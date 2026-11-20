@@ -11,7 +11,7 @@ import { verifyTurnstile } from "../../turnstile";
 import { EMAIL_RE } from "../../validate";
 import { Repo } from "../../repo";
 import { ALL, ok, publicRoute, route, SESSION_COOKIE, SESSION_DAYS } from "../api";
-import { audit, consumeToken, createSession, createToken, createUser, deleteSession, getUser, getUserByEmail, updateUser, type User } from "../data/users";
+import { audit, canSignIn, consumeToken, createSession, createToken, createUser, deleteSession, getUser, getUserByEmail, updateUser, type User } from "../data/users";
 import { selfView } from "../views";
 
 const TOKEN_MINUTES = 15;
@@ -49,7 +49,7 @@ publicRoute("POST", "/api/auth/request", async (c) => {
     await createUser(c.db, user);
     await audit(c.db, { actor_id: user.id, action: "admin.bootstrap", target_type: "user", target_id: user.id, ip_hash: c.ipHash });
   }
-  if (user && user.status === "active") c.exec.waitUntil(sendSignInLink(c.env, c.db, user));
+  if (user && canSignIn(user)) c.exec.waitUntil(sendSignInLink(c.env, c.db, user));
   // Same answer whether or not the address has an account, so nobody can probe for accounts.
   return ok({ message: "If this email has an account, a sign-in link is on its way. It expires in 15 minutes." });
 });
@@ -61,7 +61,7 @@ publicRoute("POST", "/api/auth/verify", async (c) => {
   const now = nowIso();
   const userId = await consumeToken(c.db, await sha256(`t|${token}`), now);
   const user = userId ? await getUser(c.db, userId) : null;
-  if (!user || user.status !== "active") throw new ApiError(400, "invalid_link", "This sign-in link has expired or was already used. Please request a new one.");
+  if (!user || !canSignIn(user)) throw new ApiError(400, "invalid_link", "This sign-in link has expired or was already used. Please request a new one.");
   const session = b64u(32);
   await createSession(c.db, { token_hash: await sha256(`s|${session}`), user_id: user.id, created_at: now, expires_at: new Date(Date.now() + SESSION_DAYS * 86400_000).toISOString(),
     last_seen_at: now, user_agent: (c.req.headers.get("user-agent") || "").slice(0, 200) });

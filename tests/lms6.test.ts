@@ -41,6 +41,7 @@ test("dashboards use only existing colour tokens (no hex values) and never show 
 });
 
 test("footers link to sign-in", () => {
-  assert.match(read("app/page.tsx"), /href="\/app\/login\/"/);
+  assert.match(read("app/header.tsx"), /href="\/app\/login\/"/);
+  assert.match(read("app/page.tsx"), /<SiteFooter \/>/);
   assert.match(read("app/site-parts.tsx"), /href="\/app\/login\/"/);
 });

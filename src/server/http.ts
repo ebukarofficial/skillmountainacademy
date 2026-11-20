@@ -18,7 +18,7 @@ const BASE_HEADERS: Record<string, string> = {
 
 export function json(data: unknown, status = 200, extra: HeadersInit = {}): Response {
   const h = new Headers(BASE_HEADERS);
-  new Headers(extra).forEach((v, k) => h.append(k, v));
+  new Headers(extra).forEach((v, k) => (k === "set-cookie" ? h.append(k, v) : h.set(k, v)));
   return new Response(JSON.stringify(data), { status, headers: h });
 }
 

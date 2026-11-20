@@ -71,7 +71,7 @@ test("descriptive alt text: no empty alt on programme photos", () => {
 });
 
 test("the footer shows a contact email on every page", () => {
-  assert.match(read("app/page.tsx"), /Email: <a href=\{`mailto:\$\{BUSINESS\.email\}`\}/);
+  assert.match(read("app/page.tsx"), /<SiteFooter \/>/, "the home page uses the shared footer");
   assert.match(read("app/site-parts.tsx"), /Email: <a href=\{`mailto:\$\{BUSINESS\.email\}`\}/);
   const home = built("index.html");
   if (home) assert.ok(home.includes(`mailto:${BUSINESS.email}`));

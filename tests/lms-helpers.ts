@@ -34,6 +34,14 @@ const admins = new WeakMap<W, Promise<Session>>();
 export async function setup(w: W) {
   if (!admins.has(w)) admins.set(w, signIn(w, "owner@example.com"));
   const admin = await admins.get(w)!;
-  const make = async (role: string, email: string, fullName: string) => (await admin.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email, role, fullName, sendInvite: false })).user.id;
+  const make = async (role: string, email: string, fullName: string) => {
+    const id = (await admin.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email, role, fullName, sendInvite: false })).user.id;
+    // New instructors are candidates until approved in Recruitment, which needs the three required checks.
+    if (role === "instructor") await approve(admin, id);
+    return id;
+  };
   return { admin, make };
 }
+
+export const REQUIRED = { identity: { done: true }, credentials: { done: true }, technical: { done: true } };
+export const approve = (admin: Session, id: string) => admin.json("PATCH", `/api/app/admin/recruitment/${id}`, { checks: REQUIRED, stage: "approved", sendInvite: false });

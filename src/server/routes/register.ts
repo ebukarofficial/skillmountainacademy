@@ -13,6 +13,7 @@ import { mirrorToSheet } from "../sheet";
 import { activeHoldFor } from "./hold";
 import { readRates } from "./geo";
 import { startPayment } from "./payments";
+import { assertCanRegister } from "../lms/admissions";
 
 type Body = Record<string, unknown> & { learner?: Record<string, unknown>; members?: unknown };
 
@@ -42,6 +43,8 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   const repo = new Repo(env.DB);
   const prog = findProgramme(String(body.programme ?? ""));
   if (!prog) throw new ApiError(400, "invalid", "Please choose a programme.");
+  // Admissions closed, not yet open, or the programme is full: nothing is saved and nothing is charged.
+  await assertCanRegister(env.DB, prog.slug);
 
   const c = new Checker();
   const learner = readLearner(c, (body.learner as Record<string, unknown>) ?? {});

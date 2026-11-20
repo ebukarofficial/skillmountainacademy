@@ -205,7 +205,7 @@ test("checkout: server flow only when the backend is ready; otherwise the origin
   assert.match(sp, /const server = !!ready\.database && !!ready\.turnstile && !!CFG\.turnstileSiteKey;/);
   assert.match(sp, /\.catch\(\(\) => \{ if \(!off\) setB\(\{ mode: "legacy"/);
   assert.match(sp, /Live-session access is paused if a payment is more than 2 weeks late\./);
-  const page = read("app/checkout/page.tsx");
+  const page = read("app/checkout/flow.tsx");
   assert.match(page, /backend\.mode === "server"/);
   assert.match(page, /backend\.mode === "legacy"/);
   assert.match(page, /window\.PaystackPop\.setup/, "original Paystack popup flow kept as the fallback");

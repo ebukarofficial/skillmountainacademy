@@ -2,7 +2,7 @@
 import { ApiError, nowIso, randomCode } from "../../http";
 import { Checker } from "../../validate";
 import { ALL, notFound, ok, page, route } from "../api";
-import { createUser, deleteUserSessions, getUser, getUserByEmail, listAudit, listUsers, updateUser, type Role, type User } from "../data/users";
+import { canSignIn, createUser, deleteUserSessions, getUser, getUserByEmail, listAudit, listUsers, updateUser, type Role, type User } from "../data/users";
 import { adminView, selfView } from "../views";
 import { sendSignInLink } from "./auth";
 
@@ -75,9 +75,11 @@ route("POST", "/api/app/admin/users", ["admin"], async (c) => {
   const u: User = { id: crypto.randomUUID(), email, role, status: "active", full_name: fields.full_name!, phone: fields.phone ?? null, bio: fields.bio ?? null,
     photo_key: null, student_no: role === "student" ? newStudentNo() : null, specialization: fields.specialization ?? null, qualifications: fields.qualifications ?? null,
     links: fields.links ?? null, registration_id: null, created_at: nowIso(), last_login_at: null };
+  // A new instructor starts as a candidate: they cannot sign in or teach until approved in Recruitment.
+  if (role === "instructor") u.verification = "application_received";
   await createUser(c.db, u);
   await c.audit("user.create", "user", u.id, { email, role });
-  if (b.sendInvite !== false) c.exec.waitUntil(sendSignInLink(c.env, c.db, u, true));
+  if (b.sendInvite !== false && canSignIn(u)) c.exec.waitUntil(sendSignInLink(c.env, c.db, u, true));
   return ok({ user: adminView(u) }, 201);
 });
 
@@ -92,6 +94,8 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   ch.done();
   if (u.id === c.user.id && (patch.status === "suspended" || (patch.role && patch.role !== "admin"))) throw new ApiError(400, "self", "You cannot suspend yourself or remove your own admin role.");
   if (patch.role === "student" && !u.student_no) patch.student_no = newStudentNo();
+  // Becoming an instructor means going through verification first (unless they were approved before).
+  if (patch.role === "instructor" && u.role !== "instructor" && u.verification !== "approved") patch.verification = "application_received";
   await updateUser(c.db, u.id, patch);
   if (patch.status === "suspended" || (patch.role && patch.role !== u.role)) await deleteUserSessions(c.db, u.id); // takes effect at once
   await c.audit("user.update", "user", u.id, patch);
@@ -102,6 +106,7 @@ route("POST", "/api/app/admin/users/:id/invite", ["admin"], async (c) => {
   const u = await getUser(c.db, c.params.id);
   if (!u) throw notFound("That user");
   if (u.status !== "active") throw new ApiError(400, "suspended", "This account is suspended.");
+  if (!canSignIn(u)) throw new ApiError(400, "not_approved", "This instructor has not been approved yet. Approve them in Recruitment first.");
   const sent = await sendSignInLink(c.env, c.db, u, true);
   await c.audit("user.invite", "user", u.id);
   return ok({ sent });
