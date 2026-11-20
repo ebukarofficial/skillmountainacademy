@@ -9,18 +9,29 @@ import { ROOT } from "./helpers.ts";
 const builds = new Map<string, Promise<string>>();
 // `patch` is extra code appended to lib/config.ts in the test bundle only, for example to give a programme a
 // timed price or switch a flag on. The real config file is never changed.
-function bundle(patch = ""): Promise<string> {
+// `aiMock` swaps src/server/lms/ai-client.ts for a version that asks https://ai.test/run (answered by the outbound mock).
+const AI_MOCK = `export const DEFAULT_MODEL = "test";
+export async function runModel(env, messages, maxTokens) {
+  const r = await fetch("https://ai.test/run", { method: "POST", body: JSON.stringify({ messages, maxTokens }) });
+  if (!r.ok) throw new Error("ai failed");
+  return (await r.json()).response;
+}`;
+function bundle(patch = "", aiMock = false): Promise<string> {
   mkdirSync(join(ROOT, ".wrangler", "test"), { recursive: true });
+  const cacheKey = `${aiMock}|${patch}`;
   const out = join(ROOT, ".wrangler", "test", `worker-${builds.size}.mjs`);
-  if (builds.has(patch)) return builds.get(patch)!;
+  if (builds.has(cacheKey)) return builds.get(cacheKey)!;
   const configPath = join(ROOT, "lib", "config.ts");
   const p = build({
     entryPoints: [join(ROOT, "src/worker.ts")], bundle: true, format: "esm", platform: "neutral", target: "es2022", outfile: out,
-    plugins: [{ name: "patch-config", setup(b) { b.onLoad({ filter: /lib[\\/]config\.ts$/ }, (a) => (a.path === configPath ? { contents: readFileSync(configPath, "utf8") + "\n" + patch, loader: "ts" } : undefined)); } }],
+    plugins: [{ name: "patch-config", setup(b) {
+      b.onLoad({ filter: /lib[\\/]config\.ts$/ }, (a) => (a.path === configPath ? { contents: readFileSync(configPath, "utf8") + "\n" + patch, loader: "ts" } : undefined));
+      if (aiMock) b.onLoad({ filter: /ai-client\.ts$/ }, () => ({ contents: AI_MOCK, loader: "ts" }));
+    } }],
     conditions: ["workerd", "worker", "browser"], logLevel: "silent",
     define: { "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": '""', "process.env.NEXT_PUBLIC_SHEET_URL": '""', "process.env.NEXT_PUBLIC_WHATSAPP": '""', "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": '""' },
   }).then(() => out);
-  builds.set(patch, p);
+  builds.set(cacheKey, p);
   return p;
 }
 
@@ -47,8 +58,8 @@ export function defaultMock(req: Request, body: string): Response {
   return new Response("not mocked", { status: 599 });
 }
 
-export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; r2?: boolean; mock?: Mock; patch?: string } = {}) {
-  const scriptPath = await bundle(opts.patch);
+export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; r2?: boolean; ai?: boolean; mock?: Mock; patch?: string } = {}) {
+  const scriptPath = await bundle(opts.patch, !!opts.ai);
   const calls: Call[] = [];
   // Miniflare 5 (bundled with Wrangler 4.156) takes the classic option shape through convertV4MiniflareOptions.
   const mf = new Miniflare(convertV4MiniflareOptions({
@@ -56,7 +67,7 @@ export async function startWorker(opts: { env?: Record<string, string>; db?: boo
     d1Databases: opts.db === false ? undefined : { DB: "test-db-" + crypto.randomUUID() },
     kvNamespaces: opts.kv === false ? undefined : { KV: "test-kv-" + crypto.randomUUID() },
     r2Buckets: opts.r2 === false ? undefined : { BUCKET: "test-r2-" + crypto.randomUUID() },
-    bindings: { SITE_URL: SITE, ADMIN_EMAILS: "owner@example.com", AI_MODEL: "@cf/test/model", ADMIN_EMAIL: "admin@example.com", EMAIL_FROM: "SMA <admission@skillmountainacademy.com>", CLASS_BOOKING_URL: "", ...(opts.env ?? SECRETS) },
+    bindings: { SITE_URL: SITE, ADMIN_EMAILS: "owner@example.com", AI_MODEL: "@cf/test/model", ADMIN_EMAIL: "admin@example.com", EMAIL_FROM: "SMA <admission@skillmountainacademy.com>", CLASS_BOOKING_URL: "", ...(opts.ai ? { AI: "mock-binding" } : {}), ...(opts.env ?? SECRETS) },
     serviceBindings: { ASSETS: () => new Response("static site") },
     outboundService: async (req: Request) => {
       const body = await req.text();

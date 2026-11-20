@@ -4,4 +4,5 @@ import "./routes/users";
 import "./routes/teaching";
 import "./routes/coursework";
 import "./routes/admin";
+import "./routes/assistant";
 export { handleLms } from "./api";
