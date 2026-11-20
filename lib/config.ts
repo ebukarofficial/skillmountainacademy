@@ -188,12 +188,19 @@ export const FAST_TRACK = { enabled: false, months: 3, discount: 0.35 };
 // Pay in 3 parts. Due dates are days after registration (3-month training uses the shorter schedule).
 export const PAY_PLAN = { split: [50, 30, 20], dueDays: [0, 45, 90], dueDaysShort: [0, 30, 60] };
 
-export const AUDIENCE = [
+// Children's package. Self-serve checkout stays off (FLAGS.CHILDREN_ENABLED) until the owner sets the ages, programmes and prices here.
+export const CHILDREN = {
+  minAge: 4, maxAge: 17,                 // ages accepted on the enquiry form
+  programmes: [] as { slug: string; ages: string; price: number }[], // e.g. { slug: "graphics", ages: "10-17", price: 250000 }
+};
+
+export const AUDIENCE: [string, string, string?][] = [
   ["School leavers", "Start your skill journey early, before or alongside your studies."],
   ["Graduates", "Add a practical skill to your degree."],
   ["Working professionals", "Re-skill and stay ahead in your career."],
   ["Job seekers", "Learn something employers and clients pay for."],
   ["Entrepreneurs", "Build the skills your business needs, yourself."],
+  ["Parents and children", "Customised one-on-one learning for children, through a parent account and with your consent.", "/children/"],
 ];
 
 // "Tell us your goal" picker in the Your Path section.

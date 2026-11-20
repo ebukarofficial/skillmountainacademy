@@ -1,5 +1,5 @@
 // POST /api/children-enquiry: a parent's enquiry about the children's package. Saved to D1 and emailed to the owner.
-import { PROGRAMMES } from "../../../lib/config.ts";
+import { CHILDREN, PROGRAMMES } from "../../../lib/config.ts";
 import type { AppEnv } from "../env";
 import { ApiError, clientIp, json, nowIso, readJson, sameOrigin } from "../http";
 import { Repo } from "../repo";
@@ -21,7 +21,7 @@ export async function handleChildrenEnquiry(req: Request, env: AppEnv, ctx: Exec
     parent_name: c.req(b.parentName, "Your name", 120),
     email: c.email(b.email),
     phone: c.phone(b.phone, "Phone number") as string,
-    child_age: c.int(b.childAge, 4, 17, "Your child's age"),
+    child_age: c.int(b.childAge, CHILDREN.minAge, CHILDREN.maxAge, "Your child's age"),
     programme_interest: c.oneOf(b.programme, CHILD_INTERESTS, "a programme of interest"),
     message: c.opt(b.message, 1000),
   };

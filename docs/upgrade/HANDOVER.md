@@ -11,7 +11,8 @@ This ZIP is the live skillmountainacademy.com project, upgraded by Claude follow
 | 4 Currency | done |
 | 5 Timed price hold | done (dormant) |
 | 6 Checkout, payments, groups | done |
-| 7 to 9 | see the phase log below |
+| 7 Children's package | done |
+| 8 to 9 | see the phase log below |
 
 Every phase must end with `npm run build`, `npm run lint` and `npm test` all passing.
 
@@ -96,6 +97,17 @@ Every phase must end with `npm run build`, `npm run lint` and `npm test` all pas
 - Home page shows a notice for `?notice=pay-unavailable` (pay link clicked before Paystack is set up).
 - Files: `app/checkout/server-pay.tsx`, `app/turnstile.tsx` (new), `app/checkout/page.tsx`, `app/page.tsx`, `lib/config.ts` (turnstileSiteKey),
   `src/server/routes/payments.ts`, `src/server/cron.ts`, `src/server/repo.ts`, `wrangler.jsonc` (define), `tests/phase6.test.ts`.
+
+### Phase 7: children's package
+- New `/children/` page: parent account, consent, customised curriculum, one-on-one, flexible days. Parent enquiry form (name, email,
+  phone, child's age 4-17, programme interest, optional message, consent, Turnstile) → `POST /api/children-enquiry` → D1 + email to
+  the owner + confirmation to the parent + "Children enquiries" sheet tab. Without the backend it shows WhatsApp/email buttons.
+- `FLAGS.CHILDREN_ENABLED` (off) plus `CHILDREN.programmes` (empty) in `lib/config.ts` gate a self-serve section; nothing shows today.
+  Interpretation: the /children page and enquiry form are always visible (spec Phase 7.1-7.2); only self-serve checkout is behind the flag.
+  The child checkout itself will be built when you supply ages, programmes and prices.
+- New "Parents and children" card (6th) in "Who it's for" links to /children/. Sitemap lists /children/.
+- Files: `app/children/page.tsx`, `app/children/enquiry-form.tsx` (new), `lib/config.ts` (CHILDREN, AUDIENCE links), `app/page.tsx`,
+  `app/sitemap.ts`, `src/server/routes/children.ts`, `tests/phase7.test.ts`.
 
 ## How to continue in a new chat
 1. Make sure package installs are allowed in your network settings, then open a NEW chat.
