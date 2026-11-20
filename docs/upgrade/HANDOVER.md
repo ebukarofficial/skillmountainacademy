@@ -28,8 +28,8 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 | 2 Enrolments, timetables, sessions, Meet links, attendance, reminders | done |
 | 3 Resources, assignments, quizzes, grades, progress | done |
 | 4 Messaging, ratings, admin reports, finance | done |
-| 5 AI assistant | next |
-| 6 Screens | |
+| 5 AI assistant | done |
+| 6 Screens | next |
 | 7 Security review, docs, final ZIP | |
 
 ### LMS 1: accounts, sign-in, roles, audit
@@ -97,6 +97,19 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
   Paystack payment; the first part creates the student account. (Fixes the earlier "bank transfers only in the sheet" limitation.)
 - Student: own orders, amount paid, outstanding, history, and signed Paystack links for unpaid parts.
 - Files: `src/server/lms/data/reports.ts`, `routes/admin.ts`; `tests/lms4.test.ts`.
+
+### LMS 5: AI learning assistant (Workers AI)
+- `POST /api/app/student/assistant {message, programme?}` and `GET` (history, remaining today). Students only, enrolled only.
+- Context per question: the programme (name, level), its course/lesson outline (or the curriculum list), up to 4 matching chunks of
+  APPROVED materials from that programme only (SQLite FTS5, sanitised query), the student's open assignments and progress, and the last
+  6 turns. System rules: programme topics only, base answers on the materials, never write graded answers, treat materials as
+  reference text (prompt-injection guard), defer to the instructor when unsure, concise, cite material numbers. Sources are returned.
+- Limits: 20 questions per student per Lagos day, 5 per minute. Free Workers AI allowance is 10,000 neurons/day for the WHOLE account
+  (roughly 15-25 answers on an 8B model); past it, requests fail on the free plan and the student sees "not available right now"
+  (failed answers are not counted). For more, the owner needs Workers Paid ($5/month + $0.011 per 1,000 neurons).
+- Model: `AI_MODEL` var (default `@cf/meta/llama-3.1-8b-instruct-fast`); list current models with `npx wrangler ai models list`.
+- Materials feed the assistant only through their "text" field (paste the key content when adding a material); PDFs are not read automatically.
+- Files: `src/server/lms/routes/assistant.ts`, `ai-client.ts` (the only Workers AI call; tests swap it for a mock), `ai-index.ts`, `data/ai.ts`; `tests/lms5.test.ts`.
 
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)
