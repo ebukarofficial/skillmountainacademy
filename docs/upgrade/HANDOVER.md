@@ -26,8 +26,8 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 |---|---|
 | 1 Accounts, sign-in, roles, audit | done |
 | 2 Enrolments, timetables, sessions, Meet links, attendance, reminders | done |
-| 3 Resources, assignments, quizzes, grades, progress | next |
-| 4 Messaging, ratings, admin reports, finance | |
+| 3 Resources, assignments, quizzes, grades, progress | done |
+| 4 Messaging, ratings, admin reports, finance | next |
 | 5 AI assistant | |
 | 6 Screens | |
 | 7 Security review, docs, final ZIP | |
@@ -65,6 +65,21 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
   Capped at 24 emails per run (free plan).
 - Notifications centre: list, unread count, mark read (own only).
 - Files: `src/server/lms/data/teaching.ts`, `data/enrolments.ts`, `routes/teaching.ts`, `schedule.ts`, `notify.ts`, `access.ts`, `time.ts`; `tests/lms2.test.ts`.
+
+### LMS 3: materials, assignments, quizzes, grades, progress
+- Materials (`resources`): admins add approved items for any programme; instructors add items for their programmes, which an admin
+  approves before students see them. Links (https only), files (R2) and optional text (feeds the AI assistant's search index).
+- Uploads stream straight into R2 (`PUT ...?name=file.pdf`, raw body): pdf, Office files, txt/md/csv, zip and images, 25 MB max
+  (photos: png/jpg/webp, 3 MB). No HTML or SVG. Downloads are always attachments (images inline) with nosniff and a sandbox CSP,
+  and every download checks access. Without R2: uploads answer 503 with "type your answer instead"; text submissions still work.
+- Assignments: instructor sets work for their own students; student sees this week's work plus anything overdue; submits text
+  and/or a file (replaceable until graded); statuses pending / submitted / submitted_late / overdue / graded; instructor grades with feedback.
+- Quizzes (multiple choice, marked automatically) and assessments (written answers, marked by the instructor). Correct answers
+  are never sent to students before marking. One attempt; time limit with a 2-minute grace (after that, no answers count).
+- Grades, lesson completion (student or instructor), progress per enrolment (lessons, assignments, quizzes, assessments,
+  attendance, overall %) and "needs attention" flags (overdue work, 2+ missed classes, scores under 50%, no class in 3 weeks).
+- Profile photos (`PUT /api/me/photo`), visible to signed-in users only.
+- Files: `src/server/lms/data/coursework.ts`, `data/ai.ts`, `routes/coursework.ts`, `upload-rules.ts`, `ai-index.ts`; `tests/lms3.test.ts`.
 
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)

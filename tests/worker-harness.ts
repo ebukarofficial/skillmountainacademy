@@ -47,7 +47,7 @@ export function defaultMock(req: Request, body: string): Response {
   return new Response("not mocked", { status: 599 });
 }
 
-export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; mock?: Mock; patch?: string } = {}) {
+export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; r2?: boolean; mock?: Mock; patch?: string } = {}) {
   const scriptPath = await bundle(opts.patch);
   const calls: Call[] = [];
   // Miniflare 5 (bundled with Wrangler 4.156) takes the classic option shape through convertV4MiniflareOptions.
@@ -55,6 +55,7 @@ export async function startWorker(opts: { env?: Record<string, string>; db?: boo
     modules: true, scriptPath, compatibilityDate: "2026-10-01",
     d1Databases: opts.db === false ? undefined : { DB: "test-db-" + crypto.randomUUID() },
     kvNamespaces: opts.kv === false ? undefined : { KV: "test-kv-" + crypto.randomUUID() },
+    r2Buckets: opts.r2 === false ? undefined : { BUCKET: "test-r2-" + crypto.randomUUID() },
     bindings: { SITE_URL: SITE, ADMIN_EMAILS: "owner@example.com", AI_MODEL: "@cf/test/model", ADMIN_EMAIL: "admin@example.com", EMAIL_FROM: "SMA <admission@skillmountainacademy.com>", CLASS_BOOKING_URL: "", ...(opts.env ?? SECRETS) },
     serviceBindings: { ASSETS: () => new Response("static site") },
     outboundService: async (req: Request) => {
