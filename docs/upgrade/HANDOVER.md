@@ -25,8 +25,8 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 | LMS phase | State |
 |---|---|
 | 1 Accounts, sign-in, roles, audit | done |
-| 2 Enrolments, timetables, sessions, Meet links, attendance, reminders | next |
-| 3 Resources, assignments, quizzes, grades, progress | |
+| 2 Enrolments, timetables, sessions, Meet links, attendance, reminders | done |
+| 3 Resources, assignments, quizzes, grades, progress | next |
 | 4 Messaging, ratings, admin reports, finance | |
 | 5 AI assistant | |
 | 6 Screens | |
@@ -47,6 +47,24 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 - Cron is now every 5 minutes (needed for 15-minute class reminders); rates/instalments still run only at 06:00/18:00 Lagos.
 - `ai` binding added (Workers AI). R2 binding is commented out in wrangler.jsonc until you turn on R2 (a missing bucket would fail deploys).
 - Tests: `tests/lms1.test.ts`, helpers `tests/lms-helpers.ts`.
+
+### LMS 2: enrolments, timetables, sessions, Meet links, attendance, reminders
+- Admin: create enrolments (student + programme + instructor), change instructor (future classes move, their Meet links are cleared,
+  history keeps the original instructor), set/change the FIXED weekly slot (`timetables`, history kept with effective_from/to; only
+  future classes without an outcome are replaced), add one-off classes, move one class (original = "rescheduled", timetable untouched),
+  list sessions and classes awaiting attendance. Courses and lessons per programme.
+- Class records (`class_sessions`) are created by ONE SQL statement per Lagos date for all active enrolments (cheap at any size),
+  14 days ahead, daily at 06:00 Lagos and immediately when a slot is set. UNIQUE(timetable_id, starts_at) prevents duplicates.
+- Instructor: own sessions (day/week ranges), students list, `PUT /api/app/instructor/sessions/:id/meet` (must be a real
+  https://meet.google.com/xxx-xxxx-xxx link; student notified in-app + email; replace re-notifies; `meetNotifiedAt` shows delivery),
+  outcomes completed/missed (after start) or cancelled; correctable for 48 h; "rescheduled" is admin-only.
+- Student: own sessions, overview (programmes, instructor profile, weekly slot, next class with `joinOpen` from 15 min before).
+  Students cannot change their timetable (no route exists; admin routes return 403).
+- Reminders (5-minute cron): 24 h, 1 h, 15 min before, to student and instructor, once each; Meet-link-missing alert to the
+  instructor within 24 h; daily attendance nudge. Without a link, reminders say it is pending: the platform never invents one.
+  Capped at 24 emails per run (free plan).
+- Notifications centre: list, unread count, mark read (own only).
+- Files: `src/server/lms/data/teaching.ts`, `data/enrolments.ts`, `routes/teaching.ts`, `schedule.ts`, `notify.ts`, `access.ts`, `time.ts`; `tests/lms2.test.ts`.
 
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)
