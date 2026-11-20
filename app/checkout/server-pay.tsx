@@ -7,7 +7,7 @@ import { BANK, CFG, FLAGS, type Programme } from "@/lib/config";
 import { approx, convertParts, dueDays, lagosDate, money, planParts, type Plan } from "@/lib/pricing";
 import { TERMS_VERSION } from "@/lib/terms";
 import { BankDetails } from "../components";
-import { useCurrency, FxNote } from "../currency";
+import { useCurrency, FxNote, PayCurrency } from "../currency";
 import { useHold } from "../hold";
 import { Turnstile } from "../turnstile";
 
@@ -86,6 +86,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
   return (
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-extrabold">Review and pay</h1>
+      <PayCurrency />
       <div className="rounded-2xl bg-cream p-4 text-sm">
         <p><b>{[d.firstName, d.middleName, d.surname].filter(Boolean).join(" ")}</b> · {d.email} · {d.phone}</p>
         <button type="button" onClick={onBack} className="mt-1 font-semibold text-brand-red underline">Edit my details</button>

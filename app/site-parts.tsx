@@ -4,10 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
-import { BUSINESS, MESSAGE, SOCIAL, careerPackage, pillars, type Programme } from "@/lib/config";
+import { BUSINESS, MESSAGE, SOCIAL, careerPackage, type Programme } from "@/lib/config";
 import { hasPdf } from "@/lib/curricula";
 import { SocialIcon } from "./components";
-import { CurrencySwitcher, FxNote } from "./currency";
 
 // Slim strip that repeats the message at the top of programme pages and the registration page.
 export function MessageStrip() {
@@ -15,26 +14,6 @@ export function MessageStrip() {
     <div className="bg-indigo px-5 py-2.5 text-center text-sm text-white">
       <b className="font-display text-brand-orange">{MESSAGE.headline}</b> <span className="text-white/85">One teacher, one student · Pick your day and time · Pay in 3 parts</span>
     </div>
-  );
-}
-
-// Full-width band directly under the hero.
-export function PillarsBand() {
-  const list = pillars();
-  return (
-    <section aria-label="How SMA works" className="bg-indigo text-white">
-      <div className={`mx-auto grid max-w-6xl gap-6 px-5 py-9 sm:py-11 ${list.length > 2 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-        {list.map((pl) => (
-          <div key={pl.title} className="flex gap-4">
-            <span className="brand-bg mt-1 h-10 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
-            <div>
-              <p className="font-display text-2xl font-extrabold text-brand-orange sm:text-3xl">{pl.title}</p>
-              <p className="mt-1 text-lg text-white/85">{pl.text}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -93,7 +72,6 @@ export function SiteHeader() {
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3" aria-label="Main">
         <Link href="/" aria-label="Skill Mountain Academy home"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" /></Link>
         <div className="flex items-center gap-3">
-          <CurrencySwitcher />
           <Link href="/#programmes" className="rounded-full bg-indigo px-5 py-2.5 font-display text-sm font-semibold text-cream transition hover:bg-navy"><span className="hidden sm:inline">All </span>Programmes</Link>
         </div>
       </nav>
@@ -120,7 +98,6 @@ export function SiteFooter() {
             <Link href="/cookies/" className="underline hover:text-white">Cookies</Link>
             <Link href="/refunds/" className="underline hover:text-white">Refunds</Link>
           </nav>
-          <FxNote className="text-white/60" />
           <p className="text-white/60">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
         </div>
       </div>

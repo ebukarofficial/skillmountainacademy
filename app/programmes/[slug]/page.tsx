@@ -7,7 +7,6 @@ import { learnList } from "@/lib/curricula";
 import { FOCUS, PHOTO } from "@/lib/photos";
 import { CloudBadges } from "../../components";
 import { HoldPrice } from "../../hold";
-import { FxNote } from "../../currency";
 import { CareerLaunch, CurriculumActions, MessageStrip, SiteFooter, SiteHeader, TrustLines } from "../../site-parts";
 
 type Params = { params: Promise<{ slug: string }> };
@@ -70,7 +69,6 @@ export default async function ProgrammePage({ params }: Params) {
             <div className="mt-6 rounded-[1.75rem] bg-paper p-5 sm:p-6">
               <HoldPrice p={p} />
               <p className="mt-1 text-sm text-ink/70">Pay in full, or in 3 parts (50%, 30%, 20%).</p>
-              <FxNote className="mt-1 text-ink/70" />
               <Link href={reg} className="brand-bg mt-4 block rounded-full py-4 text-center font-display text-lg font-semibold text-white transition hover:brightness-110">Register for {p.name}</Link>
               <div className="mt-4"><CurriculumActions p={p} /></div>
               <div className="mt-5 border-t border-ink/10 pt-4"><TrustLines /></div>

@@ -58,10 +58,10 @@ export function setCurrency(c: Currency) {
   emit();
 }
 
-// A naira amount shown in the visitor's currency (naira exactly, other currencies approximately).
+// A naira amount. Prices on the site are always shown in naira; other currencies appear only at checkout
+// (payment step and order summary), through ChargeNote and the checkout switcher.
 export function Money({ naira }: { naira: number }) {
-  const { currency, rates } = useCurrency();
-  return <>{display(naira, currency, rates)}</>;
+  return <>{display(naira, "NGN", null)}</>;
 }
 
 export function CurrencySwitcher({ dark = false }: { dark?: boolean }) {
@@ -98,6 +98,17 @@ export function ChargeNote({ naira, className = "" }: { naira: number; className
     <div className={className}>
       <p data-charge-note>Paystack will charge <b>{display(naira, "NGN", null)}</b> in Nigerian naira (NGN).{approx ? <> That is {approx} at today&apos;s rate; your bank converts it at its own rate.</> : null}</p>
       <FxNote className="mt-1" />
+    </div>
+  );
+}
+
+// Payment step: choose which currency to see the amounts in. Starts on the visitor's detected currency.
+export function PayCurrency() {
+  const { currency } = useCurrency();
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-cream px-4 py-3" data-pay-currency>
+      <span className="text-sm"><b className="font-display">Show amounts in</b><span className="block text-ink/70">{currency === "NGN" ? "Nigerian naira" : "A guide only. You pay in naira (₦)."}</span></span>
+      <CurrencySwitcher />
     </div>
   );
 }

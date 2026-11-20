@@ -10,7 +10,7 @@ import { TERMS_VERSION } from "@/lib/terms";
 import { MessageStrip } from "../site-parts";
 import { BankDone, Confirming, ServerPayment, useBackend } from "./server-pay";
 import { useHold } from "../hold";
-import { ChargeNote, CurrencySwitcher, Money } from "../currency";
+import { ChargeNote, Money, PayCurrency } from "../currency";
 import { BankDetails, CloudBadges, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet } from "../components";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -261,6 +261,7 @@ function Checkout() {
         )}
         {step === 2 && backend.mode === "legacy" && (
           <div className="space-y-4">
+            <PayCurrency />
             <h1 className="font-display text-2xl font-extrabold">Review and pay</h1>
             <div className="rounded-2xl bg-cream p-4 text-sm">
               <p><b>{fullName}</b> · {d.email} · {d.phone}</p>
@@ -334,7 +335,7 @@ export default function CheckoutPage() {
       <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
         <Link href="/" aria-label="Skill Mountain Academy home"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-12" /></Link>
-        <span className="flex items-center gap-2"><CurrencySwitcher /><span className="hidden rounded-full bg-paper px-4 py-1.5 text-sm font-medium sm:inline">🔒 Secure checkout</span></span>
+        <span className="rounded-full bg-paper px-4 py-1.5 text-sm font-medium">🔒 Secure checkout</span>
       </header>
       <div className="px-5 pt-4">
         <Suspense fallback={<p className="text-center text-ink/70">Loading checkout…</p>}><Checkout /></Suspense>
