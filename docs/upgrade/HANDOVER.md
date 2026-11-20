@@ -27,8 +27,8 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 | 1 Accounts, sign-in, roles, audit | done |
 | 2 Enrolments, timetables, sessions, Meet links, attendance, reminders | done |
 | 3 Resources, assignments, quizzes, grades, progress | done |
-| 4 Messaging, ratings, admin reports, finance | next |
-| 5 AI assistant | |
+| 4 Messaging, ratings, admin reports, finance | done |
+| 5 AI assistant | next |
 | 6 Screens | |
 | 7 Security review, docs, final ZIP | |
 
@@ -80,6 +80,23 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
   attendance, overall %) and "needs attention" flags (overdue work, 2+ missed classes, scores under 50%, no class in 3 weeks).
 - Profile photos (`PUT /api/me/photo`), visible to signed-in users only.
 - Files: `src/server/lms/data/coursework.ts`, `data/ai.ts`, `routes/coursework.ts`, `upload-rules.ts`, `ai-index.ts`; `tests/lms3.test.ts`.
+
+### LMS 4: messaging, ratings, reports, finance
+- Messages: only between a student and an instructor assigned to them (server-checked both ways); admins cannot read them (private).
+  Contacts with unread counts and last message; opening a conversation marks it read; one email per unread conversation (not per
+  message); 30 messages per 10 minutes per user.
+- Ratings: a student rates their own instructor (1-5 + comment, one per pair, editable). Instructor performance: students, sessions
+  completed/missed/cancelled, attendance %, classes awaiting attendance, students' average scores, grading backlog, average rating;
+  instructors see review comments without names, admins with names.
+- Admin: overview (students/instructors total and active, enrolments ongoing/completed, awaiting instructor/timetable, paid vs unpaid
+  registrations in 30 days, attendance to record), academics (completion, average scores, 30-day attendance, needs-attention list from
+  one query), finance (revenue, outstanding, overdue, one-time vs instalments, bank transfers awaiting confirmation, unpaid checkouts,
+  revenue by month), payments history, orders with/without a learning account, platform health (active users, sign-ins, errors,
+  activity; traffic/SEO are honestly marked as coming from Cloudflare Web Analytics / Google Search Console).
+- NEW: admin confirms a bank transfer per part (`POST /api/app/admin/orders/:reference/payments`), with the same atomic update as a
+  Paystack payment; the first part creates the student account. (Fixes the earlier "bank transfers only in the sheet" limitation.)
+- Student: own orders, amount paid, outstanding, history, and signed Paystack links for unpaid parts.
+- Files: `src/server/lms/data/reports.ts`, `routes/admin.ts`; `tests/lms4.test.ts`.
 
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)
