@@ -97,6 +97,7 @@ export function SiteFooter() {
             <Link href="/privacy/" className="underline hover:text-white">Privacy</Link>
             <Link href="/cookies/" className="underline hover:text-white">Cookies</Link>
             <Link href="/refunds/" className="underline hover:text-white">Refunds</Link>
+            <Link href="/app/login/" className="underline hover:text-white">Sign in</Link>
           </nav>
           <p className="text-white/60">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
         </div>

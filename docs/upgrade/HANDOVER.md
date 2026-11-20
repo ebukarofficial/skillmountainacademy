@@ -29,8 +29,8 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 | 3 Resources, assignments, quizzes, grades, progress | done |
 | 4 Messaging, ratings, admin reports, finance | done |
 | 5 AI assistant | done |
-| 6 Screens | next |
-| 7 Security review, docs, final ZIP | |
+| 6 Screens | done |
+| 7 Security review, docs, final ZIP | next |
 
 ### LMS 1: accounts, sign-in, roles, audit
 - `migrations/0003_lms.sql`: the whole LMS schema (users, auth_tokens, auth_sessions, audit_log, courses, lessons, enrolments, timetables,
@@ -110,6 +110,24 @@ This REPLACES the earlier rule "do not build dashboards or login". Video and whi
 - Model: `AI_MODEL` var (default `@cf/meta/llama-3.1-8b-instruct-fast`); list current models with `npx wrangler ai models list`.
 - Materials feed the assistant only through their "text" field (paste the key content when adding a material); PDFs are not read automatically.
 - Files: `src/server/lms/routes/assistant.ts`, `ai-client.ts` (the only Workers AI call; tests swap it for a mock), `ai-index.ts`, `data/ai.ts`; `tests/lms5.test.ts`.
+
+### LMS 6: dashboard screens
+- `/app/login/` (email + Turnstile), `/app/login/confirm/?t=` (one click to sign in), `/app/` (one page; shows the student,
+  instructor or admin dashboard for the signed-in role). All `noindex`, not in the sitemap. Footers link to sign-in.
+- Student: left = this week's assignments (submit text/file), quizzes (start, answer, submit; answers after marking), graded work,
+  materials; centre (first on phones) = next live class with "Join live session" (15 min before) or "Meet link pending", upcoming
+  classes, AI assistant, messages; right = profile (edit, photo), programme + weekly time + instructor, progress bars, payments with
+  "Pay now" links, rate your instructor. Notification bell with unread count.
+- Instructor: programmes and students (click for progress), attendance to record, schedule (today / next 7 days) with Meet-link entry
+  and Completed / Student missed / Cancel, marking queue, set assignment/quiz/assessment, messages, profile, performance.
+- Admin tabs: Overview, Users (create+invite, send link, suspend), Enrolments (assign instructor, status, fixed weekly time),
+  Orders (confirm bank payment per part), Academics (needs attention, attendance to record), Finance, Instructors, Materials
+  (add, approve, delete), Platform (activity, errors, audit log).
+- Checked in Chrome through `wrangler dev` with a seeded local database (all three roles, phone and desktop).
+- NOTE: with the `ai` binding in wrangler.jsonc, `npx wrangler dev` needs a Cloudflare login (Workers AI only runs remotely).
+  Run `npx wrangler login` first, or remove the "ai" line in a local copy of the config for offline previews.
+- Files: `app/app/*` (layout, page, ui, shared, student, instructor, admin, login, login/confirm), footer links in `app/page.tsx` and
+  `app/site-parts.tsx`; `tests/lms6.test.ts`.
 
 ## Owner changes after Phase 9 (20 Nov 2026), these override earlier decisions and the spec
 - The pillars band under the hero ("One teacher. One student." / "Flexible") is removed. (Spec acceptance 5's "band below the hero" no longer applies.)

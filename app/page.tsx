@@ -511,6 +511,7 @@ export default function Home() {
                 <Link href="/privacy/" className="underline hover:text-white">Privacy</Link>
                 <Link href="/cookies/" className="underline hover:text-white">Cookies</Link>
                 <Link href="/refunds/" className="underline hover:text-white">Refunds</Link>
+                <Link href="/app/login/" className="underline hover:text-white">Student &amp; staff sign-in</Link>
               </nav>
               <p className="text-sm text-white/75">Email: <a href={`mailto:${BUSINESS.email}`} className="font-semibold text-white underline">{BUSINESS.email}</a><br />Phone: <a href={`tel:${BUSINESS.phone.replace(/\s/g, "")}`} className="underline">{BUSINESS.phone}</a></p>
               <p className="text-sm text-white/60">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
