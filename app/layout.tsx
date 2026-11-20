@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { SITE_URL } from "@/lib/config";
+import { BUSINESS, SITE_URL, SOCIAL } from "@/lib/config";
 import "./globals.css";
 
 // Fonts are bundled from npm packages (@fontsource), so the build needs no internet access.
@@ -31,6 +31,15 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: "Skill Mountain Academy", description: "Flexible, one-on-one learning. Learn in-demand skills at your time, space, and pace.", images: ["/og-share.jpg"] },
 };
 
+// Organization structured data (https://schema.org/EducationalOrganization), on every page.
+const ORG_LD = {
+  "@context": "https://schema.org", "@type": "EducationalOrganization", name: "Skill Mountain Academy", legalName: BUSINESS.name,
+  url: SITE_URL, logo: `${SITE_URL}/icon.png`, email: BUSINESS.email, telephone: "+234 706 100 0472",
+  slogan: "Flexible, one-on-one learning.",
+  address: { "@type": "PostalAddress", streetAddress: "Suite C8, Zara Plaza, Life Camp", addressLocality: "Abuja", addressCountry: "NG" },
+  sameAs: SOCIAL.map((s) => s.url),
+};
+
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#fcf9db" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head><meta httpEquiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'" /></head>
       <body className={`${montserrat.variable} ${carlito.variable} font-sans antialiased`}>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_LD).replace(/</g, "\\u003c") }} />
         <a href="#main" className="skip-link">Skip to main content</a>
         {children}
       </body>

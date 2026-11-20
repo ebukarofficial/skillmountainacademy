@@ -304,7 +304,7 @@ function Checkout() {
         <p className="text-sm font-medium text-white/60">Your order</p>
         <div className="mt-4 flex gap-4">
           <div className={`relative h-24 w-20 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br ${p.tone}`}>
-            <Image src={PHOTO[p.slug]} alt="" fill sizes="80px" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
+            <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name}`} fill sizes="80px" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
           </div>
           <div>
             <h2 className="font-display text-xl font-bold">{p.name}</h2>

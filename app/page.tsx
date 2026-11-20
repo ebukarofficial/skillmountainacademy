@@ -6,13 +6,18 @@ import Link from "next/link";
 import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
 import banner from "@/assets/photos/banner-students.webp";
-import { AUDIENCE, BUSINESS, CFG, FAQ, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, duration, findProgramme, type Programme } from "@/lib/config";
+import { AUDIENCE, BUSINESS, CFG, faqList, GOALS, IMAGE_CREDIT, PROGRAMMES, REVIEW_SHOTS, SOCIAL, STEPS, duration, findProgramme, type Programme } from "@/lib/config";
 import { hasPdf } from "@/lib/curricula";
+import { MENTORS, REVIEWS, SHOW_MENTORS, SHOW_REVIEWS } from "@/lib/content";
 import { PillarsBand } from "./site-parts";
 import { CurrencySwitcher, FxNote, Money } from "./currency";
 import { CalendlyEmbed, Chevrons, CloudBadges, CurriculumModal, FOCUS, Intro, PHOTO, SMA_PHOTO, Price, Reveal, SocialIcon, postSheet } from "./components";
 
-const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]].filter(([h]) => h !== "#reviews" || REVIEW_SHOTS.length > 0);
+const NAV = [["#programmes", "Programmes"], ["#why", "Our approach"], ["#who", "Who it's for"], ["#how", "Your path"], ["#reviews", "Reviews"], ["#faq", "FAQ"]].filter(([h]) => h !== "#reviews" || SHOW_REVIEWS || REVIEW_SHOTS.length > 0);
+const FAQS = faqList();
+// FAQ structured data (https://schema.org/FAQPage), from the same list the page shows.
+const FAQ_LD = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: FAQS.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) };
+const progName = (slug: string) => PROGRAMMES.find((p) => p.slug === slug)?.name ?? slug;
 
 type Slide = { id: string; name: string; tone: string; photo: StaticImageData; prog: Programme };
 const SLIDES: Slide[] = [
@@ -170,7 +175,7 @@ export default function Home() {
               return (
                 <div key={sl.id} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} role="button" tabIndex={0} aria-label={sl.name} onKeyDown={(e) => e.key === "Enter" && setActive(i)}
                   className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${sl.tone} transition-all duration-700 ease-out ${on ? "flex-[6]" : "hidden flex-[1] cursor-pointer md:block"}`}>
-                  <Image src={sl.photo} alt="" fill sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[sl.id] }} />
+                  <Image src={sl.photo} alt={`A learner studying ${sl.name} online with Skill Mountain Academy`} fill sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[sl.id] }} />
                   <div className={`absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
                   {on ? (
                     <div className="pop absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
@@ -234,7 +239,7 @@ export default function Home() {
             <Reveal key={p.slug} delay={(i % 4) * 80} className="h-full">
               <article className="flex h-full flex-col rounded-[1.75rem] bg-paper p-3 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo/10">
                 <div className={`relative h-48 overflow-hidden rounded-[1.25rem] bg-gradient-to-br ${p.tone}`}>
-                  <Image src={PHOTO[p.slug]} alt="" fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
+                  <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name} online`} fill sizes="(max-width: 640px) 90vw, 25vw" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
                   {p.was && <span className="absolute left-3 top-3 rounded-full bg-brand-red px-3 py-1 text-xs font-bold text-white">{`${Math.round((1 - p.price / p.was) * 100)}% OFF`}</span>}
                 </div>
                 <div className="flex flex-1 flex-col px-2 pb-2 pt-4">
@@ -392,12 +397,25 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {REVIEW_SHOTS.length > 0 && (
+      {(SHOW_REVIEWS || REVIEW_SHOTS.length > 0) && (
       <section id="reviews" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-16 sm:py-24">
         <Reveal className="text-center">
           <h2 className="font-display text-3xl font-extrabold sm:text-5xl">Real Learners. Real Transformation<span className="text-brand-orange">.</span></h2>
-          <p className="mx-auto mt-3 max-w-xl text-ink/70">What learners say about us on social media.</p>
+          <p className="mx-auto mt-3 max-w-xl text-ink/70">What learners say about us.</p>
         </Reveal>
+        {SHOW_REVIEWS && (
+          <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-reviews>
+            {REVIEWS.map((r) => (
+              <li key={`${r.name}-${r.quote.slice(0, 20)}`} className="flex flex-col rounded-[1.75rem] bg-paper p-6">
+                <blockquote className="flex-1 text-lg text-ink/85">&ldquo;{r.quote}&rdquo;</blockquote>
+                <div className="mt-4 flex items-center gap-3">
+                  {r.photo && <img src={`/reviews/${r.photo}`} alt={`Photo of ${r.name}`} loading="lazy" width={48} height={48} className="h-12 w-12 rounded-full object-cover" />}
+                  <p className="text-sm"><b className="font-display">{r.name}</b><span className="block text-ink/70">{progName(r.programme)} · {r.year}</span></p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
         {REVIEW_SHOTS.length ? (
           <div className="mt-10 columns-1 gap-4 sm:columns-2 lg:columns-3">
             {REVIEW_SHOTS.map((r, i) => (
@@ -417,11 +435,29 @@ export default function Home() {
         </div>
       )}
 
+      {SHOW_MENTORS && (
+        <section id="mentors" className="mx-auto max-w-6xl scroll-mt-20 px-5 pb-16 sm:pb-24" data-mentors>
+          <Reveal className="text-center"><h2 className="font-display text-3xl font-extrabold sm:text-5xl">Meet our mentors<span className="text-brand-orange">.</span></h2></Reveal>
+          <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {MENTORS.map((m) => (
+              <li key={m.name} className="rounded-[1.75rem] bg-paper p-6">
+                {m.photo && <img src={`/mentors/${m.photo}`} alt={`Photo of ${m.name}, ${m.role}`} loading="lazy" width={80} height={80} className="h-20 w-20 rounded-full object-cover" />}
+                <h3 className="mt-4 font-display text-xl font-bold">{m.name}</h3>
+                <p className="text-sm font-semibold text-brand-red">{m.role}</p>
+                {m.bio && <p className="mt-2 text-ink/75">{m.bio}</p>}
+                {m.programmes?.length ? <p className="mt-2 text-sm text-ink/70">Teaches: {m.programmes.map(progName).join(", ")}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* FAQ */}
       <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-5 pb-16 sm:pb-24">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD).replace(/</g, "\\u003c") }} />
         <Reveal><h2 className="font-display text-3xl font-extrabold sm:text-5xl"><span className="brand-text">Questions, answered</span></h2></Reveal>
         <div className="mt-8 space-y-3">
-          {FAQ.map(([qq, a]) => (
+          {FAQS.map(([qq, a]) => (
             <details key={qq} className="group rounded-2xl bg-paper px-5 py-4 open:shadow-md">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display font-semibold">{qq}<span className="text-brand-red transition group-open:rotate-45">+</span></summary>
               <p className="mt-3 text-ink/75">{a}</p>
@@ -481,6 +517,7 @@ export default function Home() {
                 <Link href="/cookies/" className="underline hover:text-white">Cookies</Link>
                 <Link href="/refunds/" className="underline hover:text-white">Refunds</Link>
               </nav>
+              <p className="text-sm text-white/75">Email: <a href={`mailto:${BUSINESS.email}`} className="font-semibold text-white underline">{BUSINESS.email}</a><br />Phone: <a href={`tel:${BUSINESS.phone.replace(/\s/g, "")}`} className="underline">{BUSINESS.phone}</a></p>
               <p className="text-sm text-white/60">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
               <FxNote className="text-white/60" />
               <p className="text-sm text-white/60">© Skill Mountain Academy 2021–{new Date().getFullYear()}{IMAGE_CREDIT ? ` · ${IMAGE_CREDIT}` : ""}</p>
