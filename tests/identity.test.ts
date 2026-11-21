@@ -120,3 +120,12 @@ test("each entrance signs in only its own role; others are told where their entr
   assert.match(right[0].html, /\/app\/confirm\/\?t=/);
   assert.ok(right.every((m) => typeof m.html === "string"));
 });
+
+test("email failures are recorded with Resend's reason, and admins can send a test email", async () => {
+  const { admin } = await setup(w);
+  const ok = await admin.json<{ sent: boolean; reason: string; to: string }>("POST", "/api/app/admin/test-email");
+  assert.equal(ok.sent, true);
+  const { deliver } = await import("../src/server/email.ts");
+  const r = await deliver({} as never, { to: "x@example.com", subject: "s", html: "<p>x</p>" });
+  assert.deepEqual([r.ok, /RESEND_API_KEY/.test(r.reason)], [false, true], "a missing key is named");
+});
