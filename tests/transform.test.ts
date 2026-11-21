@@ -15,9 +15,9 @@ test("hero: the approved slider is kept; no currency control, price or register 
   const home = read("app/page.tsx");
   const hero = home.slice(home.indexOf('id="top"'), home.indexOf("Three principles"));
   assert.ok(home.includes("setInterval(() => setActive((a) => (a + 1) % SLIDES.length), 5500)"), "slide timing changed");
-  for (const s of ["SLIDES.map", "h-[26rem] gap-3 sm:h-[30rem] lg:h-[33rem]", "flex-[6]", "[writing-mode:vertical-rl]", "onTouchEnd"]) assert.ok(hero.includes(s), `slider changed: ${s}`);
+  for (const s of ["SLIDES.map", "h-[26rem] gap-2 sm:h-[30rem] lg:h-[33rem]", "flex-[9]", "text-balance break-words", "[writing-mode:vertical-rl]", "onTouchEnd"]) assert.ok(hero.includes(s), `slider changed: ${s}`);
   assert.doesNotMatch(hero, /CurrencySwitcher|<Money|<Price|sl\.prog\.price|\/checkout\/\?p=|>Register</, "no price, currency control or register button in the hero");
-  assert.match(hero, />Explore Programme</);
+  assert.match(hero, />Explore programme</i);
   assert.doesNotMatch(home, /\/checkout\/\?p=/, "the home page sends visitors to programme pages, not straight to payment");
 });
 
@@ -39,10 +39,11 @@ test("programme cards: title, image, description, one Explore Programme action; 
   if (html) for (const p of PROGRAMMES) assert.ok(html.includes(`/programmes/${p.slug}/`), p.slug);
 });
 
-test("every programme has editorial copy, and the catalogue is unchanged", () => {
+test("every programme has editorial copy, and the catalogue matches the approved list", () => {
   assert.deepEqual(PROGRAMMES.map((p) => [p.slug, p.name, p.price]), [
     ["graphics", "Graphics Design", 350000], ["uiux", "UI/UX Design (Product Design)", 400000], ["webdev", "Web Development", 500000], ["marketing", "Digital Marketing", 300000],
     ["cybersecurity", "Cybersecurity", 650000], ["cloud", "Cloud Engineering", 450000], ["devops", "DevOps Engineering", 500000], ["cloud-devops", "Cloud & DevOps Engineering", 650000],
+    ["ai-automation", "AI Automation", 300000], // added by the final refinement brief (21 Nov 2026), full payment only
   ]);
   for (const p of PROGRAMMES) {
     const c = PROGRAMME_COPY[p.slug];

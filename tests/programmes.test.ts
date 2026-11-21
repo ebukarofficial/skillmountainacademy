@@ -12,12 +12,12 @@ const bySlug = (s: string) => {
   return p;
 };
 
-test("exactly the eight live programmes, in the spec's slugs", () => {
+test("exactly the nine live programmes (AI Automation added 21 Nov 2026), in the spec's slugs", () => {
   assert.deepEqual(
     PROGRAMMES.map((p) => p.slug).sort(),
-    ["cloud", "cloud-devops", "cybersecurity", "devops", "graphics", "marketing", "uiux", "webdev"],
+    ["ai-automation", "cloud", "cloud-devops", "cybersecurity", "devops", "graphics", "marketing", "uiux", "webdev"],
   );
-  assert.equal(new Set(PROGRAMMES.map((p) => p.name)).size, 8, "programme names must be unique (the Apps Script keys on them)");
+  assert.equal(new Set(PROGRAMMES.map((p) => p.name)).size, 9, "programme names must be unique (the Apps Script keys on them)");
 });
 
 test("prices, crossed-out prices and durations match the spec and owner decisions", () => {
@@ -30,6 +30,7 @@ test("prices, crossed-out prices and durations match the spec and owner decision
     cloud: [450000, undefined, 4, 2],         // owner (20 Nov 2026): no crossed-out price, keep ₦450,000
     devops: [500000, undefined, 4, 2],
     "cloud-devops": [650000, undefined, 5, 2],
+    "ai-automation": [300000, undefined, 1, 1], // owner (21 Nov 2026): full payment only
   };
   for (const [slug, [price, was, t, i]] of Object.entries(want)) {
     const p = bySlug(slug);
@@ -44,6 +45,9 @@ test("prices, crossed-out prices and durations match the spec and owner decision
 test("duration reads as training + internship", () => {
   assert.equal(duration(bySlug("marketing")), "3 months training + 3 months internship");
   assert.equal(duration(bySlug("cloud-devops")), "5 months training + 2 months internship");
+  assert.equal(duration(bySlug("ai-automation")), "1 month training + 1 month internship");
+  assert.equal(bySlug("ai-automation").fullPaymentOnly, true);
+  assert.ok(PROGRAMMES.filter((p) => p.slug !== "ai-automation").every((p) => !p.fullPaymentOnly), "other programmes keep their instalment plans");
 });
 
 test("dormant options: no timed price, fast track off, group price unset", () => {

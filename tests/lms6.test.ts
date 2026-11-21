@@ -28,16 +28,16 @@ test("each role gets its own workspace in the shared shell, with the brief's sec
   const stu = read("app/app/student.tsx");
   for (const s of ["Welcome, {firstName(me.fullName)}.", "Registration No", "<NextClass", "Your Academic Tasks", "Announcements and messages", "My Programme", "Current module", "Continue learning", "topics completed",
     "Learning Materials", "Assignments", "Assessments", "Calendar", "Messages", "Notifications", "Profile", "Academic progress", "Academic record", "Admitted", "Payments", "Email preferences", "Join the live session", "has not added the"]) assert.ok(stu.includes(s), s);
-  const ins = read("app/app/instructor.tsx");
+  const ins = read("app/app/instructor.tsx") + read("app/app/instructor-records.tsx") + read("app/app/weekly.tsx");
   for (const s of ["Overview", "My Students", "My Programmes", "Teaching Calendar", "Class Sessions", "Assignments", "Assessments", "Attendance", "Messages", "Academic Resources", "Instructor Profile",
-    "Today's classes", "Upcoming classes", "Assignments awaiting grading", "New student messages", "Recent academic activity", "Attendance to record", "My schedule", "Next 7 days", "Add link", "Completed", "Student missed", "Faculty No"]) assert.ok(ins.includes(s), s);
+    "Today's classes", "Upcoming classes", "Assignments awaiting grading", "New student messages", "Recent academic activity", "Attendance to record", "My schedule", "Live teaching screen", "Open the class in Google Meet", "Academic average", "Add a task for this week", "Add link", "Completed", "Student missed", "Attended late", "Excused absence", "Google Meet settings", "Faculty No"]) assert.ok(ins.includes(s), s);
   const adm = read("app/app/admin.tsx");
   for (const s of ["Institutional overview", "Students", "Instructors", "Programmes", "Admissions", "Payments", "Academic records", "Instructor allocation", "Attendance", "Assessments", "Learning materials", "Notifications", "Security and audit",
     "Admit a student", "/api/app/admin/admit", "/api/app/admin/coursework", "Fixed weekly class time", "Confirm bank payment"]) assert.ok(adm.includes(s), s);
   const shell = read("app/app/shell.tsx");
   for (const s of ["Notifications", "Sign out", "My profile", "aria-current", "View all notifications", "Skip to content", 'quick("calendar"', 'quick("messages"']) assert.ok(shell.includes(s), s);
-  assert.doesNotMatch([stu, ins, adm, shell].join("\n"), /--font-serif|bg-cream|bg-paper|uppercase/, "dashboards: modern sans, white surfaces, no decorative capitals");
-  assert.match(shell, /<div className="min-h-screen overflow-x-clip bg-ink\/\[0\.03\]">/, "a soft neutral page under white cards (owner: white should be subtle)");
+  assert.doesNotMatch([stu, ins, adm, shell].join("\n"), /--font-serif|bg-cream|uppercase/, "dashboards: modern sans, white surfaces, no decorative capitals");
+  assert.match(shell, /<div className="min-h-screen overflow-x-clip bg-paper">/, "final brief: dashboard background #FFFDF0 (bg-paper) under white cards");
 });
 
 test("dashboards use only existing colour tokens (no hex values) and never show a made-up Meet link", () => {

@@ -77,9 +77,9 @@ test("no job placement, job guarantee or income claims anywhere", () => {
 test("programme pages: one per programme, with Course data, price, curriculum, career package, trust lines and built-in enrolment", () => {
   const page = read("app/programmes/[slug]/page.tsx");
   for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<HoldPrice", "<CurriculumActions", "<CareerLaunch", "<TrustLines", 'href="#enrol"', "Apply for Admission", "<EnrolSection p={p} />", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
-  // The academic brief's order: introduction, outcomes, audience, curriculum, duration, practical work, internship,
+  // The academic brief's order: introduction, outcomes, audience, curriculum, weekly commitment (duration is in the facts block), practical work, internship,
   // then investment, the admission form and payment.
-  const order = ["Programme introduction", "Learning outcomes", "Intended audience", "Curriculum", "Programme duration", "Practical work", "Internship", "Faculty"].map((t) => page.indexOf(`title="${t}"`)).concat(page.indexOf("Admission and investment</h2>"));
+  const order = ["Programme introduction", "Learning outcomes", "Intended audience", "Curriculum", "Weekly commitment", "Practical work", "Internship", "Faculty"].map((t) => page.indexOf(`title="${t}"`)).concat(page.indexOf("Admission and investment</h2>"));
   assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `sections out of order: ${order}`);
   for (const p of PROGRAMMES) {
     const html = built(`programmes/${p.slug}/index.html`);

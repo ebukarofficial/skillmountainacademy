@@ -43,7 +43,8 @@ test("free-plan limits: small bundle, capped cron work, few queries per request"
   const r = await build({ entryPoints: [join(ROOT, "src/worker.ts")], bundle: true, minify: true, write: false, format: "esm", platform: "neutral",
     define: { "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": '""', "process.env.NEXT_PUBLIC_SHEET_URL": '""', "process.env.NEXT_PUBLIC_WHATSAPP": '""', "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": '""' } });
   const kb = r.outputFiles[0].contents.length / 1024;
-  assert.ok(kb < 200, `Worker bundle ${kb.toFixed(1)} KiB (Free plan limit 3 MiB)`);
+  // Raised from 200 to 300 KiB for the final brief (bookings, assistant, records, checklist); the Free plan allows 3 MiB.
+  assert.ok(kb < 300, `Worker bundle ${kb.toFixed(1)} KiB (Free plan limit 3 MiB)`);
   assert.ok(Number(read("src/server/cron.ts").match(/MAX_NOTICES_PER_RUN = (\d+)/)![1]) <= 20, "each cron run stays under 50 subrequests and 50 D1 queries");
   const src = files("src", [".ts"]).map(read).join("\n");
   assert.doesNotMatch(src, /bcrypt|scrypt|pbkdf2|argon/i, "no CPU-heavy hashing in routes");

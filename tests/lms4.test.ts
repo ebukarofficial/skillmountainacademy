@@ -63,7 +63,7 @@ test("ratings and instructor performance (instructors see comments without names
 test("admin overview and academic monitoring", async () => {
   const o = await admin.json<{ overview: Record<string, number> }>("GET", "/api/app/admin/overview");
   assert.ok(o.overview.students >= 2 && o.overview.instructors >= 2 && o.overview.active_students >= 2);
-  assert.equal(o.overview.programmes, 8);
+  assert.equal(o.overview.programmes, 9);
   assert.ok(o.overview.awaiting_timetable >= 2, "enrolments without a weekly slot are flagged");
   await ins.json("POST", "/api/app/instructor/assignments", { studentId: ids.stu, title: "Old task", dueAt: new Date(Date.now() - 3 * 86400_000).toISOString() });
   const a = await admin.json<{ academics: { assignmentCompletionPct: number }; needsAttention: { student: string; reasons: string[] }[] }>("GET", "/api/app/admin/academics");

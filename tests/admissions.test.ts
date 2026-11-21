@@ -35,7 +35,7 @@ test("rules: capacity counts assignments; status follows mode, periods and capac
 
 test("by default every programme is open and registration works as before; the public status has no capacity figures", async () => {
   const p = await pub();
-  assert.equal(Object.keys(p).length, 8);
+  assert.equal(Object.keys(p).length, 9);
   for (const s of Object.values(p)) {
     assert.equal(s.state, "open");
     assert.deepEqual(Object.keys(s).filter((k) => !["state", "listed", "opensAt", "closesAt"].includes(k)), []);
