@@ -1,5 +1,9 @@
-import type { Metadata } from "next";
-import { EntryPage } from "../entry";
+"use client";
+// The old staff entrance moved: faculty sign in at /app/instructor/login/, administrators at /app/login/.
+import { useEffect } from "react";
+import Link from "next/link";
 
-export const metadata: Metadata = { title: "Staff workspace", robots: { index: false, follow: false } };
-export default function Page() { return <EntryPage kind="staff" />; }
+export default function Page() {
+  useEffect(() => { window.location.replace("/app/instructor/login/"); }, []);
+  return <main id="main" className="p-10 text-sm">This entrance has moved. <Link href="/app/instructor/login/" className="font-semibold text-indigo underline">Go to the faculty entrance</Link>.</main>;
+}

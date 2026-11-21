@@ -1,4 +1,5 @@
 "use client";
+import { PORTALS } from "./portals";
 // The signed-in application frame: a sidebar of sections (a drawer on phones), a top bar with notifications and
 // the account menu, and the content area. Each dashboard passes its own sections; the server decides the role.
 import Image from "next/image";
@@ -90,7 +91,7 @@ const ROLE_LABEL = { student: "Student", instructor: "Faculty", admin: "Administ
 export function AppShell<T extends string>({ me, nav, tab, setTab, children }: { me: Me; nav: NavItem<T>[]; tab: T; setTab: (t: T) => void; children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const [menu, setMenu] = useState(false);
-  async function signOut() { await api("/api/auth/logout", { method: "POST" }).catch(() => undefined); goTo(me.role === "student" ? "/app/login/" : "/app/staff/"); }
+  async function signOut() { await api("/api/auth/logout", { method: "POST" }).catch(() => undefined); goTo(me.role === "admin" ? PORTALS.admin : me.role === "instructor" ? PORTALS.instructor : PORTALS.student); }
   const go = (t: T) => { setTab(t); setDrawer(false); };
   const openFromNotice = (t: string | null, link: string | null) => {
     if (link && /^https:\/\/meet\.google\.com\//.test(link)) { window.open(link, "_blank", "noopener"); return; }

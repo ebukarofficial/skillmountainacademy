@@ -200,3 +200,15 @@ It uses the same database, secrets and Turnstile/Resend setup as above. Sign-in 
 5. **Founding year.** The site no longer states a year (the old pages said both 2021 and other dates). If you want one shown,
    tell me the correct year and I will add it in one place.
 6. Read the new home, programme and About pages and tell me any wording you want changed.
+
+## H. Three private entrances (21 Nov 2026)
+- Students: https://skillmountainacademy.com/app/student/login/
+- Instructors: https://skillmountainacademy.com/app/instructor/login/
+- Administrators only: https://skillmountainacademy.com/app/login/
+A sign-in link is only sent when the account matches the entrance. Anyone using the wrong one gets an email pointing to
+theirs (with no link). The old /app/staff/ page forwards to the instructor entrance.
+
+**Email speed.** The Worker hands the email to Resend the moment the button is pressed. Any further delay is between
+Resend and the receiving mailbox. To see where the time goes: Resend dashboard > Emails > open the email: "Sent" and
+"Delivered" times. If Resend shows "Delivered" within a few seconds but the email shows up later, the delay is the
+mailbox's own spam scanning (Northwest webmail). Gmail and Outlook addresses usually receive within seconds.

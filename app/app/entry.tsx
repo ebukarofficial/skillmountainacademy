@@ -1,6 +1,6 @@
 "use client";
-// The two private entry points: students (/app/login/) and staff (/app/staff/). Both use the same passwordless
-// link; the role always comes from the server account, never from which page was used.
+// The three private entrances: students (/app/student/login/), instructors (/app/instructor/login/) and
+// administrators (/app/login/). The server only sends a link when the account's role matches the entrance.
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
@@ -8,10 +8,12 @@ import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
 import { Turnstile, turnstileAvailable } from "../turnstile";
 import { api, inputCls, Msg } from "./ui";
+import { PORTAL_KEY, type Portal } from "./portals";
+export { lastPortal, PORTALS, type Portal } from "./portals";
 
 const KEY = "sma-entry-email";
 // Only same-site learning-space paths are kept as a return address.
-export const safeNext = (v: string | null) => (v && /^\/app\/[^/]/.test(v) && !v.startsWith("//") && !/^\/app\/(login|staff)\b/.test(v) ? v : null);
+export const safeNext = (v: string | null) => (v && /^\/app\/[^/]/.test(v) && !v.startsWith("//") && !/^\/app\/(login|staff|confirm|student\/login|instructor\/login)\b/.test(v) ? v : null);
 
 const COPY = {
   student: {
@@ -20,19 +22,29 @@ const COPY = {
     lede: "Your classes, coursework, materials and instructor, in one place.",
     points: ["Your next class and its Google Meet link", "Assignments, quizzes and feedback", "Messages with your instructor", "Your progress, payments and registration number"],
     form: "Enter the email address you used for your admission. We will send you a secure, single-use link.",
-    other: { href: "/app/staff/", text: "Faculty and staff entrance" },
+    other: { href: "/app/instructor/login/", text: "Faculty entrance" },
   },
-  staff: {
-    eyebrow: "Faculty and staff",
-    title: "Staff workspace",
-    lede: "Teaching, admissions and academy administration.",
-    points: ["Schedules, attendance and marking", "Admissions and enrolments", "Recruitment and faculty records", "Finance and platform health"],
-    form: "Enter your staff email address. We will send you a secure, single-use link.",
-    other: { href: "/app/login/", text: "Student entrance" },
+  instructor: {
+    eyebrow: "Faculty",
+    title: "Your teaching workspace.",
+    lede: "Classes, students, coursework and marking, in one place.",
+    points: ["Your schedule, Meet links and attendance", "Your students and their progress", "Assignments, quizzes and marking", "Materials and messages"],
+    form: "Enter your faculty email address. We will send you a secure, single-use link.",
+    other: { href: "/app/student/login/", text: "Student entrance" },
+  },
+  admin: {
+    eyebrow: "Administration",
+    title: "Academy administration.",
+    lede: "Admissions, people, teaching and finance.",
+    points: ["Admissions and enrolments", "Faculty recruitment and records", "Orders, payments and finance", "Platform health and audit log"],
+    form: "Administrators only. Enter your email address and we will send you a secure, single-use link.",
+    other: null,
   },
 } as const;
 
-export function EntryPage({ kind }: { kind: "student" | "staff" }) {
+const H1: Record<Portal, string> = { student: "Enter your learning space", instructor: "Enter the faculty workspace", admin: "Administrator sign-in" };
+
+export function EntryPage({ kind }: { kind: Portal }) {
   const c = COPY[kind];
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
@@ -52,8 +64,8 @@ export function EntryPage({ kind }: { kind: "student" | "staff" }) {
     if (!token) return setErr("Please complete the security check.");
     setBusy(true); setErr("");
     try {
-      const r = await api<{ message: string }>("/api/auth/request", { method: "POST", body: { email, turnstileToken: token, next } });
-      try { localStorage.setItem(KEY, email.trim().toLowerCase()); } catch { /* private mode */ }
+      const r = await api<{ message: string }>("/api/auth/request", { method: "POST", body: { email, turnstileToken: token, next, portal: kind } });
+      try { localStorage.setItem(KEY, email.trim().toLowerCase()); localStorage.setItem(PORTAL_KEY, kind); } catch { /* private mode */ }
       setSent(r.message);
     } catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
   }
@@ -75,7 +87,7 @@ export function EntryPage({ kind }: { kind: "student" | "staff" }) {
         <div className="mx-auto w-full max-w-sm">
           <Link href="/" aria-label="Skill Mountain Academy home" className="lg:hidden"><Image src={logo} alt="Skill Mountain Academy" unoptimized className="h-10 w-auto" /></Link>
           <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-brand-red lg:mt-0">{c.eyebrow}</p>
-          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">{kind === "student" ? "Enter your learning space" : "Enter the staff workspace"}</h1>
+          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">{H1[kind]}</h1>
           <p className="mt-3 text-sm text-ink/65">{c.form}</p>
           {sent ? (
             <div role="status" className="mt-8 rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-sm shadow-ink/5">
@@ -95,9 +107,9 @@ export function EntryPage({ kind }: { kind: "student" | "staff" }) {
               <button disabled={busy} className="w-full rounded-xl bg-indigo py-3 font-display text-sm font-semibold text-white shadow-lg shadow-indigo/20 transition hover:bg-navy disabled:opacity-60">{busy ? "Sending…" : "Email me a secure link"}</button>
             </form>
           )}
-          <div className="mt-10 space-y-2 border-t border-ink/[0.07] pt-6 text-sm text-ink/60">
+          <div className={`mt-10 space-y-2 pt-6 text-sm text-ink/60 ${c.other ? "border-t border-ink/[0.07]" : ""}`}>
             {kind === "student" && <p>Not admitted yet? <Link href="/admissions/" className="font-semibold text-indigo hover:underline">Apply for admission</Link></p>}
-            <p><Link href={c.other.href} className="font-semibold text-ink/70 hover:text-indigo">{c.other.text}</Link></p>
+            {c.other && <p><Link href={c.other.href} className="font-semibold text-ink/70 hover:text-indigo">{c.other.text}</Link></p>}
           </div>
         </div>
       </section>

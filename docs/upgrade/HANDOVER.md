@@ -428,7 +428,7 @@ plus owner asks: modern dashboard design (no serif "old" look), fix adding tutor
 - Numbers: students `SMA/yy/000001` (sequence per year, Lagos time), admins `SMA/ADM/`, faculty `SMA/FAC/` on approval
   (`src/server/lms/ids.ts`, migration 0005). Old `SMA26-XXXXX` numbers are kept. A unique index stops duplicates.
 - Admin admission: `POST /api/app/admin/admit` (`routes/admit.ts`) and the **Admit a student** screen.
-- Sign-in: no public links; `/app/login/` (students) and `/app/staff/` (staff) share `app/app/entry.tsx`. Links are single use,
+- Sign-in: no public links; three entrances share `app/app/entry.tsx`: `/app/student/login/`, `/app/instructor/login/`, `/app/login/` (admins only, enforced by the server via `portal`). Confirm page: `/app/confirm/`. Links are single use,
   a new link cancels older ones, the return address (`next`) is restricted to `/app/...`, the email is remembered on the device.
 - Dashboards: one shell (`app/app/shell.tsx`): sidebar, notifications (urgent first, mark read, jump to the item), account menu.
   Student, instructor and admin sections are tabs addressable as `/app/?tab=...`. Sans type (Montserrat/Carlito) only.

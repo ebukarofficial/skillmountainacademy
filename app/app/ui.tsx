@@ -1,4 +1,5 @@
 "use client";
+import { lastPortal } from "./portals";
 // Small building blocks for the dashboards: API calls, cards, buttons, badges, fields and file uploads.
 // Colours come only from the existing tokens in app/globals.css.
 import Image from "next/image";
@@ -12,7 +13,7 @@ export async function api<T = Record<string, unknown>>(path: string, init: { met
   if (r.status === 401 && !path.startsWith("/api/auth/")) {
     // Back to the entry page, remembering where the person was going (bookmarked pages work after signing in).
     const here = window.location.pathname + window.location.search;
-    goTo(`/app/login/${here.startsWith("/app/") && here !== "/app/" ? `?next=${encodeURIComponent(here)}` : ""}`);
+    goTo(`${lastPortal()}${here.startsWith("/app/") && here !== "/app/" ? `?next=${encodeURIComponent(here)}` : ""}`);
     throw new ApiFail(401, "Please sign in.");
   }
   if (!r.ok || j.ok === false) throw new ApiFail(r.status, j.message || "Something went wrong. Please try again.");

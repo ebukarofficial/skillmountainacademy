@@ -1,7 +1,7 @@
 "use client";
 // The institutional header, shared by every public page: six sections and one admission action.
 // There is deliberately no sign-in link on the public site: students and staff use the private entry pages
-// (/app/login/ and /app/staff/) from their emails.
+// (/app/student/login/, /app/instructor/login/ and /app/login/ for administrators) from their emails.
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
