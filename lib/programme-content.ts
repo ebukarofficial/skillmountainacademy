@@ -96,6 +96,19 @@ export const PROGRAMME_COPY: Record<string, ProgrammeCopy> = {
     mastery: ["Work with core cloud services on AWS and Azure", "Secure identities and networks in the cloud", "Use Linux, Git and infrastructure as code", "Build CI/CD pipelines", "Operate containers with Docker and Kubernetes"],
     outcomes: ["Projects that span infrastructure, automation and delivery", "Deployments on both AWS and Azure you can rebuild from code", "Readiness to take on cloud and DevOps work under guidance"],
   },
+  "ai-automation": {
+    suitedTo: "Professionals, business owners and operators who want to apply AI and automation to real work. No programming background is required.",
+    discipline: "Applying AI tools and automation to business and professional workflows.",
+    intro: [
+      "AI automation is the practice of combining modern AI tools with workflow automation so that routine work (research, drafting, follow-up, data entry, reporting) is handled reliably and reviewed by people.",
+      "The programme teaches real tools and their limits. Students design, build, test and maintain automations for actual business processes, and learn where human judgement must stay in the loop.",
+    ],
+    opportunities: ["Operations and administration roles", "Marketing, sales and customer teams", "Independent automation work for small businesses", "Running and improving your own business"],
+    mastery: ["Choose the right AI tool for a task, and recognise where it fails", "Design a business process as a workflow before automating it", "Build no-code and low-code automations that connect business applications",
+      "Set up AI assistants and agents for research, content and customer work", "Automate lead capture, customer follow-up and marketing tasks", "Support e-commerce and dropshipping operations with AI and automation",
+      "Test, monitor and improve automations over time"],
+    outcomes: ["Working automations built for real business processes, documented for handover", "A practical project portfolio from training and the internship", "A method for assessing which work should and should not be automated"],
+  },
 };
 
 const FALLBACK: ProgrammeCopy = { discipline: "", intro: [], opportunities: [], mastery: [], outcomes: [] };

@@ -14,12 +14,14 @@ import pSma from "@/assets/photos/photo-sma.webp";
 export const PHOTO: Record<string, StaticImageData> = {
   graphics: pGraphics, uiux: pUiux, webdev: pWeb, marketing: pMarketing, cybersecurity: pCyber,
   cloud: pCloud, devops: pDevops, "cloud-devops": pCloudDevops,
+  // No dedicated photograph yet: the Academy photo is used until the owner supplies one.
+  "ai-automation": pSma,
 };
 
 // Where each photo is anchored inside its card, so faces are never cropped out ("x% y%").
 export const FOCUS: Record<string, string> = {
   graphics: "75% 0%", uiux: "45% 0%", webdev: "50% 0%", marketing: "60% 0%", cybersecurity: "50% 0%",
-  cloud: "50% 0%", devops: "35% 0%", "cloud-devops": "50% 0%",
+  cloud: "50% 0%", devops: "35% 0%", "cloud-devops": "50% 0%", "ai-automation": "50% 20%",
 };
 
 export const SMA_PHOTO = pSma;

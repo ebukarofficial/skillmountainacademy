@@ -27,7 +27,7 @@ export const BANK = { name: "Skill Mountain Academy Limited", number: "102544048
 // Public Google Drive links to each programme's curriculum (share as "Anyone with the link can view").
 // They power the Download curriculum button. The same links go in the welcome email (see docs/google-sheet-script.gs).
 export const CURRICULUM_LINKS: Record<string, string> = {
-  graphics: "", marketing: "", uiux: "", webdev: "", cybersecurity: "", cloud: "", devops: "", "cloud-devops": "",
+  graphics: "", marketing: "", uiux: "", webdev: "", cybersecurity: "", cloud: "", devops: "", "cloud-devops": "", "ai-automation": "",
 };
 
 // Options used by the application form.
@@ -73,12 +73,13 @@ export type Programme = {
   fastTrack: boolean;        // 3-month fast track. Switched OFF for every programme (see FAST_TRACK)
   curriculum: string;        // curriculum PDF path (added in Phase 2)
   groupPrice: number | null; // price for a group class (Phase 6). null = group option hidden
+  fullPaymentOnly?: boolean;  // true = no 3-part instalment plan (AI Automation)
   tone: string;
   learn: string[];
 };
 
 // Every programme is online, one-on-one, teacher-to-student, with a Skill Mountain Academy certificate,
-// and can be paid in 3 parts. All programmes listed here are open for registration.
+// and can be paid in 3 parts unless it is marked fullPaymentOnly. All programmes listed here are open for registration.
 // Prices are checked on the server too: change them in docs/google-sheet-script.gs (FEES) as well.
 const base = (slug: string) => ({ timedPrice: null, fastTrack: false, curriculum: `/curricula/${slug}.pdf`, groupPrice: null });
 
@@ -135,12 +136,24 @@ export const PROGRAMMES: Programme[] = [
     blurb: "The complete path: beginner-level cloud on AWS and Azure through to DevOps, in one programme.",
     learn: ["Cloud fundamentals on AWS and Azure", "Identity, security and networking in the cloud", "Linux, Git and infrastructure as code",
       "CI/CD pipelines that test and ship code", "Containers with Docker and Kubernetes", "Monitoring, cost control and real-world projects"] },
+  // Added 21 Nov 2026 (owner brief): ₦300,000, one month of training and one month of internship, full payment only.
+  { slug: "ai-automation", name: "AI Automation", tag: "AI", price: 300000, trainingMonths: 1, internshipMonths: 1, fullPaymentOnly: true,
+    level: "Beginner to intermediate", audience: "Professionals, business owners and operators who want to apply AI and automation to real work.", ...base("ai-automation"),
+    tone: "from-indigo via-plum to-brand-red",
+    blurb: "Apply modern AI tools and no-code automation to real business workflows, from research and content to sales and operations.",
+    learn: ["Understanding modern AI tools and their limits", "AI-assisted business operations and research", "No-code and low-code workflow automation",
+      "AI agents and assistants for everyday work", "Lead generation, customer management and marketing automation", "E-commerce and dropshipping operations with AI support",
+      "Integrating business applications", "Testing, monitoring and improving automated workflows"] },
 ];
 
 // Old links used different names. /checkout/?p=cyber still opens Cybersecurity, and so on.
 export const LEGACY_SLUGS: Record<string, string> = { cyber: "cybersecurity", web: "webdev" };
 // Programmes that are no longer offered. Old links to them go to the home page with a short notice.
 export const REMOVED_SLUGS = ["ielts", "data", "data-analytics"];
+
+// "nine" etc. for prose, so copy never falls out of step with the catalogue.
+const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+export const PROGRAMME_COUNT = WORDS[PROGRAMMES.length] ?? String(PROGRAMMES.length);
 
 export function findProgramme(slug: string | null | undefined): Programme | undefined {
   if (!slug) return undefined;
@@ -215,6 +228,7 @@ export const GOALS: { goal: string; slug: string; why: string }[] = [
   { goal: "Build websites and web apps", slug: "webdev", why: "Web developers build the sites and apps people use every day, for employers, clients or their own ideas." },
   { goal: "Design apps people love", slug: "uiux", why: "UI/UX designers research what users need and design products that are easy and pleasant to use." },
   { goal: "Create and design", slug: "graphics", why: "Graphics designers shape how brands look. You can work for a company, freelance, or build your own studio." },
+  { goal: "Automate work with AI", slug: "ai-automation", why: "AI automation applies modern AI tools and no-code workflows to the routine work of a business: research, content, sales, customers and operations." },
   { goal: "Grow a brand or business online", slug: "marketing", why: "Digital marketing skills help any business find customers online, including your own." },
 ];
 
@@ -230,24 +244,35 @@ export const STEPS: { title: string; text: string; cta?: [string, string] }[] = 
   { title: "Start learning one-on-one", text: "Your mentor meets you online, at your pace, and guides you through projects until you are ready for the next step in your career." },
 ];
 
-export const FAQ: [string, string][] = [
-  ["Why is one-on-one learning better than a class?", "In a group, the pace is set by the room. Here, a mentor teaches only you. Your questions are answered straight away, nothing is skipped, and your time goes where you need it. It works like a homeschool: one teacher, one student."],
-  ["I find it hard to learn in a crowd. Is SMA for me?", "Yes. Skill Mountain Academy was designed for people who learn better away from a crowd. There is no audience, no pressure and no comparing yourself with anyone else."],
-  ["Do I need any experience?", "No. Programmes run from complete beginner to advanced. Your mentor starts exactly where you are, including if you have little or no IT experience."],
-  ["Can I learn around my job, school or family?", "Yes. You choose training times that suit your life, so learning fits around your other commitments."],
-  ["Which skills are in demand in the world job market?", "Companies everywhere need people who can build and run cloud systems, automate software delivery, defend against cyber threats, build websites and apps, grow brands online and design. Those are the skills our programmes teach. You can use them in a job, as a freelancer or in your own business, wherever you are."],
-  ["Will I have something real to show employers or clients?", "Yes. You learn by doing, through hands-on projects, real-world scenarios and industry tools. You build a portfolio and get career guidance along the way."],
-  ["Do the Cloud programmes teach AWS or Azure?", "Both. Cloud Engineering, DevOps Engineering and Cloud & DevOps Engineering all teach Amazon Web Services (AWS) and Microsoft Azure, with hands-on projects on each, so you can work with either platform."],
-  ["What is the internship?", "Every programme ends with an internship after the training: 2 months for most programmes and 3 months for Digital Marketing. You work on practical projects with guidance and feedback from your mentor, and add the work to your portfolio. It is part of your learning, not a paid job, and it is not a promise of employment."],
-  ["Can I pay in instalments?", "Yes. You can pay in full, or in 3 parts: 50% when you register, 30% and 20% later (usually 45 and 90 days after registering, or 30 and 60 days for 3-month training). We email a secure payment link for each part on its due date, with a reminder 3 days before. Live-session access is paused if a payment is more than 2 weeks late."],
-  ["Will I get a certificate?", "Yes. When you complete your programme's requirements you receive a Skill Mountain Academy certificate. It is an SMA certificate, not a university degree or a government or professional qualification."],
-  ["Do you teach children?", "Yes, through our children's package. Children learn only through a parent or guardian's account and with the parent's consent, with a customised curriculum and one-on-one teaching. Visit the children's package page to send us an enquiry."],
-  ["Can I enrol from any country?", "Yes. Teaching is online, so you can study from anywhere. Programme fees are set in naira (₦). When you enrol, the country you select determines the currency in which we show an approximate equivalent: US dollars, pounds sterling or euros. Payment is processed in naira through Paystack, and your bank converts it at its own rate."],
-  ["Are admissions open all year?", "Admissions are managed in periods, and enrolment on each programme is matched to the number of verified instructors available to teach it. Each programme page shows whether admissions are currently open."],
-  ["How do I pay, and what happens next?", "Complete the enrolment form on the programme page, accept the terms and choose to pay in full or in 3 parts, by Paystack (card or bank transfer) or a manual transfer to our UBA account. When your payment is confirmed, we email your welcome message with your curriculum and a secure link to sign in to your student dashboard."],
-  ["I paid by bank transfer. What do I do now?", "Send us your teller (proof of payment) on WhatsApp or email, quoting your reference. We confirm it and then send your welcome email. Please send it on or before the scheduled date for your programme."],
-  ["How is my class time set?", "After enrolment you choose a preferred weekly day and time, for example Monday at 10:00. Once confirmed, that becomes your fixed weekly session with your instructor for the programme, and each week's Google Meet link appears in your dashboard. Any change to the timetable goes through Admissions."],
+// "Before you apply": sixteen questions in four groups of four (owner brief, 21 Nov 2026). The flat FAQ list below
+// is derived from it, for the structured data and anywhere a single list is needed.
+export const FAQ_GROUPS: { title: string; items: [string, string][] }[] = [
+  { title: "Studying with the Academy", items: [
+    ["How is teaching organised?", "Each student is taught by one assigned instructor in a live one-on-one session every week. Questions are answered as they arise, and the pace follows the student's progress rather than a class timetable."],
+    ["Do I need prior experience?", "Most programmes begin at beginner level. DevOps Engineering expects basic cloud knowledge. Each programme page states its level and who it suits."],
+    ["Can I study alongside work or family?", "Yes. Your weekly session is set at a time agreed at enrolment, and independent study (10 to 20 hours a week) can be spread across the week."],
+    ["What does a typical week involve?", "One 45 to 60 minute live session with your instructor, and independent study: assignments, practical tasks, quizzes, revision and preparation for the next session. Your dashboard lists the week's activities."],
+  ] },
+  { title: "Programmes", items: [
+    ["How do I choose a programme?", "Read each programme page for its discipline, curriculum, level and duration. If you are unsure, book a call with Admissions and we will talk it through with you."],
+    ["Will I produce practical work?", "Yes. Each programme is built around practical projects using the tools of the discipline, which form a portfolio of your work."],
+    ["Do the Cloud programmes teach AWS or Azure?", "Both. Cloud Engineering, DevOps Engineering and Cloud & DevOps Engineering teach Amazon Web Services and Microsoft Azure, with practical work on each."],
+    ["What is the internship?", "After training, each programme includes an internship period (one to three months, depending on the programme) of supervised practical projects. It is part of your studies; it is not paid employment and not a promise of employment."],
+  ] },
+  { title: "Fees and payment", items: [
+    ["Can I pay in instalments?", "Most programmes can be paid in full or in 3 parts (50%, 30% and 20%) on the dates shown at checkout. AI Automation is paid in full. Live-session access is paused if a payment is more than two weeks late."],
+    ["In which currency will I see the fee?", "Your country of residence sets the currency shown: pounds in the United Kingdom, euros in eurozone countries, naira where the naira is the national currency, and US dollars elsewhere. Payment is processed in naira, and the exact amount charged is shown before you pay."],
+    ["How do I pay?", "On the programme page, complete the admission form and pay online with Paystack, or by bank transfer to the Academy's account."],
+    ["I paid by bank transfer. What happens next?", "Send your proof of payment to Admissions, quoting your reference. Once the payment is confirmed in our account, your admission is processed."],
+  ] },
+  { title: "Admission and records", items: [
+    ["Are admissions open all year?", "Admissions run in periods, and places on each programme depend on the instructors available to teach it. Each programme page shows its current admission status."],
+    ["What happens after I pay?", "Your payment is verified, you receive your registration number and admission confirmation, and then a separate email to enter your learning space. Your instructor and weekly session time follow."],
+    ["Will I receive a certificate?", "Students who complete their programme's requirements receive a Skill Mountain Academy certificate. It is the Academy's own certificate, not a university degree or a government or professional qualification."],
+    ["Do you teach children?", "Yes, through the children's package, which runs through a parent or guardian's account and with their consent. Send an enquiry from the children's package page."],
+  ] },
 ];
+export const FAQ: [string, string][] = FAQ_GROUPS.flatMap((g) => g.items);
 
 // Shown in the FAQ only when group classes are switched on (FLAGS.GROUP_ENABLED).
 export const FAQ_GROUP: [string, string] = ["Can I learn with friends?", "Yes. You can learn with 1 or 2 friends in one shared live class, for one group price. The person registering adds the others by name and email, and each learner keeps their own record, grades and attendance."];
