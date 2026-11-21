@@ -112,7 +112,7 @@ test("first payment creates the student account and enrolment; the welcome email
   const init = w.calls.map((c) => c.url.endsWith("/transaction/initialize") ? JSON.parse(c.body) : null).find((b) => b?.reference.startsWith(reg.reference))!;
   const body = JSON.stringify({ event: "charge.success", data: { id: 777001, reference: init.reference, amount: init.amount, currency: "NGN", status: "success" } });
   await w.fetchApi("/api/paystack/webhook", { method: "POST", headers: { "x-paystack-signature": createHmac("sha512", SECRETS.PAYSTACK_SECRET_KEY).update(body).digest("hex") }, body });
-  assert.ok(await w.waitFor((c) => c.some((x) => x.url.includes("api.resend.com") && x.body.includes("payer@example.com") && x.body.includes("/app/login/"))));
+  assert.ok(await w.waitFor((c) => c.some((x) => x.url.includes("api.resend.com") && x.body.includes("payer@example.com") && x.body.includes("/app/confirm/?t="))));
   const db = await w.db();
   const u = await db.prepare("SELECT * FROM users WHERE email = 'payer@example.com'").first<Record<string, string>>();
   assert.equal(u?.role, "student");

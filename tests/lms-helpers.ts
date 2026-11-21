@@ -14,7 +14,7 @@ export async function signIn(w: W, email: string): Promise<Session> {
   assert.equal(r.status, 200, await r.clone().text());
   assert.ok(await w.waitFor((c) => c.slice(before).some((x) => x.url.includes("api.resend.com") && x.body.includes(email))), `sign-in email to ${email}`);
   const mail = w.calls.slice(before).filter((x) => x.url.includes("api.resend.com") && x.body.includes(email)).at(-1)!;
-  const token = JSON.parse(mail.body).html.match(/\/app\/login\/confirm\/\?t=([\w-]+)/)[1];
+  const token = JSON.parse(mail.body).html.match(/\/app\/confirm\/\?t=([\w-]+)/)[1];
   const v = await w.post("/api/auth/verify", { token }, { "cf-connecting-ip": ip });
   assert.equal(v.status, 200, await v.clone().text());
   const cookie = v.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");

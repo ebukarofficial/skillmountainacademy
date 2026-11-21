@@ -42,7 +42,7 @@ test("admin admits a student who paid offline: records, registration number, pay
   const m = mails(before, "ada.offline@example.com");
   const conf = m.find((x) => /Admission confirmed/.test(x.subject))!;
   assert.ok(conf.html.includes(r.student.studentNo), "registration number in the admission confirmation");
-  assert.ok(m.some((x) => /learning space is ready/.test(x.subject) && /\/app\/login\/confirm\/\?t=/.test(x.html)), "separate access email");
+  assert.ok(m.some((x) => /learning space is ready/.test(x.subject) && /\/app\/confirm\/\?t=/.test(x.html)), "separate access email");
   const db = await w.db();
   const enr = await db.prepare("SELECT instructor_id, status FROM enrolments WHERE student_id = ? AND programme_slug = 'cloud'").bind(r.student.id).first<{ instructor_id: string; status: string }>();
   assert.deepEqual(enr, { instructor_id: ins, status: "active" });
@@ -99,4 +99,24 @@ test("an outdated database gives the admin a plain instruction instead of a raw 
   } finally {
     await db.prepare("ALTER TABLE users RENAME COLUMN verification_old TO verification").run();
   }
+});
+
+test("each entrance signs in only its own role; others are told where their entrance is, with no link", async () => {
+  const { make } = await setup(w);
+  await make("student", "portal-stu@example.com", "Portal Student");
+  const req = async (email: string, portal: string) => {
+    const before = w.calls.length;
+    const r = await w.post("/api/auth/request", { email, portal, turnstileToken: "good-token" }, { "cf-connecting-ip": `10.9.${portal.length}.${email.length}` });
+    assert.equal(r.status, 200);
+    assert.ok(await w.waitFor((c) => c.slice(before).some((x) => x.url.includes("api.resend.com") && x.body.includes(email))));
+    return mails(before, email);
+  };
+  const wrong = await req("portal-stu@example.com", "admin");
+  assert.equal(wrong.length, 1);
+  assert.match(wrong[0].subject, /use your Skill Mountain Academy entrance/);
+  assert.doesNotMatch(wrong[0].html, /confirm\/\?t=/, "no sign-in link from the wrong entrance");
+  assert.match(wrong[0].html, /\/app\/student\/login\//);
+  const right = await req("portal-stu@example.com", "student");
+  assert.match(right[0].html, /\/app\/confirm\/\?t=/);
+  assert.ok(right.every((m) => typeof m.html === "string"));
 });

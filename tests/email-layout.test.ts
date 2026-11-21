@@ -20,8 +20,9 @@ test("letters carry the logo, the student photo, the headline and a footer with 
   for (const c of colours) assert.ok(["#16163a", "#1e0e6f", "#c8233a", "#fcf9db", "#fffdf0", "#f7892b", "#14296b", "#5b2270", "#ffffff"].includes(c.toLowerCase()), `brand colour only: ${c}`);
 });
 
-test("internal notices to staff are compact (no photo)", () => {
+test("internal notices to staff use the staff card, not the student photo", () => {
   const html = notice("New registration", "<p>x</p>");
   assert.doesNotMatch(html, /hero-student/);
+  assert.match(html, /hero-staff\.png/);
   assert.match(html, /New registration/);
 });

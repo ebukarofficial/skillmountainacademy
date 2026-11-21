@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import { built, files, read } from "./helpers.ts";
 
 test("sign-in, confirm and dashboard pages exist, are private (noindex) and not in the sitemap", () => {
-  for (const f of ["app/app/page.tsx", "app/app/login/page.tsx", "app/app/login/confirm/page.tsx", "app/app/layout.tsx"]) assert.ok(read(f));
+  for (const f of ["app/app/page.tsx", "app/app/login/page.tsx", "app/app/confirm/page.tsx", "app/app/student/login/page.tsx", "app/app/instructor/login/page.tsx", "app/app/layout.tsx"]) assert.ok(read(f));
   assert.match(read("app/app/layout.tsx"), /robots: \{ index: false, follow: false \}/);
-  for (const p of ["app/index.html", "app/login/index.html", "app/login/confirm/index.html"]) {
+  for (const p of ["app/index.html", "app/login/index.html", "app/confirm/index.html", "app/student/login/index.html", "app/instructor/login/index.html"]) {
     const html = built(p);
     if (html) assert.match(html, /<meta name="robots" content="noindex, nofollow"/, p);
   }
@@ -15,7 +15,7 @@ test("sign-in, confirm and dashboard pages exist, are private (noindex) and not 
 });
 
 test("the confirm page signs in only on a click (POST), never on page load", () => {
-  const src = read("app/app/login/confirm/page.tsx");
+  const src = read("app/app/confirm/page.tsx");
   assert.match(src, /onClick=\{go\}/);
   assert.match(src, /api\("\/api\/auth\/verify", \{ method: "POST"/);
   assert.doesNotMatch(src, /useEffect/);
@@ -44,11 +44,13 @@ test("dashboards use only existing colour tokens (no hex values) and never show 
 });
 
 test("the public site has no sign-in links; students and staff have their own private entrances", () => {
-  for (const f of ["app/header.tsx", "app/site-parts.tsx", "app/page.tsx"]) assert.doesNotMatch(read(f), /href="\/app\/(login|staff)\/"/, f);
+  for (const f of ["app/header.tsx", "app/site-parts.tsx", "app/page.tsx"]) assert.doesNotMatch(read(f), /href="\/app\//, f);
   assert.match(read("app/page.tsx"), /<SiteFooter \/>/);
-  assert.match(read("app/app/login/page.tsx"), /<EntryPage kind="student" \/>/);
-  assert.match(read("app/app/staff/page.tsx"), /<EntryPage kind="staff" \/>/);
+  assert.match(read("app/app/student/login/page.tsx"), /<EntryPage kind="student" \/>/);
+  assert.match(read("app/app/instructor/login/page.tsx"), /<EntryPage kind="instructor" \/>/);
+  assert.match(read("app/app/login/page.tsx"), /<EntryPage kind="admin" \/>/, "/app/login/ is for administrators only");
+  assert.match(read("app/app/staff/page.tsx"), /\/app\/instructor\/login\//, "the old staff entrance forwards to faculty");
   const entry = read("app/app/entry.tsx");
   for (const s of ["Welcome to your learning space.", "localStorage", "next", "Turnstile"]) assert.ok(entry.includes(s), s);
-  for (const f of ["app/app/login/page.tsx", "app/app/staff/page.tsx"]) assert.match(read(f), /index: false/, `${f} is not indexed`);
+  for (const f of ["app/app/login/page.tsx", "app/app/student/login/page.tsx", "app/app/instructor/login/page.tsx"]) assert.match(read(f), /index: false/, `${f} is not indexed`);
 });
