@@ -39,7 +39,7 @@ type Note = { id: string; kind: string; title: string; body: string | null; crea
 // Where a notice leads inside the app.
 const TAB_FOR: [RegExp, string][] = [
   [/^(assignment|quiz)\./, "coursework"], [/^message/, "messages"], [/^(meet|session|reminder|timetable)\./, "classes"],
-  [/^student\.assigned/, "students"], [/^attendance\./, "schedule"], [/^instructor\.assigned/, "home"], [/^payment/, "account"],
+  [/^student\.assigned/, "students"], [/^attendance\./, "schedule"], [/^instructor\.assigned/, "home"], [/^payment/, "account"], [/^programme\.completed/, "progress"],
 ];
 
 function Notifications({ onOpen }: { onOpen: (tab: string | null, link: string | null) => void }) {

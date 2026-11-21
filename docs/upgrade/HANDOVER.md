@@ -439,3 +439,13 @@ plus owner asks: modern dashboard design (no serif "old" look), fix adding tutor
 - Public site: repeated sections removed, each page has one purpose; programme pages end in "Apply for Admission"; the
   founding year is not stated anywhere; checkout keeps a draft if the visitor leaves.
 - Tests: 142 passing (`tests/identity.test.ts` new; lms1, lms3, lms6, phase2, phase6, transform updated to the new brief).
+- Emails (21 Nov, later): new designed layout in `src/server/email.ts`: logo header, a hero with the student photo on the
+  right, a gradient button, and an ink footer with logo, social icons, links and contact. `letter()` for learners,
+  `notice()` (no photo) for staff alerts. Images live in `public/email/` and load from skillmountainacademy.com/email/.
+
+### Email designs (21 Nov 2026)
+`src/server/email.ts` has nine card designs (`EmailKind`): admission, login (students), instructor, admin, enquiry,
+notification, reminder, payment, graduation. Each has its own label, hero colour and picture (`public/email/hero-*.png`,
+the student photo for admissions). Notifications choose a card through `designOf` in `lib/notify-rules.ts`. Completing an
+enrolment (Admin > Enrolments > status Completed) now sends a graduation notice. Images load from the live site, so emails
+sent before the new code is deployed show the old images. Bump `V` in email.ts when a picture changes.

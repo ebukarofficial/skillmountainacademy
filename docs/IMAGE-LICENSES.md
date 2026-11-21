@@ -23,3 +23,10 @@ add the required credit in `IMAGE_CREDIT` in `lib/config.ts` (it shows in the fo
 The IELTS photo (photo-ielts.webp) was removed from the site with the IELTS programme.
 
 Also remember: do not post photos of real learners, or screenshots of their posts, without their permission.
+
+## Email images (added 21 Nov 2026)
+- `public/email/hero-student.jpg`: the student photo supplied by the owner (SMA-branded T-shirt), cropped and placed on the
+  brand colours for emails. Owner confirms the right to use it.
+- `public/email/logo-white.png`: a scaled copy of `assets/sma-logo-white.png` (the logo itself is unchanged).
+- `public/email/{facebook,instagram,x,tiktok,whatsapp}.png`: drawn from Simple Icons (CC0) in the brand indigo on white;
+  `linkedin.png` is a plain "in" mark. Each links to the Academy's own page.
