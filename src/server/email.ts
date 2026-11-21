@@ -10,6 +10,21 @@ export const esc = (v: unknown) =>
 
 export type Mail = { to: string | string[]; subject: string; html: string; replyTo?: string };
 
+// Plain-text copy of an HTML email. Mail servers score HTML-only messages as more likely to be spam, so including one
+// helps the email pass filtering (and arrive) sooner.
+export function plainText(html: string): string {
+  return unesc(html
+    .replace(/<(style|title|head)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<div style="display:none[\s\S]*?<\/div>/i, "")
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href: string, t: string) => { const label = t.replace(/<[^>]+>/g, "").trim(); return !label ? "" : !href.startsWith("mailto:") && label !== href ? `${label}: ${href}` : label; })
+    .replace(/<\/(p|h1|h2|h3|tr|li|div)>|<br\s*\/?>/gi, "\n")
+    .replace(/<\/td>/gi, "  ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " "))
+    .replace(/\u2011/g, "-")
+    .replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export async function sendEmail(env: AppEnv, m: Mail): Promise<boolean> {
   if (!env.RESEND_API_KEY) {
     console.warn("email skipped: RESEND_API_KEY is not set", m.subject);
@@ -24,6 +39,7 @@ export async function sendEmail(env: AppEnv, m: Mail): Promise<boolean> {
         to: Array.isArray(m.to) ? m.to : [m.to],
         subject: m.subject,
         html: m.html,
+        text: plainText(m.html),
         reply_to: m.replyTo || env.ADMIN_EMAIL || "admission@skillmountainacademy.com",
       }),
     });

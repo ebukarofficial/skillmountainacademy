@@ -1,5 +1,8 @@
 // Sign-in with one-time email links. No passwords.
-//   POST /api/auth/request {email, turnstileToken}  -> emails a link to /app/login/confirm/?t=<token> (15 minutes, single use)
+//   POST /api/auth/request {email, turnstileToken, portal} -> emails a link to /app/confirm/?t=<token> (15 minutes, single use)
+// Three private entrances, one per role: students /app/student/login/, instructors /app/instructor/login/, administrators
+// /app/login/. A link is only sent to the person whose role matches the entrance used; anyone else is emailed the right
+// entrance instead (no link), so the answer on screen never reveals whether an account exists.
 //   POST /api/auth/verify  {token}                  -> sets the HttpOnly session cookie (30 days, sliding)
 //   POST /api/auth/logout                           -> ends this session
 //   GET  /api/me                                    -> who is signed in (or 401)
@@ -23,8 +26,12 @@ const adminEmails = (v?: string) => (v || "").split(",").map((s) => s.trim().toL
 // Only a path inside the learning platform may be used as the place to return to after signing in.
 export const safeNext = (v: unknown) => {
   const s = typeof v === "string" ? v.trim() : "";
-  return /^\/app\/[\w\-/]*(\?[\w\-=&%.]*)?$/.test(s) && s.length <= 200 && !s.startsWith("/app/login") && !s.startsWith("/app/staff") ? s : null;
+  return /^\/app\/[\w\-/]*(\?[\w\-=&%.]*)?$/.test(s) && s.length <= 200 && !/^\/app\/(login|staff|confirm|student\/login|instructor\/login)\b/.test(s) ? s : null;
 };
+
+export type Portal = "student" | "instructor" | "admin";
+export const PORTALS: Record<Portal, string> = { student: "/app/student/login/", instructor: "/app/instructor/login/", admin: "/app/login/" };
+export const portalOf = (role: string): Portal => (role === "admin" ? "admin" : role === "instructor" ? "instructor" : "student");
 
 // Emails a fresh single-use sign-in link. Any earlier unused link for the same person stops working at once.
 export async function sendSignInLink(env: Parameters<typeof sendEmail>[0], db: D1Database, user: User, invite = false, next: string | null = null) {
@@ -33,10 +40,10 @@ export async function sendSignInLink(env: Parameters<typeof sendEmail>[0], db: D
   await revokeTokens(db, user.id, new Date(now).toISOString());
   await createToken(db, { token_hash: await sha256(`t|${token}`), user_id: user.id, expires_at: new Date(now + TOKEN_MINUTES * 60_000).toISOString(), created_at: new Date(now).toISOString() });
   const site = siteUrl(env);
-  const link = `${site}/app/login/confirm/?t=${token}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+  const link = `${site}/app/confirm/?t=${token}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
   const staff = user.role !== "student";
   const place = staff ? "the Skill Mountain Academy staff workspace" : "your learning space";
-  const entry = staff ? `${site}/app/staff/` : `${site}/app/login/`;
+  const entry = `${site}${PORTALS[portalOf(user.role)]}`;
   const number = user.role === "student" ? user.student_no : user.staff_no;
   return sendEmail(env, {
     to: user.email,
@@ -49,8 +56,23 @@ export async function sendSignInLink(env: Parameters<typeof sendEmail>[0], db: D
   });
 }
 
+// Someone used another role's entrance: tell them where theirs is. No sign-in link is included.
+function sendWrongEntrance(env: Parameters<typeof sendEmail>[0], user: User) {
+  const p = portalOf(user.role);
+  const url = `${siteUrl(env)}${PORTALS[p]}`;
+  const who = p === "admin" ? "administrators" : p === "instructor" ? "faculty" : "students";
+  return sendEmail(env, {
+    to: user.email,
+    subject: "Please use your Skill Mountain Academy entrance",
+    html: layout(`Dear ${esc(user.full_name.split(" ")[0])}`, `<p>A sign-in link was requested for this email address on an entrance that is not for your account. For security, no link was sent.</p><p>Your entrance (for ${who}) is:</p>${button(url, "Go to my entrance")}<p style="opacity:.7;font-size:14px">If you did not ask for this, you can ignore this email.</p>`,
+      { headline: "Please use your own entrance", kind: p === "admin" ? "admin" : p === "instructor" ? "instructor" : "login" }),
+  });
+}
+
 publicRoute("POST", "/api/auth/request", async (c) => {
-  const b = await c.body<{ email?: string; turnstileToken?: string; next?: string }>();
+  const b = await c.body<{ email?: string; turnstileToken?: string; next?: string; portal?: string }>();
+  // Older cached pages send no portal: they are treated as allowing any role.
+  const portal = b.portal && b.portal in PORTALS ? (b.portal as Portal) : null;
   const email = String(b.email ?? "").trim().toLowerCase().slice(0, 200);
   if (!EMAIL_RE.test(email)) throw new ApiError(400, "invalid", "Please enter a valid email address.");
   await verifyTurnstile(c.env, b.turnstileToken, clientIp(c.req));
@@ -59,14 +81,17 @@ publicRoute("POST", "/api/auth/request", async (c) => {
   await repo.limitOrThrow(`login-email:${email}`, 4, 600);
   let user = await getUserByEmail(c.db, email);
   // First sign-in of an owner listed in ADMIN_EMAILS creates their admin account.
-  if (!user && adminEmails(c.env.ADMIN_EMAILS).includes(email)) {
+  if (!user && (portal === null || portal === "admin") && adminEmails(c.env.ADMIN_EMAILS).includes(email)) {
     user = { id: crypto.randomUUID(), email, role: "admin", status: "active", full_name: "SMA Admin", phone: null, bio: null, photo_key: null, student_no: null,
       specialization: null, qualifications: null, links: null, registration_id: null, created_at: nowIso(), last_login_at: null,
       staff_no: (await newStaffNo(c.db, "admin")) ?? undefined };
     await createUser(c.db, user);
     await audit(c.db, { actor_id: user.id, action: "admin.bootstrap", target_type: "user", target_id: user.id, ip_hash: c.ipHash });
   }
-  if (user && canSignIn(user)) c.exec.waitUntil(sendSignInLink(c.env, c.db, user, false, safeNext(b.next)));
+  if (user && canSignIn(user)) {
+    if (portal === null || portalOf(user.role) === portal) c.exec.waitUntil(sendSignInLink(c.env, c.db, user, false, safeNext(b.next)));
+    else c.exec.waitUntil(sendWrongEntrance(c.env, user));
+  }
   // Same answer whether or not the address has an account, so nobody can probe for accounts.
   return ok({ message: "If this email has an account, a sign-in link is on its way. It expires in 15 minutes." });
 });
