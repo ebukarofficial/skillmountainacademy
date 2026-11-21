@@ -53,7 +53,7 @@ function Users() {
       </Card>
       <Card title="Add a person">
         <p className="mb-3 text-sm text-ink/60">For a paying student, use <b>Admit a student</b> so the payment, registration number and enrolment are recorded too.</p>
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api("/api/app/admin/users", { method: "POST", body: f }), f.role === "instructor" ? "Added as an instructor candidate. Approve them in Recruitment to send their sign-in link." : "Created. A sign-in link was emailed.", () => { form.reset(); reload(); }); }}>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api("/api/app/admin/users", { method: "POST", body: f }), f.role === "instructor" ? "Added. They were emailed an invitation to sign in and complete their faculty profile; verify and approve them in Recruitment." : "Created. A sign-in link was emailed.", () => { form.reset(); reload(); }); }}>
           <Field label="Full name"><input name="fullName" required className={inputCls} /></Field>
           <Field label="Email"><input name="email" type="email" required className={inputCls} /></Field>
           <Field label="Role"><select name="role" className={inputCls}><option value="instructor">Instructor (candidate)</option><option value="admin">Administrator</option><option value="student">Student (account only)</option></select></Field>
@@ -282,7 +282,7 @@ function Admit() {
           <Field label="Surname"><input name="surname" required autoComplete="off" className={inputCls} /></Field>
           <Field label="Email"><input name="email" type="email" required autoComplete="off" className={inputCls} /></Field>
           <Field label="Phone"><input name="phone" autoComplete="off" className={inputCls} /></Field>
-          <Field label="Country"><input name="country" defaultValue="Nigeria" className={inputCls} /></Field>
+          <Field label="Country"><input name="country" className={inputCls} /></Field>
           <Field label="Programme"><select name="programme" value={prog} onChange={(e) => setProg(e.target.value)} className={inputCls}>{PROGRAMMES.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Field>
           <Field label="Payment plan"><select name="plan" value={plan} onChange={(e) => setPlan(e.target.value as "full" | "parts")} className={inputCls}><option value="full">Paid in full</option><option value="parts">Paying in 3 parts</option></select></Field>
           {plan === "parts" ? <Field label="Parts already paid"><select name="paidParts" className={inputCls}><option value="1">Part 1 (50%)</option><option value="2">Parts 1 and 2 (80%)</option><option value="3">All 3 parts</option></select></Field> : <div className="hidden sm:block" />}

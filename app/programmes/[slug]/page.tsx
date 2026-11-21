@@ -23,7 +23,7 @@ export function generateStaticParams() {
 }
 
 const find = (slug: string) => PROGRAMMES.find((p) => p.slug === slug);
-const describe = (p: Programme) => `${p.name} at Skill Mountain Academy. ${programmeCopy(p.slug).discipline} ${p.blurb} ${duration(p)}, one-on-one with an assigned instructor. Online, from Abuja, Nigeria.`;
+const describe = (p: Programme) => `${p.name} at Skill Mountain Academy. ${programmeCopy(p.slug).discipline} ${p.blurb} ${duration(p)}, one-on-one with an assigned instructor, online.`;
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const p = find((await params).slug);

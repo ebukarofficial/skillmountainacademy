@@ -28,7 +28,7 @@ test("each role gets its own workspace in the shared shell, with the brief's sec
   const stu = read("app/app/student.tsx");
   for (const s of ["Welcome to your learning space.", "Registration No", "<NextClass", "Your responsibilities", "Classes and calendar", "Coursework", "Learning materials", "Learning assistant", "Messages", "Progress", "Academic record", "Admitted", "Payments", "Email preferences", "Join the live session", "has not added the"]) assert.ok(stu.includes(s), s);
   const ins = read("app/app/instructor.tsx");
-  for (const s of ["Attendance to record", "My schedule", "Next 7 days", "Add link", "Completed", "Student missed", "Waiting to be marked", "Set work", "My performance", "Staff No"]) assert.ok(ins.includes(s), s);
+  for (const s of ["Attendance to record", "My schedule", "Next 7 days", "Add link", "Completed", "Student missed", "Waiting to be marked", "Set work", "My performance", "Faculty No"]) assert.ok(ins.includes(s), s);
   const adm = read("app/app/admin.tsx");
   for (const s of ["Overview", "Admit a student", "/api/app/admin/admit", "People", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Materials", "Platform", "Fixed weekly class time", "Confirm bank payment"]) assert.ok(adm.includes(s), s);
   const shell = read("app/app/shell.tsx");
@@ -51,6 +51,6 @@ test("the public site has no sign-in links; students and staff have their own pr
   assert.match(read("app/app/login/page.tsx"), /<EntryPage kind="admin" \/>/, "/app/login/ is for administrators only");
   assert.match(read("app/app/staff/page.tsx"), /\/app\/instructor\/login\//, "the old staff entrance forwards to faculty");
   const entry = read("app/app/entry.tsx");
-  for (const s of ["Welcome to your learning space.", "localStorage", "next", "Turnstile"]) assert.ok(entry.includes(s), s);
+  for (const s of ["QUOTES", "pickQuote", "localStorage", "next", "Turnstile"]) assert.ok(entry.includes(s), s);
   for (const f of ["app/app/login/page.tsx", "app/app/student/login/page.tsx", "app/app/instructor/login/page.tsx"]) assert.match(read(f), /index: false/, `${f} is not indexed`);
 });

@@ -6,6 +6,10 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import logo from "@/assets/sma-logo.png";
 import logoWhite from "@/assets/sma-logo-white.png";
+import bgStudent from "@/assets/photos/banner-students.webp";
+import bgInstructor from "@/assets/photos/photo-web.webp";
+import bgAdmin from "@/assets/photos/photo-cloud.webp";
+import { pickQuote, QUOTES } from "@/lib/quotes";
 import { Turnstile, turnstileAvailable } from "../turnstile";
 import { api, inputCls, Msg } from "./ui";
 import { PORTAL_KEY, type Portal } from "./portals";
@@ -18,29 +22,23 @@ export const safeNext = (v: string | null) => (v && /^\/app\/[^/]/.test(v) && !v
 const COPY = {
   student: {
     eyebrow: "Students",
-    title: "Welcome to your learning space.",
-    lede: "Your classes, coursework, materials and instructor, in one place.",
-    points: ["Your next class and its Google Meet link", "Assignments, quizzes and feedback", "Messages with your instructor", "Your progress, payments and registration number"],
     form: "Enter the email address you used for your admission. We will send you a secure, single-use link.",
     other: { href: "/app/instructor/login/", text: "Faculty entrance" },
   },
   instructor: {
     eyebrow: "Faculty",
-    title: "Your teaching workspace.",
-    lede: "Classes, students, coursework and marking, in one place.",
-    points: ["Your schedule, Meet links and attendance", "Your students and their progress", "Assignments, quizzes and marking", "Materials and messages"],
     form: "Enter your faculty email address. We will send you a secure, single-use link.",
     other: { href: "/app/student/login/", text: "Student entrance" },
   },
   admin: {
     eyebrow: "Administration",
-    title: "Academy administration.",
-    lede: "Admissions, people, teaching and finance.",
-    points: ["Admissions and enrolments", "Faculty recruitment and records", "Orders, payments and finance", "Platform health and audit log"],
     form: "Administrators only. Enter your email address and we will send you a secure, single-use link.",
     other: null,
   },
 } as const;
+
+const BG = { student: bgStudent, instructor: bgInstructor, admin: bgAdmin } as const;
+const QUOTE_KEY = "sma-quote";
 
 const H1: Record<Portal, string> = { student: "Enter your learning space", instructor: "Enter the faculty workspace", admin: "Administrator sign-in" };
 
@@ -52,8 +50,15 @@ export function EntryPage({ kind }: { kind: Portal }) {
   const [err, setErr] = useState("");
   const [sent, setSent] = useState("");
   const [next, setNext] = useState<string | null>(null);
+  const [quote, setQuote] = useState<number | null>(null);
   useEffect(() => {
     const t = setTimeout(() => {
+      // A different quotation on every visit (chosen in the browser, so the page itself stays static).
+      let last: number | null = null;
+      try { const v = localStorage.getItem(QUOTE_KEY); last = v === null ? null : Number(v); } catch { /* private mode */ }
+      const q = pickQuote(Number.isInteger(last) ? last : null);
+      setQuote(q);
+      try { localStorage.setItem(QUOTE_KEY, String(q)); } catch { /* private mode */ }
       try { setEmail(localStorage.getItem(KEY) ?? ""); } catch { /* private mode */ }
       setNext(safeNext(new URLSearchParams(window.location.search).get("next")));
     }, 0);
@@ -72,16 +77,15 @@ export function EntryPage({ kind }: { kind: Portal }) {
   return (
     <main id="main" className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       <section className="relative hidden overflow-hidden bg-indigo p-12 text-white lg:flex lg:flex-col">
-        <div aria-hidden="true" className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-plum/60 blur-3xl" />
-        <div aria-hidden="true" className="pointer-events-none absolute -bottom-40 -left-20 h-96 w-96 rounded-full bg-navy blur-3xl" />
+        <Image src={BG[kind]} alt="" aria-hidden="true" fill priority sizes="55vw" className="pointer-events-none object-cover opacity-[0.16] mix-blend-luminosity grayscale" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-indigo via-indigo/70 to-indigo/30" />
+        <div aria-hidden="true" className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-plum/50 blur-3xl" />
         <Link href="/" aria-label="Skill Mountain Academy home" className="relative"><Image src={logoWhite} alt="Skill Mountain Academy" unoptimized className="h-11 w-auto" /></Link>
-        <div className="relative mt-auto max-w-md">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-orange">{c.eyebrow}</p>
-          <h2 className="mt-3 font-display text-4xl font-semibold leading-tight tracking-tight">{c.title}</h2>
-          <p className="mt-3 text-white/70">{c.lede}</p>
-          <ul className="mt-8 space-y-3">{c.points.map((p) => <li key={p} className="flex items-center gap-3 text-sm text-white/85"><span className="grid h-6 w-6 place-items-center rounded-full bg-white/10 text-brand-orange" aria-hidden="true">✓</span>{p}</li>)}</ul>
-        </div>
-        <p className="relative mt-12 text-xs text-white/45">Skill Mountain Academy · Abuja, Nigeria · online worldwide</p>
+        <figure className={`relative mt-auto max-w-xl transition-opacity duration-700 ${quote === null ? "opacity-0" : "opacity-100"}`} aria-live="polite">
+          <span aria-hidden="true" className="block font-display text-5xl leading-none text-brand-orange">“</span>
+          <blockquote className="mt-2 font-display text-3xl font-medium leading-snug tracking-tight">{quote !== null ? QUOTES[quote].text : ""}</blockquote>
+          <figcaption className="mt-6 flex items-center gap-3 text-sm text-white/70"><span aria-hidden="true" className="h-px w-8 bg-brand-orange" />{quote !== null ? QUOTES[quote].by : ""}</figcaption>
+        </figure>
       </section>
       <section className="flex flex-col justify-center bg-paper px-5 py-12 sm:px-12">
         <div className="mx-auto w-full max-w-sm">
@@ -92,7 +96,7 @@ export function EntryPage({ kind }: { kind: Portal }) {
           {sent ? (
             <div role="status" className="mt-8 rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-sm shadow-ink/5">
               <p className="font-semibold text-ink">Check your email</p>
-              <p className="mt-1 text-sm text-ink/70">{sent} The link works once and expires shortly. Check your spam folder if it has not arrived within a few minutes.</p>
+              <p className="mt-1 text-sm text-ink/70">{sent} Check your spam folder if it has not arrived within a few minutes.</p>
               <button onClick={() => { setSent(""); setToken(""); }} className="mt-4 text-sm font-semibold text-indigo hover:underline">Use a different email</button>
             </div>
           ) : !turnstileAvailable() ? (

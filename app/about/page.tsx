@@ -33,7 +33,7 @@ export default function AboutPage() {
         <div className="mx-auto max-w-6xl px-5">
           <Block id="story" eyebrow="Our story" title="Why the Academy exists.">
             <p>Online education made information abundant. It did not make competence common. Many learners finish courses with certificates and little they can actually do, because no one ever watched them work, corrected them or held them to a standard.</p>
-            <p>Skill Mountain Academy was founded in Abuja to close that gap. We teach one student at a time, through an instructor assigned to them, and we measure progress by the work students can produce and explain.</p>
+            <p>Skill Mountain Academy was founded to close that gap. We teach one student at a time, through an instructor assigned to them, and we measure progress by the work students can produce and explain.</p>
           </Block>
 
           <Block id="philosophy" eyebrow="Our philosophy" title="Competence, not certificates.">

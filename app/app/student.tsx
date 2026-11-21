@@ -4,11 +4,11 @@
 import { useEffect, useState } from "react";
 import type { Me } from "./page";
 import { Messages, ProfileEditor, ProgressView, type Progress } from "./shared";
-import { api, Badge, Btn, Card, Empty, inputCls, Msg, naira, PageTitle, Stat, upload, useAction, useLoad, useNow, useTab } from "./ui";
+import { api, Badge, Btn, Card, Empty, inputCls, Msg, naira, PageTitle, Stat, upload, useAction, useLoad, useNow, useTab, Avatar, VerifiedBadge } from "./ui";
 import { AppShell, Icon, type NavItem } from "./shell";
 
 type Session = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetStatus: string; joinOpen: boolean; instructor: { fullName: string } | null };
-type Overview = { enrolments: { id: string; programme: string; programmeName: string; status: string; startedAt: string; instructor: { id: string; fullName: string; email: string; bio: string | null; photo: string | null; specialization: string | null } | null; timetable: { day: string; startTime: string; durationMin: number } | null }[]; nextSession: Session | null };
+type Overview = { enrolments: { id: string; programme: string; programmeName: string; status: string; startedAt: string; instructor: { id: string; fullName: string; email: string; bio: string | null; photo: string | null; specialization: string | null; verified?: boolean; headline?: string | null } | null; timetable: { day: string; startTime: string; durationMin: number } | null }[]; nextSession: Session | null };
 type Assignment = { id: string; title: string; description: string | null; dueText: string; status: string; maxScore: number; submission: { text: string | null; fileName: string | null } | null; grade: { score: number; feedback: string | null } | null };
 type Quiz = { id: string; kind: string; title: string; instructions: string | null; durationMin: number | null; dueText: string; status: string; score: number | null; maxScore: number; feedback: string | null;
   questions: { n?: number; type: string; prompt: string; options?: string[]; points: number; answer?: number }[]; answers: (number | string | null)[] | null };
@@ -229,7 +229,7 @@ export function StudentDashboard({ me }: { me: Me }) {
               <Stat label="Attendance" value={p0?.attendance.pct != null ? `${p0.attendance.pct}%` : "–"} note={p0 ? `${p0.attendance.attended} attended` : undefined} />
             </div>
             <Card title="Your instructor">
-              {ins ? <div className="text-sm"><p className="font-semibold">{ins.fullName}</p>{ins.specialization && <p className="text-ink/60">{ins.specialization}</p>}
+              {ins ? <div className="text-sm"><div className="flex items-center gap-3"><Avatar src={ins.photo} name={ins.fullName} size={44} /><div><p className="flex items-center gap-1 font-semibold">{ins.fullName}{ins.verified && <VerifiedBadge />}</p>{(ins.headline || ins.specialization) && <p className="text-ink/60">{ins.headline || ins.specialization}</p>}</div></div>
                 <div className="mt-3 flex gap-2"><Btn small kind="ghost" onClick={() => setTab("messages")}>Message{msgs.data?.unread ? ` (${msgs.data.unread} new)` : ""}</Btn></div></div>
                 : <Empty>Your instructor is being assigned. You will be notified.</Empty>}
               {e0?.timetable && <p className="mt-4 border-t border-ink/[0.07] pt-3 text-sm text-ink/70">Weekly class: <b className="text-ink">{e0.timetable.day}s at {e0.timetable.startTime}</b> (Lagos time)</p>}

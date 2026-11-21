@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { PROGRAMMES } from "@/lib/config";
 import { CHECKS, QUALIFICATION_LEVELS, REQUIRED_CHECKS, VERIFICATION, VERIFICATION_LABEL, type Verification } from "@/lib/admissions";
-import { api, Badge, Btn, Card, Empty, Field, inputCls, Msg, useAction, useLoad, when } from "./ui";
+import { api, Badge, Btn, Card, Empty, Field, inputCls, Msg, useAction, useLoad, when, Avatar, VerifiedBadge } from "./ui";
 
 type Cap = { total: number; enrolled: number; reserved: number; available: number; utilisation: number | null; full: boolean };
 type Assign = { instructor_id: string; full_name: string; email: string; max_students: number | null; verification: string | null; status: string; students: number };
@@ -111,7 +111,7 @@ export function AdmissionsAdmin() {
 }
 
 type Check = { done: boolean; note: string | null; at: string | null };
-type Cand = { id: string; email: string; fullName: string; phone: string | null; status: string; verification: Verification; checks: Partial<Record<string, Check>>; highestQualification: string | null; qualifications: string[]; experience: string | null; specialization: string | null; publicProfile: boolean; createdAt: string; programmes?: { slug: string; maxStudents: number | null }[] };
+type Cand = { id: string; email: string; fullName: string; phone: string | null; status: string; verification: Verification; checks: Partial<Record<string, Check>>; highestQualification: string | null; qualifications: string[]; experience: string | null; specialization: string | null; publicProfile: boolean; createdAt: string; bio?: string | null; photo?: string | null; links?: Record<string, string>; headline?: string | null; achievements?: string[]; certifications?: { title: string; issuer: string | null; year: string | null; url: string | null }[]; languages?: string[]; countryOrigin?: string | null; countryResidence?: string | null; profileSubmittedAt?: string | null; verifiedAt?: string | null; programmes?: { slug: string; maxStudents: number | null }[] };
 
 export function RecruitmentAdmin() {
   const [stage, setStage] = useState("");
@@ -125,15 +125,15 @@ export function RecruitmentAdmin() {
           <ul className="divide-y divide-ink/10 text-sm">
             {data?.candidates.map((c) => (
               <li key={c.id}><button type="button" onClick={() => setSel(c.id)} className={`flex w-full items-center justify-between gap-2 py-2.5 text-left ${sel === c.id ? "text-brand-red" : ""}`}>
-                <span><b>{c.fullName}</b><span className="block text-xs text-ink/55">{c.specialization || c.email}</span></span><Badge s={c.verification} />
+                <span><b className="inline-flex items-center gap-1">{c.fullName}{c.verification === "approved" && <VerifiedBadge />}</b><span className="block text-xs text-ink/55">{c.profileSubmittedAt && c.verification !== "approved" ? "Profile submitted · " : ""}{c.specialization || c.email}</span></span><Badge s={c.verification} />
               </button></li>
             ))}
             {data && !data.candidates.length && <li className="py-2"><Empty>No candidates at this stage.</Empty></li>}
           </ul>
         </Card>
         <Card title="Add a candidate">
-          <p className="mb-3 text-sm text-ink/65">Candidates cannot sign in or teach until approved. Approval sends their sign-in invitation.</p>
-          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api<{ user: { id: string } }>("/api/app/admin/users", { method: "POST", body: { ...f, role: "instructor", sendInvite: false } }).then((r) => setSel(r.user.id)), "Candidate added.", () => { form.reset(); reload(); }); }}>
+          <p className="mb-3 text-sm text-ink/65">The candidate is emailed a congratulations invitation to sign in and complete their faculty profile. They cannot teach until you verify and approve it.</p>
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); const form = e.currentTarget; run(() => api<{ user: { id: string } }>("/api/app/admin/users", { method: "POST", body: { ...f, role: "instructor" } }).then((r) => setSel(r.user.id)), "Candidate added and invited to complete their profile.", () => { form.reset(); reload(); }); }}>
             <Field label="Full name"><input name="fullName" required className={inputCls} /></Field>
             <Field label="Email"><input name="email" type="email" required className={inputCls} /></Field>
             <Field label="Phone (optional)"><input name="phone" className={inputCls} /></Field>
@@ -156,8 +156,9 @@ function Candidate({ id, onChange }: { id: string; onChange: () => void }) {
   const save = (body: Record<string, unknown>, ok = "Saved.") => run(() => api(`/api/app/admin/recruitment/${id}`, { method: "PATCH", body }), ok, () => { reload(); onChange(); });
   const missing = REQUIRED_CHECKS.filter((k) => !c.checks[k]?.done);
   return (
-    <Card title={c.fullName} action={<Badge s={c.verification} />}>
+    <Card title={<span className="inline-flex items-center gap-1.5">{c.fullName}{c.verification === "approved" && <VerifiedBadge />}</span>} action={<Badge s={c.verification} />}>
       <p className="text-sm text-ink/65">{c.email}{c.phone ? ` · ${c.phone}` : ""} · added {when(c.createdAt)}</p>
+      <SubmittedProfile c={c} />
       <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); save({ highestQualification: f.get("hq") || null, experience: f.get("exp") }); }}>
         <Field label="Highest qualification or standing"><select name="hq" defaultValue={c.highestQualification ?? ""} className={inputCls}><option value="">Not recorded</option>{QUALIFICATION_LEVELS.map((q) => <option key={q}>{q}</option>)}</select></Field>
         <Field label="Professional experience (internal notes)"><textarea name="exp" rows={2} defaultValue={c.experience ?? ""} className={inputCls} /></Field>
@@ -182,7 +183,7 @@ function Candidate({ id, onChange }: { id: string; onChange: () => void }) {
       <h3 className="mt-6 font-display text-sm font-bold">Stage</h3>
       <div className="mt-2 flex flex-wrap gap-2">
         {VERIFICATION.filter((v) => v !== c.verification).map((v) => (
-          <Btn key={v} small kind={v === "approved" ? "primary" : "ghost"} disabled={busy || (v === "approved" && missing.length > 0)} onClick={() => save({ stage: v }, v === "approved" ? "Approved. Their sign-in invitation is on its way." : `Moved to ${VERIFICATION_LABEL[v]}.`)}>{VERIFICATION_LABEL[v]}</Btn>
+          <Btn key={v} small kind={v === "approved" ? "primary" : "ghost"} disabled={busy || (v === "approved" && missing.length > 0)} onClick={() => save({ stage: v }, v === "approved" ? "Approved. They have been emailed, and the verified badge now shows next to their name." : `Moved to ${VERIFICATION_LABEL[v]}.`)}>{VERIFICATION_LABEL[v]}</Btn>
         ))}
       </div>
       {c.verification !== "approved" && missing.length > 0 && <p className="mt-2 text-xs text-ink/55">Approval unlocks once the required checks are recorded.</p>}
@@ -193,5 +194,29 @@ function Candidate({ id, onChange }: { id: string; onChange: () => void }) {
       {c.programmes && c.programmes.length > 0 && <p className="mt-4 text-sm text-ink/65">Teaching: {c.programmes.map((p) => pname(p.slug)).join(", ")}. Manage limits in Admissions.</p>}
       <Msg text={msg.text} kind={msg.kind} />
     </Card>
+  );
+}
+
+// What the instructor submitted during onboarding, laid out for checking (every link opens in a new tab).
+function SubmittedProfile({ c }: { c: Cand }) {
+  const links = Object.entries(c.links ?? {}).filter(([, v]) => v);
+  if (!c.profileSubmittedAt && !c.headline && !c.certifications?.length) return <p className="mt-4 rounded-lg bg-ink/[0.03] p-3 text-sm text-ink/65">The candidate has not submitted their profile yet. They were emailed an invitation to sign in and complete it.</p>;
+  return (
+    <div className="mt-5 rounded-xl border border-ink/[0.08] p-4">
+      <div className="flex items-start gap-4">
+        <Avatar src={c.photo ?? null} name={c.fullName} size={72} />
+        <div className="min-w-0 text-sm">
+          {c.headline && <p className="font-semibold">{c.headline}</p>}
+          <p className="text-ink/60">{[c.specialization, c.countryOrigin && `From ${c.countryOrigin}`, c.countryResidence && `lives in ${c.countryResidence}`].filter(Boolean).join(" · ")}</p>
+          {!!c.languages?.length && <p className="text-ink/60">Languages: {c.languages.join(", ")}</p>}
+          {c.profileSubmittedAt && <p className="mt-1 text-xs text-ink/50">Submitted {when(c.profileSubmittedAt)}</p>}
+        </div>
+      </div>
+      {c.bio && <p className="mt-3 whitespace-pre-line text-sm text-ink/80">{c.bio}</p>}
+      {links.length > 0 && <p className="mt-3 flex flex-wrap gap-3 text-sm">{links.map(([k, v]) => <a key={k} href={v} target="_blank" rel="noopener noreferrer" className="font-semibold capitalize text-indigo underline">{k === "x" ? "X (Twitter)" : k}</a>)}</p>}
+      {!!c.achievements?.length && <><p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink/50">Achievements</p><ul className="mt-1 list-disc pl-5 text-sm">{c.achievements.map((a, i) => <li key={i}>{a}</li>)}</ul></>}
+      {!!c.certifications?.length && <><p className="mt-4 text-xs font-semibold uppercase tracking-wide text-ink/50">Certifications: open each link to verify</p>
+        <ul className="mt-1 divide-y divide-ink/[0.07] text-sm">{c.certifications.map((x, i) => <li key={i} className="flex flex-wrap items-center justify-between gap-2 py-2"><span><b className="font-semibold">{x.title}</b>{x.issuer ? ` · ${x.issuer}` : ""}{x.year ? ` · ${x.year}` : ""}</span>{x.url ? <a href={x.url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-indigo underline">Verify ↗</a> : <span className="text-xs text-brand-red">no link</span>}</li>)}</ul></>}
+    </div>
   );
 }

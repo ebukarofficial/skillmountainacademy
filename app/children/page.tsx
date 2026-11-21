@@ -6,7 +6,7 @@ import { EnquiryForm } from "./enquiry-form";
 
 export const metadata: Metadata = {
   title: "Children's package | Flexible, one-on-one learning | Skill Mountain Academy",
-  description: "One-on-one online skill learning for children, through a parent account and with the parent's consent, with a customised curriculum. Skill Mountain Academy, Abuja, Nigeria.",
+  description: "One-on-one online skill learning for children, through a parent account and with the parent's consent, with a customised curriculum. Skill Mountain Academy.",
   alternates: { canonical: "/children/" },
 };
 

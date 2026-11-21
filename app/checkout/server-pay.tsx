@@ -158,7 +158,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
       </fieldset>
 
       <div className="rounded-md bg-indigo px-4 py-3 text-sm text-white" data-charge>
-        You pay <b>{money(parts[0], "NGN")}</b> now{plan === "parts" ? " (part 1 of 3)" : ""}. {method === "paystack" ? "Paystack charges in Nigerian naira (NGN)." : "Transfer the amount in naira (NGN)."}
+        You pay <b>{money(parts[0], "NGN")}</b> now{plan === "parts" ? " (part 1 of 3)" : ""}. {method === "paystack" ? "Paystack charges in naira (NGN)." : "Transfer the amount in naira (NGN)."}
         {shown && currency !== "NGN" ? <> That is {approx(shown[0], currency)} at today&apos;s rate; your bank converts it at its own rate.</> : null}
         <FxNote className="mt-1 text-white/70" />
       </div>

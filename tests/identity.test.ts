@@ -65,9 +65,9 @@ test("a new sign-in link replaces older ones; links carry only a safe return pat
     assert.ok(await w.waitFor((cs) => cs.slice(b).some((x) => x.url.includes("api.resend.com") && x.body.includes("relink@example.com"))));
     return mails(b, "relink@example.com").at(-1)!.html;
   };
-  const first = (await ask("/app/?tab=assignments")).match(/confirm\/\?t=([\w-]+)(&amp;next=([^"&]+))?/)!;
+  const first = (await ask("/app/?tab=assignments")).match(/confirm\/\?t=([\w-]+)&amp;p=\w+(&amp;next=([^"&]+))?/)!;
   assert.equal(decodeURIComponent(first[3]), "/app/?tab=assignments");
-  const second = (await ask("https://evil.example.com/")).match(/confirm\/\?t=([\w-]+)(&amp;next=)?/)!;
+  const second = (await ask("https://evil.example.com/")).match(/confirm\/\?t=([\w-]+)&amp;p=\w+(&amp;next=)?/)!;
   assert.equal(second[2], undefined, "an outside address is never used as the return path");
   assert.equal((await w.post("/api/auth/verify", { token: first[1] })).status, 400, "the earlier link stopped working");
   assert.equal((await w.post("/api/auth/verify", { token: second[1] })).status, 200);

@@ -32,10 +32,10 @@ test("no IELTS, Data Analytics, dollar labels, 'coming soon' or '6 months' in th
   }
 });
 
-test("meta: no keywords tag, Abuja in the description, OG alt says Academy", () => {
+test("meta: no keywords tag, no location in the description (owner choice), OG alt says Academy", () => {
   const layout = read("app/layout.tsx");
   assert.doesNotMatch(layout, /keywords\s*:/);
-  assert.match(layout, /description:[\s\S]*?Abuja/);
+  assert.doesNotMatch(layout, /Abuja|Nigeria/, "the owner asked for no location on the site");
   assert.doesNotMatch(layout, /University/);
   assert.match(layout, /Skill Academy for those made for more/);
 });
@@ -87,3 +87,14 @@ test("new files use only existing brand colour values", () => {
   }
 });
 function statSafe(p: string) { try { return statSync(join(ROOT, p)).isDirectory(); } catch { return false; } }
+
+test("no Abuja or Nigeria in site copy, sign-in pages or emails (legal pages keep their jurisdiction text)", async () => {
+  const { readdirSync, statSync } = await import("node:fs");
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : /\.(tsx?|mjs)$/.test(f) ? [p] : []; });
+  const allowed = /^(lib\/(legal|terms|pricing)\.ts)$/;
+  for (const f of [...walk("app"), ...walk("src/server"), "lib/config.ts", "lib/quotes.ts", "lib/programme-content.ts"]) {
+    if (allowed.test(f)) continue;
+    const text = readFileSync(f, "utf8").replace(/name !== "Nigeria"/g, "").replace(/address: "[^"]*"/, "");
+    assert.doesNotMatch(text, /Abuja|Nigeria(?!n Data)/, f);
+  }
+});

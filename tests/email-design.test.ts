@@ -27,5 +27,7 @@ test("notifications pick the right card", () => {
   assert.equal(designOf("payment.due"), "payment");
   assert.equal(designOf("programme.completed"), "graduation");
   assert.equal(designOf("assignment.new"), "notification");
-  assert.match(readFileSync("src/server/lms/routes/auth.ts", "utf8"), /kind: user\.role === "admin" \? "admin" : user\.role === "instructor" \? "instructor" : "login"/);
+  assert.match(readFileSync("src/server/lms/routes/auth.ts", "utf8"), /const kind = portal === "admin" \? "admin" : portal === "instructor" \? "instructor" : "login"/);
+  assert.equal(designOf("verification.approved"), "instructor");
+  assert.equal(designOf("recruitment.submitted"), "admin");
 });

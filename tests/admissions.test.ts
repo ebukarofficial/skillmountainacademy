@@ -114,19 +114,35 @@ test("capacity and recruitment are admin-only", async () => {
   assert.equal((await s.send("PATCH", "/api/app/admin/admissions/cloud", { mode: "closed" })).status, 403);
 });
 
-test("instructor verification: candidates cannot sign in or teach until approved with the required checks", async () => {
+test("instructor onboarding: invited candidates sign in only to complete their profile; approval needs the required checks and shows the verified badge", async () => {
   const { admin, make } = await setup(w);
   const c = await admin.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "cand@example.com", role: "instructor", fullName: "Dr Cand Idate" });
   const id = c.user.id;
   const list = await admin.json<{ candidates: { id: string; verification: string }[] }>("GET", "/api/app/admin/recruitment?stage=application_received");
   assert.ok(list.candidates.some((x) => x.id === id && x.verification === "application_received"));
 
-  // No sign-in email for a candidate (same public answer as always).
-  const before = w.calls.length;
-  assert.equal((await w.post("/api/auth/request", { email: "cand@example.com", turnstileToken: "good-token" }, { "cf-connecting-ip": "10.66.0.1" })).status, 200);
-  await new Promise((r) => setTimeout(r, 300));
-  assert.ok(!w.calls.slice(before).some((x) => x.url.includes("api.resend.com") && x.body.includes("cand@example.com")));
-  assert.equal((await admin.send("POST", `/api/app/admin/users/${id}/invite`)).status, 400);
+  // The invitation congratulates them and lists the onboarding steps.
+  assert.ok(await w.waitFor((cs) => cs.some((x) => x.url.includes("api.resend.com") && x.body.includes("cand@example.com") && x.body.includes("invited to join the Skill Mountain Academy faculty"))), "congratulations invite");
+  const cand = await signIn(w, "cand@example.com");
+  const me0 = (await cand.json<{ user: { verification: string; verified: boolean } }>("GET", "/api/me")).user;
+  assert.deepEqual([me0.verification, me0.verified], ["application_received", false]);
+  const blocked = await cand.send("GET", "/api/app/instructor/students");
+  assert.equal(blocked.status, 403, "nothing but the profile until verified");
+  assert.match(((await blocked.json()) as { message: string }).message, /awaiting verification/);
+  const early0 = await cand.send("POST", "/api/app/instructor/onboarding/submit");
+  assert.equal(early0.status, 400);
+  assert.match(((await early0.json()) as { message: string }).message, /photo/);
+  await cand.json("PATCH", "/api/me", { headline: "Senior product designer, 10 years", bio: "I design and teach digital products. ".repeat(4), specialization: "Graphic design",
+    countryOrigin: "Ghana", countryResidence: "United Kingdom", languages: ["English", "French"], links: { linkedin: "https://linkedin.com/in/cand", x: "https://x.com/cand", facebook: "https://facebook.com/cand", portfolio: "https://cand.design" },
+    achievements: ["Led the redesign of a national banking app"], certifications: [{ title: "Google UX Design Certificate", issuer: "Google", year: "2023", url: "https://www.credly.com/badges/example" }] });
+  assert.equal((await cand.send("PATCH", "/api/me", { certifications: [{ title: "X", url: "http://insecure" }] })).status, 400, "verification links must be https");
+  const ph = await w.fetchApi("/api/me/photo?name=me.png", { method: "PUT", headers: { cookie: cand.cookie, origin: "https://skillmountainacademy.com", "content-type": "image/png", "content-length": "4" }, body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) });
+  assert.equal(ph.status, 200);
+  const sub = await cand.json<{ user: { verification: string; profileSubmittedAt: string } }>("POST", "/api/app/instructor/onboarding/submit");
+  assert.equal(sub.user.verification, "under_review");
+  assert.ok(await w.waitFor((cs) => cs.some((x) => x.url.includes("api.resend.com") && x.body.includes("Instructor profile submitted"))), "admins are told");
+  const view = (await admin.json<{ candidate: { headline: string; certifications: { url: string }[]; languages: string[]; countryResidence: string } }>("GET", `/api/app/admin/recruitment/${id}`)).candidate;
+  assert.deepEqual([view.headline, view.certifications[0].url, view.languages[1], view.countryResidence], ["Senior product designer, 10 years", "https://www.credly.com/badges/example", "French", "United Kingdom"]);
 
   // Cannot be assigned students.
   const st = await make("student", "cand-st@example.com", "Cand Student");
@@ -134,7 +150,7 @@ test("instructor verification: candidates cannot sign in or teach until approved
   assert.equal(e.status, 400);
 
   // Moving through the stages; approval needs identity, credentials and the technical assessment.
-  await admin.json("PATCH", `/api/app/admin/recruitment/${id}`, { stage: "under_review", highestQualification: "PhD", experience: "Ten years in industry." });
+  await admin.json("PATCH", `/api/app/admin/recruitment/${id}`, { highestQualification: "PhD", experience: "Ten years in industry." });
   const early = await admin.send("PATCH", `/api/app/admin/recruitment/${id}`, { stage: "approved", checks: { identity: { done: true } } });
   assert.equal(early.status, 400);
   assert.match(((await early.json()) as { message: string }).message, /credentials/);
@@ -142,9 +158,11 @@ test("instructor verification: candidates cannot sign in or teach until approved
   const ok = await admin.json<{ candidate: { verification: string; checks: Record<string, { done: boolean; by: string }> } }>("PATCH", `/api/app/admin/recruitment/${id}`, { stage: "approved", checks: REQUIRED });
   assert.equal(ok.candidate.verification, "approved");
   assert.ok(ok.candidate.checks.technical.done && ok.candidate.checks.technical.by);
-  assert.ok(await w.waitFor((cs) => cs.some((x) => x.url.includes("api.resend.com") && x.body.includes("cand@example.com"))), "approval sends the invitation");
-  const ins = await signIn(w, "cand@example.com");
-  assert.equal((await ins.json<{ user: { role: string } }>("GET", "/api/me")).user.role, "instructor");
+  assert.ok(await w.waitFor((cs) => cs.some((x) => x.url.includes("api.resend.com") && x.body.includes("cand@example.com") && x.body.includes("profile is verified"))), "approval sends the verified notice");
+  const ins = cand;
+  const me1 = (await ins.json<{ user: { role: string; verified: boolean } }>("GET", "/api/me")).user;
+  assert.deepEqual([me1.role, me1.verified], ["instructor", true], "verified badge");
+  assert.equal((await ins.send("GET", "/api/app/instructor/students")).status, 200, "full workspace after approval");
 
   // Faculty page: only after approval AND opting in, and without private contact details.
   assert.equal(((await (await w.fetchApi("/api/faculty")).json()) as { faculty: unknown[] }).faculty.length, 0);
@@ -153,6 +171,7 @@ test("instructor verification: candidates cannot sign in or teach until approved
   const fac = ((await (await w.fetchApi("/api/faculty")).json()) as { faculty: Record<string, unknown>[] }).faculty;
   assert.equal(fac.length, 1);
   assert.equal(fac[0].fullName, "Dr Cand Idate");
+  assert.equal(fac[0].verified, true);
   assert.deepEqual(fac[0].programmes, ["graphics"]);
   assert.ok(!JSON.stringify(fac).includes("cand@example.com"), "no email on the public list");
 
@@ -161,7 +180,7 @@ test("instructor verification: candidates cannot sign in or teach until approved
   assert.equal((await ins.get("/api/me")).status, 401);
   assert.equal(((await (await w.fetchApi("/api/faculty")).json()) as { faculty: unknown[] }).faculty.length, 0);
   const audit = await (await w.db()).prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'recruitment.stage' AND target_id = ?").bind(id).first<{ n: number }>();
-  assert.equal(audit?.n, 3);
+  assert.equal(audit?.n, 2, "approved, then suspended (submitting moved it to review)");
 });
 
 test("new admissions code keeps SQL in the data layer", () => {

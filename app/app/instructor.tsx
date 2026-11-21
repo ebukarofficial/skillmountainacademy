@@ -3,9 +3,10 @@
 // attendance still to record, set work, marking queue, messages. Right: profile and performance.
 import { useMemo, useState } from "react";
 import type { Me } from "./page";
-import { MaterialsManager, Messages, ProfileEditor, ProgressView, type Progress } from "./shared";
-import { api, Avatar, Badge, Btn, Card, Empty, Field, inputCls, Msg, PageTitle, Stat, useAction, useLoad, useNow, useTab, when } from "./ui";
+import { MaterialsManager, Messages, ProgressView, type Progress } from "./shared";
+import { api, Avatar, Badge, Btn, Card, Empty, Field, inputCls, Msg, PageTitle, Stat, useAction, useLoad, useNow, useTab, VerifiedBadge, when } from "./ui";
 import { AppShell, type NavItem } from "./shell";
+import { InstructorProfileForm } from "./instructor-profile";
 
 type S = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetNotifiedAt: string | null; needsOutcome: boolean; student: { id: string; fullName: string; photo: string | null } };
 type Student = { enrolmentId: string; programme: string; programmeName: string; status: string; student: { id: string; fullName: string; email: string; studentNo: string | null; photo: string | null } };
@@ -162,7 +163,36 @@ const TABS = ["today", "schedule", "students", "coursework", "materials", "messa
 type Tab = (typeof TABS)[number];
 type Perf = { studentsTaught: number; activeStudents: number; sessions: { completed: number; missed: number; cancelled: number; awaitingAttendance: number }; attendancePct: number | null; rating: { average: number | null; count: number }; grading: { waiting: number }; reviews: { rating: number; comment: string | null }[] };
 
+// A new instructor sees only their onboarding profile until the Academy verifies it.
+function Onboarding({ me }: { me: Me }) {
+  const nav: NavItem<"profile">[] = [{ id: "profile", label: "My faculty profile", icon: "user" }];
+  const submitted = !!me.profileSubmittedAt;
+  return (
+    <AppShell me={me} nav={nav} tab="profile" setTab={() => undefined}>
+      <div className="mb-6 overflow-hidden rounded-2xl bg-indigo p-6 text-white sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-orange">Faculty onboarding</p>
+        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight sm:text-3xl">{submitted ? "Your profile is with the Academy for verification." : `Congratulations, ${me.fullName.split(" ")[0]}. Welcome to the faculty.`}</h1>
+        <p className="mt-2 max-w-2xl text-sm text-white/75">{submitted
+          ? "We are checking your details and certifications. You will be emailed as soon as it is verified; the verified badge then shows next to your name and your full workspace opens. You can still update your profile below."
+          : "Complete your faculty profile and submit it. The Academy verifies your information, then your verified badge appears and your teaching workspace opens."}</p>
+        <ol className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
+          {["Complete your profile", "Submit for verification", "Academy review", "Verified badge"].map((s, i) => {
+            const done = submitted ? i < 2 : false, now = submitted ? i === 2 : i === 0;
+            return <li key={s} className={`rounded-full px-3 py-1.5 ${done ? "bg-white text-indigo" : now ? "bg-brand-orange text-ink" : "bg-white/10 text-white/70"}`}>{i + 1}. {s}</li>;
+          })}
+        </ol>
+      </div>
+      <InstructorProfileForm me={me} onboarding />
+    </AppShell>
+  );
+}
+
 export function InstructorDashboard({ me }: { me: Me }) {
+  if (me.verified === false) return <Onboarding me={me} />;
+  return <Workspace me={me} />;
+}
+
+function Workspace({ me }: { me: Me }) {
   const [tab, setTab] = useTab(TABS, "today");
   const st = useLoad<{ students: Student[] }>("/api/app/instructor/students");
   const perf = useLoad<{ performance: Perf }>("/api/app/instructor/performance");
@@ -184,7 +214,7 @@ export function InstructorDashboard({ me }: { me: Me }) {
   return (
     <AppShell me={me} nav={nav} tab={tab} setTab={setTab}>
       {tab === "today" && <>
-        <PageTitle title={`Welcome, ${me.fullName.split(" ")[0]}`} sub={<>Faculty{me.staffNo ? <> · Staff No <b className="font-semibold text-ink/80">{me.staffNo}</b></> : null}</>} />
+        <PageTitle title={<span className="inline-flex items-center gap-2">Welcome, {me.fullName.split(" ")[0]}{me.verified && <VerifiedBadge />}</span>} sub={<>{me.headline ?? "Faculty"}{me.staffNo ? <> · Faculty No <b className="font-semibold text-ink/80">{me.staffNo}</b></> : null}</>} />
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Stat label="Active students" value={p?.activeStudents ?? "–"} note={p ? `${p.studentsTaught} taught in total` : undefined} />
           <Stat label="Attendance to record" value={p?.sessions.awaitingAttendance ?? "–"} tone={p?.sessions.awaitingAttendance ? "alert" : "plain"} />
@@ -220,7 +250,7 @@ export function InstructorDashboard({ me }: { me: Me }) {
       {tab === "account" && <>
         <PageTitle title="Profile and performance" />
         <div className="grid gap-5 lg:grid-cols-2">
-          <ProfileEditor me={me} onSaved={() => window.location.reload()} />
+          <div className="lg:col-span-2"><InstructorProfileForm me={me} onboarding={false} /></div>
           <Card title="My performance">
             {p ? <>
               <div className="grid grid-cols-2 gap-3">

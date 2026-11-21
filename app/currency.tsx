@@ -144,7 +144,7 @@ export function ChargeNote({ naira, className = "" }: { naira: number; className
   const approx = currency !== "NGN" && rates ? display(naira, currency, rates) : null;
   return (
     <div className={className}>
-      <p data-charge-note>Paystack will charge <b>{display(naira, "NGN", null)}</b> in Nigerian naira (NGN).{approx ? <> That is {approx} at today&apos;s rate; your bank converts it at its own rate.</> : null}</p>
+      <p data-charge-note>Paystack will charge <b>{display(naira, "NGN", null)}</b> in naira (NGN).{approx ? <> That is {approx} at today&apos;s rate; your bank converts it at its own rate.</> : null}</p>
       <FxNote className="mt-1" />
     </div>
   );
@@ -156,7 +156,7 @@ export function PayCurrency() {
   const name = countryName(country);
   return (
     <div className="rounded-md bg-cream px-4 py-3 text-sm" data-pay-currency>
-      <b className="font-display">{currency === "NGN" ? "Amounts in Nigerian naira (₦)" : `Amounts also shown in ${currency}`}</b>
+      <b className="font-display">{currency === "NGN" ? "Amounts in naira (₦)" : `Amounts also shown in ${currency}`}</b>
       <span className="block text-ink/70">{currency === "NGN" ? (name && name !== "Nigeria" ? `Exchange rates are unavailable right now, so amounts are shown in naira.` : "Payment is in naira.") : `Based on your country${name ? ` (${name})` : ""}. A guide only: you pay in naira (₦).`}</span>
     </div>
   );

@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "Skill Mountain Academy | For those made for more",
   description:
-    "For those made for more. Skill Mountain Academy, based in Abuja, Nigeria and open to learners worldwide, teaches advanced digital skills through one-on-one instruction from an assigned instructor, AI-assisted learning and intensive practical training: design, web development, digital marketing, cybersecurity, cloud and DevOps.",
+    "For those made for more. Skill Mountain Academy, open to learners worldwide, teaches advanced digital skills through one-on-one instruction from an assigned instructor, AI-assisted learning and intensive practical training: design, web development, digital marketing, cybersecurity, cloud and DevOps.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Skill Mountain Academy | For those made for more",
@@ -44,7 +44,6 @@ const ORG_LD = {
   "@context": "https://schema.org", "@type": "EducationalOrganization", name: "Skill Mountain Academy", legalName: BUSINESS.name,
   url: SITE_URL, logo: `${SITE_URL}/icon.png`, email: BUSINESS.email, telephone: "+234 706 100 0472",
   slogan: "For those made for more.",
-  address: { "@type": "PostalAddress", streetAddress: "Suite C8, Zara Plaza, Life Camp", addressLocality: "Abuja", addressCountry: "NG" },
   sameAs: SOCIAL.map((s) => s.url),
 };
 

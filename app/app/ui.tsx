@@ -158,3 +158,16 @@ export function useTab<T extends string>(tabs: readonly T[], first: T): [T, (t: 
   }, []);
   return [tab, setTab];
 }
+
+// The verified badge shown next to an approved instructor's name.
+export function VerifiedBadge({ className = "", light = false }: { className?: string; light?: boolean }) {
+  return (
+    <span title="Verified by Skill Mountain Academy" className={`inline-flex shrink-0 items-center align-middle ${className}`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true" className={`h-[1.05em] w-[1.05em] ${light ? "text-white" : "text-indigo"}`}>
+        <path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.2 1 3.1 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3.1-3.2-.2L12 22.5l-2.6-1.9-3.2.2-1-3.1-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3.1 3.2.2z" />
+        <path fill="none" stroke="currentColor" className={light ? "text-indigo" : "text-white"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" d="M7.8 12.3l2.8 2.8 5.6-5.8" />
+      </svg>
+      <span className="sr-only">Verified</span>
+    </span>
+  );
+}

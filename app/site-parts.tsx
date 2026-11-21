@@ -85,7 +85,7 @@ export function SiteFooter() {
           <div>
             <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-white">Contact</p>
             <p className="mt-4 text-sm leading-relaxed">Email: <a href={`mailto:${BUSINESS.email}`} className="font-semibold text-white underline">{BUSINESS.email}</a><br />Phone: <a href={`tel:${BUSINESS.phone.replace(/\s/g, "")}`} className="underline">{BUSINESS.phone}</a></p>
-            <p className="mt-4 text-sm text-white/55">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
+            <p className="mt-4 text-sm text-white/55">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}</p>
           </div>
         </div>
         <div className="flex flex-col gap-3 border-t border-white/10 py-6 text-xs text-white/50 sm:flex-row sm:items-center sm:justify-between">

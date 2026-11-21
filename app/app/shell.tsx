@@ -5,7 +5,7 @@ import { PORTALS } from "./portals";
 import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
 import logoWhite from "@/assets/sma-logo-white.png";
-import { api, Avatar, goTo, useLoad, when } from "./ui";
+import { api, Avatar, goTo, useLoad, VerifiedBadge, when } from "./ui";
 import type { Me } from "./page";
 
 const PATHS: Record<string, string> = {
@@ -121,7 +121,7 @@ export function AppShell<T extends string>({ me, nav, tab, setTab, children }: {
       <div className="m-3 rounded-xl bg-white/[0.06] p-3">
         <div className="flex items-center gap-3">
           <Avatar src={me.photo} name={me.fullName} size={36} />
-          <div className="min-w-0 text-xs"><p className="truncate font-semibold text-white">{me.fullName}</p>{number && <p className="truncate text-white/55">{number}</p>}</div>
+          <div className="min-w-0 text-xs"><p className="flex items-center gap-1 truncate font-semibold text-white">{me.fullName}{me.verified && <VerifiedBadge light />}</p>{number && <p className="truncate text-white/55">{number}</p>}</div>
         </div>
       </div>
     </nav>
@@ -146,7 +146,7 @@ export function AppShell<T extends string>({ me, nav, tab, setTab, children }: {
             <div className="relative">
               <button onClick={() => setMenu(!menu)} aria-expanded={menu} className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition hover:bg-ink/5">
                 <Avatar src={me.photo} name={me.fullName} size={32} />
-                <span className="hidden text-sm font-semibold text-ink sm:block">{me.fullName.split(" ")[0]}</span>
+                <span className="hidden items-center gap-1 text-sm font-semibold text-ink sm:flex">{me.fullName.split(" ")[0]}{me.verified && <VerifiedBadge />}</span>
               </button>
               {menu && (
                 <div className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-xl border border-ink/10 bg-white shadow-xl shadow-ink/10">

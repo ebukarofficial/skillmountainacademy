@@ -54,7 +54,7 @@ export function ProfileEditor({ me, onSaved }: { me: Me; onSaved?: () => void })
           e.preventDefault();
           const f = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
           const body: Record<string, unknown> = { fullName: f.fullName, phone: f.phone, bio: f.bio };
-          if (teacher) Object.assign(body, { specialization: f.specialization, qualifications: f.qualifications.split(",").map((s) => s.trim()).filter(Boolean), links: { linkedin: f.linkedin, portfolio: f.portfolio } });
+          if (teacher) Object.assign(body, { specialization: f.specialization, qualifications: f.qualifications.split(",").map((s) => s.trim()).filter(Boolean), links: { ...me.links, linkedin: f.linkedin, portfolio: f.portfolio } });
           run(() => api("/api/me", { method: "PATCH", body }), "Saved.", onSaved);
         }}>
           <Field label="Full name"><input name="fullName" defaultValue={me.fullName} required className={inputCls} /></Field>

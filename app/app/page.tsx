@@ -8,7 +8,9 @@ import { InstructorDashboard } from "./instructor";
 import { AdminDashboard } from "./admin";
 
 export type Me = { id: string; email: string; role: "student" | "instructor" | "admin"; fullName: string; phone: string | null; bio: string | null; photo: string | null; studentNo: string | null;
-  staffNo: string | null; emailPrefs: { reminders?: boolean; updates?: boolean }; specialization: string | null; qualifications: string[]; links: Record<string, string> };
+  staffNo: string | null; emailPrefs: { reminders?: boolean; updates?: boolean }; specialization: string | null; qualifications: string[]; links: Record<string, string>;
+  verification?: string | null; verified?: boolean; profileSubmittedAt?: string | null; headline?: string | null; achievements?: string[];
+  certifications?: { title: string; issuer: string | null; year: string | null; url: string | null }[]; languages?: string[]; countryOrigin?: string | null; countryResidence?: string | null };
 
 export default function AppHome() {
   const { data, error } = useLoad<{ user: Me }>("/api/me");

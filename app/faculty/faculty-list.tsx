@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { PROGRAMMES } from "@/lib/config";
 
-type Member = { id: string; fullName: string; specialization: string | null; bio: string | null; highestQualification: string | null; qualifications: string[]; links: Record<string, string>; programmes: string[]; photo: string | null };
+type Member = { id: string; fullName: string; specialization: string | null; bio: string | null; highestQualification: string | null; qualifications: string[]; links: Record<string, string>; programmes: string[]; photo: string | null; verified?: boolean; headline?: string | null; languages?: string[] };
 const name = (slug: string) => PROGRAMMES.find((p) => p.slug === slug)?.name ?? slug;
 const LINK_LABEL: Record<string, string> = { linkedin: "LinkedIn", portfolio: "Portfolio", website: "Website", github: "GitHub" };
 
@@ -29,8 +29,12 @@ export function FacultyList({ programme }: { programme?: string }) {
           {m.photo ? <img src={m.photo} alt={`Portrait of ${m.fullName}`} loading="lazy" width={96} height={96} className="h-24 w-24 shrink-0 rounded-full object-cover" />
             : <span aria-hidden="true" className="grid h-24 w-24 shrink-0 place-items-center rounded-full bg-indigo font-(family-name:--font-serif) text-3xl text-cream">{m.fullName.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span>}
           <div className="min-w-0">
-            <h3 className="font-(family-name:--font-serif) text-2xl font-medium leading-tight">{m.fullName}</h3>
+            <h3 className="flex items-center gap-2 font-(family-name:--font-serif) text-2xl font-medium leading-tight">{m.fullName}{m.verified && (
+              <span title="Verified by Skill Mountain Academy" className="inline-flex"><svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 text-indigo"><path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.2 1 3.1 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3.1-3.2-.2L12 22.5l-2.6-1.9-3.2.2-1-3.1-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3.1 3.2.2z" /><path fill="none" stroke="currentColor" className="text-white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" d="M7.8 12.3l2.8 2.8 5.6-5.8" /></svg><span className="sr-only">Verified</span></span>
+            )}</h3>
+            {m.headline && <p className="mt-1 text-sm text-ink/70">{m.headline}</p>}
             {m.specialization && <p className="mt-1 font-display text-sm font-semibold text-brand-red">{m.specialization}</p>}
+            {!!m.languages?.length && <p className="mt-1 text-sm text-ink/60">Teaches in {m.languages.join(", ")}</p>}
             {m.programmes.length > 0 && <p className="mt-1 text-sm text-ink/60">Teaches {m.programmes.map(name).join(", ")}</p>}
             {m.bio && <p className="mt-3 leading-relaxed text-ink/75">{m.bio}</p>}
             {(m.highestQualification || m.qualifications.length > 0) && (
