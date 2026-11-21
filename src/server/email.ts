@@ -156,7 +156,7 @@ a{color:#1e0e6f}
     <div style="margin:0 0 20px">${icons}</div>
     <p style="margin:0 0 8px;font-size:13px"><a href="${SITE}/programmes/" style="color:#ffffff;text-decoration:none">Programmes</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="${SITE}/admissions/" style="color:#ffffff;text-decoration:none">Admissions</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="${SITE}/learning-experience/" style="color:#ffffff;text-decoration:none">The Learning Experience</a></p>
     <p style="margin:0 0 16px;font-size:13px;opacity:.8"><a href="mailto:admission@skillmountainacademy.com" style="color:#f7892b;text-decoration:none">admission@skillmountainacademy.com</a></p>
-    <p style="margin:0;font-size:11px;line-height:1.6;opacity:.55">Skill Mountain Academy · Abuja, Nigeria · Learning online worldwide<br>You are receiving this email because of your application, admission or account with Skill Mountain Academy.<br>© Skill Mountain Academy ${year}</p>
+    <p style="margin:0;font-size:11px;line-height:1.6;opacity:.55">Skill Mountain Academy · Learning online worldwide<br>You are receiving this email because of your application, admission or account with Skill Mountain Academy.<br>© Skill Mountain Academy ${year}</p>
   </td></tr>
 </table>
 </td></tr></table>

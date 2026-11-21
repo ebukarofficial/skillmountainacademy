@@ -2,7 +2,7 @@
 // /api/app/* call, same-origin checks on every change, JSON helpers and the audit trail.
 import type { AppEnv } from "../env";
 import { ApiError, clientIp, getCookie, json, nowIso, readJson, sameOrigin, sha256 } from "../http";
-import { audit, canSignIn, logError, sessionUser, touchSession, type Role, type User } from "./data/users";
+import { audit, canSignIn, isApproved, logError, sessionUser, touchSession, type Role, type User } from "./data/users";
 
 export type Ctx = {
   req: Request; env: AppEnv; exec: ExecutionContext; url: URL; params: Record<string, string>;
@@ -11,6 +11,7 @@ export type Ctx = {
 };
 type PublicCtx = Omit<Ctx, "user" | "audit"> & { user: User | null };
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+const ONBOARDING_PATHS = /^\/api\/(me(\/photo)?|auth\/logout|app\/instructor\/onboarding(\/submit)?|app\/notifications(\/read)?|app\/files\/photo\/[\w-]+)$/;
 type Route = { method: Method; parts: string[]; roles: Role[] | "public"; handler: (c: Ctx) => Promise<Response> };
 
 const routes: Route[] = [];
@@ -68,6 +69,9 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
   if (found.r.roles !== "public") {
     if (!user) throw new ApiError(401, "unauthenticated", "Please sign in.");
     if (!found.r.roles.includes(user.role)) throw new ApiError(403, "forbidden", "You do not have access to this.");
+    // An instructor awaiting verification may only complete their profile, see notices and sign out.
+    if (user.role === "instructor" && !isApproved(user) && !ONBOARDING_PATHS.test(url.pathname))
+      throw new ApiError(403, "awaiting_verification", "Your profile is awaiting verification. You can use the faculty workspace once the Academy approves it.");
   }
   let cached: unknown;
   const c = {

@@ -9,16 +9,17 @@
 // The confirm page needs a click (POST) on purpose: email security scanners open links, and a GET must not sign anyone in.
 import { siteUrl } from "../../env";
 import { ApiError, clientIp, getCookie, nowIso, sha256 } from "../../http";
-import { button, esc, layout, sendEmail } from "../../email";
+import { button, esc, layout, sendEmail, table } from "../../email";
 import { verifyTurnstile } from "../../turnstile";
 import { EMAIL_RE } from "../../validate";
 import { Repo } from "../../repo";
 import { ALL, ok, publicRoute, route, SESSION_COOKIE, SESSION_DAYS } from "../api";
-import { audit, canSignIn, logError, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, getUser, getUserByEmail, updateUser, type User } from "../data/users";
+import { audit, canSignIn, isApproved, logError, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, getUser, getUserByEmail, updateUser, type User } from "../data/users";
 import { selfView } from "../views";
 import { newStaffNo } from "../ids";
 
 const TOKEN_MINUTES = 15;
+const INVITE_MINUTES = 24 * 60;
 const b64u = (n: number) => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(n)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cookie = (v: string, maxAge: number) => `${SESSION_COOKIE}=${v}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 const adminEmails = (v?: string) => (v || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -37,22 +38,52 @@ export const portalOf = (role: string): Portal => (role === "admin" ? "admin" : 
 export async function sendSignInLink(env: Parameters<typeof sendEmail>[0], db: D1Database, user: User, invite = false, next: string | null = null) {
   const token = b64u(32);
   const now = Date.now();
+  // Invitations last a day (people may not open them at once); ordinary sign-in links last 15 minutes.
+  const minutes = invite ? INVITE_MINUTES : TOKEN_MINUTES;
   await revokeTokens(db, user.id, new Date(now).toISOString());
-  await createToken(db, { token_hash: await sha256(`t|${token}`), user_id: user.id, expires_at: new Date(now + TOKEN_MINUTES * 60_000).toISOString(), created_at: new Date(now).toISOString() });
+  await createToken(db, { token_hash: await sha256(`t|${token}`), user_id: user.id, expires_at: new Date(now + minutes * 60_000).toISOString(), created_at: new Date(now).toISOString() });
   const site = siteUrl(env);
-  const link = `${site}/app/confirm/?t=${token}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+  const portal = portalOf(user.role);
+  const link = `${site}/app/confirm/?t=${token}&p=${portal}${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+  const entry = `${site}${PORTALS[portal]}`;
+  const first = esc(user.full_name.split(" ")[0]);
+  const kind = portal === "admin" ? "admin" : portal === "instructor" ? "instructor" : "login";
+  const expiry = invite ? "It works once and expires in 24 hours." : `It works once and expires in ${TOKEN_MINUTES} minutes.`;
+  const later = `<p style="opacity:.7;font-size:14px">If you did not ask for this, ignore this email; nobody can use your account without it. Next time, request a new link at <a href="${entry}">${entry.replace("https://", "")}</a> with this email address.</p>`;
+
+  // A new instructor, added by the Academy and not yet verified: congratulations and the onboarding steps.
+  if (invite && user.role === "instructor" && !isApproved(user)) {
+    return sendEmail(env, {
+      to: user.email,
+      subject: "Congratulations: you are invited to join the Skill Mountain Academy faculty",
+      html: layout(`Dear ${first}`, `<p>Congratulations. Skill Mountain Academy has invited you to join its faculty.</p>
+        ${table([["Faculty entrance", entry.replace("https://", "")], ["Sign in with", user.email], ["Password", "None needed: we email you a secure link each time"]])}
+        <p>Please sign in and complete your faculty profile, then submit it for verification:</p>
+        <ol style="padding-left:20px;margin:0 0 8px">
+          <li>A passport-style profile photo</li>
+          <li>Your biography and a one-line professional citation</li>
+          <li>Your LinkedIn, X (Twitter), Facebook and portfolio links</li>
+          <li>Your achievements and certifications, each with its public verification link</li>
+          <li>The languages you speak, your country of origin and your country of residence</li>
+        </ol>
+        <p>The Academy then verifies your information. Once approved, a verified badge shows next to your name and your full faculty workspace opens.</p>
+        ${button(link, "Sign in and complete my profile")}
+        <p style="opacity:.8;font-size:14px">This button ${expiry.toLowerCase().replace("it ", "")}</p>${later}`,
+        { headline: "Welcome to the faculty", kind: "instructor" }),
+    });
+  }
+
   const staff = user.role !== "student";
-  const place = staff ? "the Skill Mountain Academy staff workspace" : "your learning space";
-  const entry = `${site}${PORTALS[portalOf(user.role)]}`;
+  const place = portal === "admin" ? "Academy administration" : portal === "instructor" ? "the faculty workspace" : "your learning space";
   const number = user.role === "student" ? user.student_no : user.staff_no;
   return sendEmail(env, {
     to: user.email,
-    subject: invite ? (staff ? "Your Skill Mountain Academy staff access" : "Your learning space is ready") : "Your Skill Mountain Academy sign-in link",
-    html: layout(`Dear ${esc(user.full_name.split(" ")[0])}`, `<p>${invite ? `Your access to ${place} is ready.` : `Here is your link to ${place}.`} It works once and expires in ${TOKEN_MINUTES} minutes.</p>
-      ${number ? `<p style="opacity:.8">${staff ? "Staff number" : "Registration No"}: <b>${esc(number)}</b></p>` : ""}
-      ${button(link, staff ? "Enter the staff workspace" : "Enter my learning space")}
-      <p style="opacity:.7;font-size:14px">If you did not ask for this, ignore this email; nobody can use your account without it. Next time, request a new link at <a href="${entry}">${entry.replace("https://", "")}</a></p>`,
-      { headline: invite ? (staff ? "Your staff access is ready" : "Your learning space is ready") : "Your secure sign-in link", kind: user.role === "admin" ? "admin" : user.role === "instructor" ? "instructor" : "login" }),
+    subject: invite ? (portal === "admin" ? "Your Skill Mountain Academy administrator access" : portal === "instructor" ? "Your Skill Mountain Academy faculty access" : "Your learning space is ready") : "Your Skill Mountain Academy sign-in link",
+    html: layout(`Dear ${first}`, `<p>${invite ? `Your access to ${place} is ready.` : `Here is your link to ${place}.`} ${expiry}</p>
+      ${number ? `<p style="opacity:.8">${staff ? (portal === "admin" ? "Staff number" : "Faculty number") : "Registration No"}: <b>${esc(number)}</b></p>` : ""}
+      ${button(link, portal === "admin" ? "Continue to administration" : portal === "instructor" ? "Enter the faculty workspace" : "Enter my learning space")}
+      ${later}`,
+      { headline: invite ? (portal === "admin" ? "Your administrator access is ready" : portal === "instructor" ? "Your faculty access is ready" : "Your learning space is ready") : "Your secure sign-in link", kind }),
   });
 }
 

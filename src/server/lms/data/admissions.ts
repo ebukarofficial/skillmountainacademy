@@ -41,8 +41,11 @@ export const instructorLoad = (db: DB) => all<{ instructor_id: string; programme
 // Recruitment: every instructor account, newest first, with its verification state.
 export type Candidate = { id: string; email: string; full_name: string; phone: string | null; status: string; verification: string | null; verification_checks: string | null;
   highest_qualification: string | null; qualifications: string | null; experience: string | null; specialization: string | null; links: string | null; bio: string | null;
-  public_profile: number; photo_key: string | null; created_at: string };
-const CANDIDATE = "SELECT id, email, full_name, phone, status, verification, verification_checks, highest_qualification, qualifications, experience, specialization, links, bio, public_profile, photo_key, created_at FROM users WHERE role = 'instructor'";
+  public_profile: number; photo_key: string | null; created_at: string;
+  headline?: string | null; achievements?: string | null; certifications?: string | null; languages?: string | null;
+  country_origin?: string | null; country_residence?: string | null; profile_submitted_at?: string | null; verified_at?: string | null };
+// SELECT * so newer optional columns appear when their migration has run, and nothing breaks before it has.
+const CANDIDATE = "SELECT * FROM users WHERE role = 'instructor'";
 export const listCandidates = (db: DB, stage: string | null) => stage
   ? all<Candidate>(db, `${CANDIDATE} AND verification = ?1 ORDER BY created_at DESC LIMIT 500`, stage)
   : all<Candidate>(db, `${CANDIDATE} ORDER BY created_at DESC LIMIT 500`);
@@ -50,6 +53,6 @@ export const getCandidate = (db: DB, id: string) => one<Candidate>(db, `${CANDID
 
 // The public Faculty page: approved, active instructors who agreed to be listed.
 export const publicFaculty = (db: DB) => all<Candidate & { programmes: string | null }>(db,
-  `SELECT u.id, u.full_name, u.specialization, u.bio, u.qualifications, u.highest_qualification, u.links, u.photo_key,
+  `SELECT u.*,
      (SELECT GROUP_CONCAT(programme_slug) FROM instructor_programmes WHERE instructor_id = u.id) AS programmes
    FROM users u WHERE u.role = 'instructor' AND u.status = 'active' AND u.verification = 'approved' AND u.public_profile = 1 ORDER BY u.full_name LIMIT 200`);

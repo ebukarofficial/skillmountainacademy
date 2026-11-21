@@ -17,6 +17,8 @@ import { deleteUserSessions, getUser, updateUser } from "../data/users";
 import { sendFile } from "./coursework";
 import { sendSignInLink } from "./auth";
 import { newStaffNo } from "../ids";
+import { notify } from "../notify";
+import { instructorProfile } from "../views";
 
 const SLUGS = PROGRAMMES.map((p) => p.slug);
 const isoOrThrow = (ch: Checker, v: unknown, label: string) => {
@@ -36,6 +38,7 @@ publicRoute("GET", "/api/faculty", async (c) => {
     id: u.id, fullName: u.full_name, specialization: u.specialization, bio: u.bio, highestQualification: u.highest_qualification,
     qualifications: parseJsonCol<string[]>(u.qualifications, []), links: parseJsonCol<Record<string, string>>(u.links, {}),
     programmes: (u.programmes || "").split(",").filter((s) => SLUGS.includes(s)), photo: u.photo_key ? `/api/faculty/${u.id}/photo` : null,
+    verified: true, headline: u.headline ?? null, languages: parseJsonCol<string[]>(u.languages ?? null, []),
   }));
   return json({ ok: true, faculty }, 200, { "cache-control": "public, max-age=300" });
 });
@@ -126,7 +129,7 @@ const candidateView = (u: Candidate, assignments: Awaited<ReturnType<typeof inst
   id: u.id, email: u.email, fullName: u.full_name, phone: u.phone, status: u.status, verification: (u.verification ?? "approved") as Verification,
   checks: readChecks(u.verification_checks), highestQualification: u.highest_qualification, qualifications: parseJsonCol<string[]>(u.qualifications, []),
   experience: u.experience, specialization: u.specialization, bio: u.bio, links: parseJsonCol<Record<string, string>>(u.links, {}), publicProfile: !!u.public_profile,
-  hasPhoto: !!u.photo_key, createdAt: u.created_at, programmes: assignments.map((a) => ({ slug: a.programme_slug, maxStudents: a.max_students })),
+  hasPhoto: !!u.photo_key, photo: u.photo_key ? `/api/app/files/photo/${u.id}` : null, createdAt: u.created_at, profileSubmittedAt: u.profile_submitted_at ?? null, verifiedAt: u.verified_at ?? null, ...instructorProfile(u), programmes: assignments.map((a) => ({ slug: a.programme_slug, maxStudents: a.max_students })),
 });
 
 route("GET", "/api/app/admin/recruitment", ["admin"], async (c) => {
@@ -182,11 +185,22 @@ route("PATCH", "/api/app/admin/recruitment/:id", ["admin"], async (c) => {
   }
   await updateUser(c.db, u.id, patch as Parameters<typeof updateUser>[2]);
   if (to !== from) {
-    if (to !== "approved") await deleteUserSessions(c.db, u.id);
+    // Candidates stay signed in while under review (they can still edit their profile); rejection or suspension ends access.
+    if (to === "rejected" || to === "suspended") await deleteUserSessions(c.db, u.id);
     await c.audit("recruitment.stage", "user", u.id, { from, to });
     if (to === "approved") {
+      await updateUser(c.db, u.id, { verified_at: nowIso() });
       const fresh = await getUser(c.db, u.id);
-      if (fresh && b.sendInvite !== false) c.exec.waitUntil(sendSignInLink(c.env, c.db, fresh, true));
+      if (fresh && b.sendInvite !== false) {
+        // Instructors who already signed in get the "verified" notice; anyone who never did gets a fresh sign-in link too.
+        c.exec.waitUntil(notify(c.env, c.db, [{ id: fresh.id, email: fresh.email, name: fresh.full_name }], { kind: "verification.approved",
+          title: "Congratulations: your faculty profile is verified",
+          body: `Your profile has been verified by Skill Mountain Academy${fresh.staff_no ? ` (faculty number ${fresh.staff_no})` : ""}. The verified badge now shows next to your name, and your full faculty workspace is open.`, link: "/app/" }));
+        if (!fresh.last_login_at) c.exec.waitUntil(sendSignInLink(c.env, c.db, fresh, true));
+      }
+    } else if (to === "rejected") {
+      c.exec.waitUntil(notify(c.env, c.db, [{ id: u.id, email: u.email, name: u.full_name }], { kind: "verification.closed", title: "Your Skill Mountain Academy faculty application",
+        body: "Thank you for your interest in teaching with Skill Mountain Academy. After review, we are not able to proceed with your application at this time." }));
     }
   } else await c.audit("recruitment.update", "user", u.id, Object.keys(patch));
   const fresh = (await getCandidate(c.db, u.id))!;

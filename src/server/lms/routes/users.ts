@@ -13,7 +13,7 @@ function readLinks(c: Checker, v: unknown): string | undefined {
   if (v === undefined) return undefined;
   const o = (v ?? {}) as Record<string, unknown>;
   const out: Record<string, string> = {};
-  for (const k of ["linkedin", "portfolio", "website", "github", "x", "instagram"]) {
+  for (const k of ["linkedin", "x", "facebook", "portfolio", "website", "github", "instagram"]) {
     const s = c.opt(o[k], 200);
     if (!s) continue;
     if (!/^https:\/\/[^\s<>"]+$/.test(s)) c.errors.push(`The ${k} link must start with https://`);
@@ -23,7 +23,7 @@ function readLinks(c: Checker, v: unknown): string | undefined {
 }
 function readList(c: Checker, v: unknown, max = 12): string | undefined {
   if (v === undefined) return undefined;
-  if (!Array.isArray(v)) { c.errors.push("Qualifications must be a list."); return undefined; }
+  if (!Array.isArray(v)) { c.errors.push("Please send a list."); return undefined; }
   return JSON.stringify(v.slice(0, max).map((x) => c.opt(x, 200)).filter(Boolean));
 }
 
@@ -38,7 +38,31 @@ function profilePatch(c: Checker, b: Record<string, unknown>, role: Role): Parti
     const q = readList(c, b.qualifications); if (q !== undefined) p.qualifications = q;
     const l = readLinks(c, b.links); if (l !== undefined) p.links = l;
   }
+  if (role === "instructor") {
+    if (b.headline !== undefined) p.headline = c.opt(b.headline, 160);
+    const a = readList(c, b.achievements, 10); if (a !== undefined) p.achievements = a;
+    const g = readList(c, b.languages, 10); if (g !== undefined) p.languages = g;
+    if (b.countryOrigin !== undefined) p.country_origin = c.opt(b.countryOrigin, 60);
+    if (b.countryResidence !== undefined) p.country_residence = c.opt(b.countryResidence, 60);
+    const cert = readCertificates(c, b.certifications); if (cert !== undefined) p.certifications = cert;
+  }
   return p;
+}
+
+// Certificates with a public page where anyone can check them (Credly, Coursera, Microsoft Learn, a university register...).
+function readCertificates(c: Checker, v: unknown): string | undefined {
+  if (v === undefined) return undefined;
+  if (!Array.isArray(v)) { c.errors.push("Certifications must be a list."); return undefined; }
+  const out = v.slice(0, 12).map((x) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    const title = c.opt(o.title, 160), issuer = c.opt(o.issuer, 120), year = c.opt(o.year, 4), url = c.opt(o.url, 300);
+    if (!title && !url) return null;
+    if (!title) c.errors.push("Each certification needs a title.");
+    if (url && !/^https:\/\/[^\s<>"]+$/.test(url)) c.errors.push(`The verification link for "${title}" must start with https://`);
+    if (year && !/^(19|20)\d\d$/.test(year)) c.errors.push(`The year for "${title}" must look like 2024.`);
+    return { title, issuer, year, url };
+  }).filter(Boolean);
+  return JSON.stringify(out);
 }
 
 route("PATCH", "/api/me", ALL, async (c) => {

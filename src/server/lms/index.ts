@@ -7,4 +7,5 @@ import "./routes/admin";
 import "./routes/assistant";
 import "./routes/admissions";
 import "./routes/admit";
+import "./routes/onboarding";
 export { handleLms } from "./api";

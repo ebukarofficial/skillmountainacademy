@@ -8,11 +8,16 @@ export type User = {
   registration_id: string | null; created_at: string; last_login_at: string | null;
   verification?: string | null; verification_checks?: string | null; highest_qualification?: string | null; experience?: string | null; public_profile?: number;
   staff_no?: string | null; email_prefs?: string | null;
+  headline?: string | null; achievements?: string | null; certifications?: string | null; languages?: string | null;
+  country_origin?: string | null; country_residence?: string | null; profile_submitted_at?: string | null; verified_at?: string | null;
 };
-// Instructors can sign in only once their verification is approved (see lib/admissions.ts). If migration 0004 has
-// not run yet the column does not exist (undefined), and instructors keep working as before.
+// Only approved instructors teach (see lib/admissions.ts). New instructors can sign in before approval, but only to
+// complete and submit their profile (the API allows them nothing else). Rejected or suspended candidates cannot sign
+// in. If migration 0004 has not run yet the column does not exist (undefined), and instructors work as before.
 export const isApproved = (u: Pick<User, "verification">) => u.verification === undefined || u.verification === "approved";
-export const canSignIn = (u: Pick<User, "status" | "role" | "verification">) => u.status === "active" && (u.role !== "instructor" || isApproved(u));
+export const canSignIn = (u: Pick<User, "status" | "role" | "verification">) =>
+  u.status === "active" && (u.role !== "instructor" || (u.verification !== "rejected" && u.verification !== "suspended"));
+export const isVerifiedInstructor = (u: Pick<User, "role" | "verification">) => u.role === "instructor" && u.verification === "approved";
 
 export const getUser = (db: DB, id: string) => one<User>(db, "SELECT * FROM users WHERE id = ?1", id);
 export const getUserByEmail = (db: DB, email: string) => one<User>(db, "SELECT * FROM users WHERE email = ?1", email.toLowerCase());
