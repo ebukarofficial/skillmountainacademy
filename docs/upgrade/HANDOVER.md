@@ -457,3 +457,29 @@ notifications, logout and `/api/app/instructor/onboarding(/submit)` (`routes/onb
 "verified" notice; `verified` is in selfView, instructorPublic and /api/faculty, and `VerifiedBadge` (app/app/ui.tsx) shows it.
 Sign-in pages: quotes in `lib/quotes.ts` (documented attributions only), background photos per portal in `app/app/entry.tsx`.
 Confirm links carry `&p=<portal>` so /app/confirm/ greets each role correctly.
+
+### Academic redesign (21 Nov 2026, "MASTER UI/UX REDESIGN & ACADEMIC LEARNING PLATFORM PROMPT")
+- Dashboards: `app/app/shell.tsx` is now a white header (logo, context, calendar, messages, notifications, profile) with a
+  brand-colour navigation bar ("More" holds overflow sections) and a white drawer on phones. White page, light neutral
+  surfaces, sans typography, no decorative capitals, readable small text, 36-44px tap targets.
+- Student: Home (welcome, next class, Your Academic Tasks, announcements and messages, My Programme, upcoming events,
+  academic progress, resources), My Programme (module cards with topic completion, from `/api/app/programmes/:slug/courses`
+  which now returns the student's own `completedAt` per lesson), Learning Materials (+ assistant), Assignments,
+  Assessments, Calendar (`app/app/calendar.tsx`: upcoming list and month grid), Messages, Notifications, Profile.
+- Instructor: Overview, My Students, My Programmes, Teaching Calendar, Class Sessions, Assignments, Assessments,
+  Attendance, Messages, Academic Resources, Instructor Profile.
+- Admin: Overview (dense table + "needs your action"), Students, Instructors (verification / activity / accounts),
+  Programmes, Admissions (admit / intake and capacity), Payments, Academic records, Instructor allocation, Attendance,
+  Assessments (new read-only `GET /api/app/admin/coursework`), Learning materials, Notifications, Security and audit.
+- Public (owner's exceptions: website colours and the stylish serif hero are unchanged): cream/paper backgrounds,
+  Cormorant Garamond headlines and the italic "made for more." hero stay; homepage order:
+  hero, Academy, programmes, records and certification (sample certificate clearly labelled), learning model, faculty,
+  admissions pathway, questions; catalogue search + discipline/level filters (`app/programmes/catalogue.tsx`); programme
+  page order: introduction, outcomes, audience, curriculum, duration, practical work, internship, faculty, investment
+  and admission. Splash shortened to 1.8 s (still skipped for reduced motion and after the first visit).
+
+- Correction (same day): an earlier pass had moved the public site to white with sans headlines; that was reverted to
+  the owner's colours and serif. Dashboards use a soft neutral page (`bg-ink/[0.03]`) under white cards ("white should
+  be subtle"). Admin gained **Reports** (summary from overview/finance/academics, CSV downloads built in the browser)
+  and **Website content** (admission status shown per programme, published faculty, curricula; fixed copy explained).
+- Before/after screenshots: `docs/upgrade/screens/before-after.png`.

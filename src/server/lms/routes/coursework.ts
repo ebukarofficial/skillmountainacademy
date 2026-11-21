@@ -3,7 +3,7 @@
 import { findProgramme, PROGRAMMES } from "../../../../lib/config.ts";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
-import { ALL, notFound, ok, route, type Ctx } from "../api";
+import { ALL, notFound, ok, page, route, type Ctx } from "../api";
 import { assertStudentAccess } from "../access";
 import {
   completeLesson, completedLessons, createAssignment, getSubmission, createQuiz, createResource, deleteResource, getAssignment, getAttempt, getQuiz, getResource, gradeAttempt,
@@ -429,4 +429,19 @@ route("PUT", "/api/me/photo", ALL, async (c) => {
 route("GET", "/api/app/files/photo/:id", ALL, async (c) => {
   const u = await getUser(c.db, c.params.id);
   return sendFile(c, u?.photo_key ?? null, "photo", true);
+});
+
+// Admin: coursework across the Academy (most recent first), for the Assessments area. Summary fields only: no answers.
+route("GET", "/api/app/admin/coursework", ["admin"], async (c) => {
+  const limit = page(c.url, 200).limit;
+  const [as, qs] = await Promise.all([listAssignments(c.db, { limit: 500 }), listQuizzes(c.db, { limit })]);
+  const row = (kind: string, x: { id: string; title: string; due_at: string; max_score: number; programme_slug: string; student_name: string; score: number | null; graded_at: string | null }, status: string) => ({
+    id: x.id, kind, title: x.title, studentName: x.student_name, programmeName: progName(x.programme_slug), dueAt: x.due_at, dueText: lagosText(x.due_at), status,
+    scorePct: x.graded_at && x.score !== null && x.max_score ? Math.round((x.score / x.max_score) * 100) : null,
+  });
+  const items = [
+    ...as.map((a) => row("assignment", a, assignmentStatus(a))),
+    ...qs.map((q) => row(q.kind, q, q.graded_at ? "graded" : q.submitted_at ? "submitted" : q.started_at ? "in_progress" : Date.parse(q.due_at) < Date.now() ? "missed" : "open")),
+  ].sort((a, b) => b.dueAt.localeCompare(a.dueAt)).slice(0, limit);
+  return ok({ coursework: items });
 });

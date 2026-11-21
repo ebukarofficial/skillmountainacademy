@@ -1,4 +1,5 @@
 // Enrolments, the fixed weekly timetable, class sessions, Google Meet links, attendance, courses and notifications.
+import { completedLessons } from "../data/coursework";
 import { PROGRAMMES, findProgramme } from "../../../../lib/config.ts";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
@@ -303,7 +304,9 @@ route("GET", "/api/app/programmes/:slug/courses", ALL, async (c) => {
   }
   const courses = await programmeCourses(c.db, slug);
   const lessons = await programmeLessons(c.db, slug);
-  return ok({ courses: courses.map((co) => ({ ...co, lessons: lessons.filter((l) => l.course_id === co.id) })) });
+  // A student also sees which lessons they have completed (their own record only).
+  const done = c.user.role === "student" ? new Map((await completedLessons(c.db, c.user.id)).map((x) => [x.lesson_id, x.completed_at])) : null;
+  return ok({ courses: courses.map((co) => ({ ...co, lessons: lessons.filter((l) => l.course_id === co.id).map((l) => (done ? { ...l, completedAt: done.get(l.id) ?? null } : l)) })) });
 });
 
 route("POST", "/api/app/admin/courses", ["admin"], async (c) => {
