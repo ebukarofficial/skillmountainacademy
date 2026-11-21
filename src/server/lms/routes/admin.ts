@@ -13,7 +13,7 @@ import {
 } from "../data/reports";
 import { getUser } from "../data/users";
 import { notify } from "../notify";
-import { ensureStudentAccount } from "../accounts";
+import { afterPayment } from "../../routes/payments";
 import { payLink } from "../../routes/payments";
 
 const progName = (s: string) => findProgramme(s)?.name ?? s;
@@ -168,10 +168,8 @@ route("POST", "/api/app/admin/orders/:reference/payments", ["admin"], async (c) 
   const at = nowIso();
   await recordManualPayment(c.db, { id: crypto.randomUUID(), orderId: order.id, instalmentId: inst.id, ref: `BANK-${inst.reference}${note ? `-${note.replace(/[^\w-]/g, "").slice(0, 40)}` : ""}`, amountKobo: inst.amount_kobo, paidAt: at });
   await c.audit("payment.manual", "order", order.id, { part: seq, naira: inst.amount_kobo / 100, bankReference: note });
-  if (seq === 1) {
-    const reg = await repo.getRegistration(order.registration_id);
-    if (reg) await ensureStudentAccount(c.env, reg, order);
-  }
+  // Same steps as a Paystack payment: on part 1 the student account, registration number and emails.
+  await afterPayment(c.env, repo, inst, inst.amount_kobo, `BANK-${inst.reference}`);
   return ok({ order: await repo.getOrderByReference(ref) });
 });
 

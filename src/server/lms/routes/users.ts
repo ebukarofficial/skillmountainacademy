@@ -1,13 +1,13 @@
 // Profiles (everyone edits their own) and user management (admins only).
-import { ApiError, nowIso, randomCode } from "../../http";
+import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
 import { ALL, notFound, ok, page, route } from "../api";
 import { canSignIn, createUser, deleteUserSessions, getUser, getUserByEmail, listAudit, listUsers, updateUser, type Role, type User } from "../data/users";
 import { adminView, selfView } from "../views";
 import { sendSignInLink } from "./auth";
+import { newStaffNo, newStudentNo } from "../ids";
 
 const ROLES: Role[] = ["student", "instructor", "admin"];
-export const newStudentNo = () => `SMA${String(new Date().getUTCFullYear()).slice(2)}-${randomCode(5)}`;
 
 function readLinks(c: Checker, v: unknown): string | undefined {
   if (v === undefined) return undefined;
@@ -43,7 +43,13 @@ function profilePatch(c: Checker, b: Record<string, unknown>, role: Role): Parti
 
 route("PATCH", "/api/me", ALL, async (c) => {
   const ch = new Checker();
-  const patch = profilePatch(ch, await c.body(), c.user.role);
+  const body = await c.body();
+  const patch: Partial<User> = profilePatch(ch, body, c.user.role);
+  // Optional emails: class reminders and general updates. Essential emails (sign-in, payments, grades) always go.
+  if (body.emailPrefs && typeof body.emailPrefs === "object") {
+    const p = body.emailPrefs as Record<string, unknown>;
+    patch.email_prefs = JSON.stringify({ reminders: p.reminders !== false, updates: p.updates !== false });
+  }
   ch.done();
   await updateUser(c.db, c.user.id, patch);
   await c.audit("profile.update", "user", c.user.id, Object.keys(patch));
@@ -73,10 +79,11 @@ route("POST", "/api/app/admin/users", ["admin"], async (c) => {
   ch.done();
   if (await getUserByEmail(c.db, email)) throw new ApiError(409, "exists", "A user with this email already exists.");
   const u: User = { id: crypto.randomUUID(), email, role, status: "active", full_name: fields.full_name!, phone: fields.phone ?? null, bio: fields.bio ?? null,
-    photo_key: null, student_no: role === "student" ? newStudentNo() : null, specialization: fields.specialization ?? null, qualifications: fields.qualifications ?? null,
+    photo_key: null, student_no: role === "student" ? await newStudentNo(c.db) : null, specialization: fields.specialization ?? null, qualifications: fields.qualifications ?? null,
     links: fields.links ?? null, registration_id: null, created_at: nowIso(), last_login_at: null };
   // A new instructor starts as a candidate: they cannot sign in or teach until approved in Recruitment.
   if (role === "instructor") u.verification = "application_received";
+  if (role === "admin") u.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
   await createUser(c.db, u);
   await c.audit("user.create", "user", u.id, { email, role });
   if (b.sendInvite !== false && canSignIn(u)) c.exec.waitUntil(sendSignInLink(c.env, c.db, u, true));
@@ -93,7 +100,8 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   if (b.status !== undefined) patch.status = ch.oneOf(b.status, ["active", "suspended"] as const, "a status");
   ch.done();
   if (u.id === c.user.id && (patch.status === "suspended" || (patch.role && patch.role !== "admin"))) throw new ApiError(400, "self", "You cannot suspend yourself or remove your own admin role.");
-  if (patch.role === "student" && !u.student_no) patch.student_no = newStudentNo();
+  if (patch.role === "student" && !u.student_no) patch.student_no = await newStudentNo(c.db);
+  if (patch.role === "admin" && !u.staff_no) patch.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
   // Becoming an instructor means going through verification first (unless they were approved before).
   if (patch.role === "instructor" && u.role !== "instructor" && u.verification !== "approved") patch.verification = "application_received";
   await updateUser(c.db, u.id, patch);

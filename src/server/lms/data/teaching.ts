@@ -82,10 +82,11 @@ export const pendingOutcomesByInstructor = (db: DB, nowIso: string) => all<{ ins
    WHERE cs.status = 'scheduled' AND cs.ends_at <= ?1 GROUP BY cs.instructor_id LIMIT 30`, nowIso);
 
 // ---------- notifications ----------
-export type Notification = { id: string; user_id: string; kind: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null; emailed_at: string | null };
+export type Notification = { id: string; user_id: string; kind: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null; emailed_at: string | null; priority?: "urgent" | "normal" };
 export const addNotification = (db: DB, n: Notification) => insert(db, "notifications", n);
-export const addNotificationStmt = (db: DB, n: Notification) =>
-  stmt(db, "INSERT INTO notifications (id, user_id, kind, title, body, link, created_at, read_at, emailed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)", n.id, n.user_id, n.kind, n.title, n.body, n.link, n.created_at, n.emailed_at);
+export const addNotificationStmt = (db: DB, n: Notification, withPriority = true) => withPriority
+  ? stmt(db, "INSERT INTO notifications (id, user_id, kind, title, body, link, created_at, read_at, emailed_at, priority) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8, ?9)", n.id, n.user_id, n.kind, n.title, n.body, n.link, n.created_at, n.emailed_at, n.priority ?? "normal")
+  : stmt(db, "INSERT INTO notifications (id, user_id, kind, title, body, link, created_at, read_at, emailed_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, ?8)", n.id, n.user_id, n.kind, n.title, n.body, n.link, n.created_at, n.emailed_at);
 export const listNotifications = (db: DB, userId: string, unreadOnly: boolean, limit: number) => all<Notification>(db,
   "SELECT * FROM notifications WHERE user_id = ?1 AND (?2 = 0 OR read_at IS NULL) ORDER BY created_at DESC LIMIT ?3", userId, unreadOnly ? 1 : 0, limit);
 export const unreadCount = async (db: DB, userId: string) => (await one<{ n: number }>(db, "SELECT COUNT(*) AS n FROM notifications WHERE user_id = ?1 AND read_at IS NULL", userId))?.n ?? 0;

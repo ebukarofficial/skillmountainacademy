@@ -7,9 +7,10 @@ import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
 import { ApiError, clientIp, json, nowIso, randomCode, sha256 } from "../http";
 import { Repo, type InstalmentRow, type OrderRow } from "../repo";
-import { button, layout, sendEmail, table } from "../email";
+import { button, esc, layout, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
 import { ensureStudentAccount } from "../lms/accounts";
+import { sendSignInLink } from "../lms/routes/auth";
 
 const PAYSTACK = "https://api.paystack.co";
 const progName = (slug: string) => PROGRAMMES.find((p) => p.slug === slug)?.name ?? slug;
@@ -70,7 +71,8 @@ export async function recordCharge(env: AppEnv, repo: Repo, ctx: ExecutionContex
   return "recorded";
 }
 
-async function afterPayment(env: AppEnv, repo: Repo, inst: InstalmentRow, amountKobo: number, ref: string) {
+// After a confirmed payment (Paystack webhook, or an admin recording a transfer). Runs once per payment.
+export async function afterPayment(env: AppEnv, repo: Repo, inst: InstalmentRow, amountKobo: number, ref: string) {
   const order = await repo.getOrder(inst.order_id);
   if (!order) return;
   const reg = await repo.getRegistration(order.registration_id);
@@ -86,14 +88,19 @@ async function afterPayment(env: AppEnv, repo: Repo, inst: InstalmentRow, amount
   const rest = left.length ? `<p>Still to pay: ${left.map((i) => `part ${i.seq}, ${ngn(i.amount_kobo)} due ${i.due_date}`).join("; ")}. We email a payment link on each due date, with a reminder 3 days before. Live sessions are paused if a payment is more than 2 weeks late.</p>` : "<p>Your programme is now fully paid.</p>";
   const welcome = inst.seq === 1;
   // First payment: the learner gets a student account and enrolment on the learning platform.
-  if (welcome) await ensureStudentAccount(env, reg, order);
+  const student = welcome ? await ensureStudentAccount(env, reg, order) : null;
+  const regNo = student?.student_no ?? null;
+  // 1. Admission confirmation (first payment) or payment receipt (later parts).
   await sendEmail(env, {
     to: reg.email,
-    subject: welcome ? `Welcome to Skill Mountain Academy: ${name}` : `Payment received: ${name} (part ${inst.seq})`,
-    html: layout(welcome ? `Welcome, ${reg.first_name}` : `Thank you, ${reg.first_name}`,
-      `${welcome ? "<p><b>Your payment is confirmed and your place is secured.</b></p>" : "<p>We received your payment.</p>"}${table(rows)}${rest}
-       ${welcome ? `<p>Your learning dashboard is ready: sign in at <a href="${site}/app/login/">${site}/app/login/</a> with this email address.</p><h3>Step 1: Your curriculum</h3>${button(`${site}${p?.curriculum ?? "/"}`, "Open my curriculum")}<h3>Step 2: Choose your class days and time</h3>${booking}` : ""}`),
+    subject: welcome ? `Admission confirmed: ${name}` : `Payment received: ${name} (part ${inst.seq})`,
+    html: layout(welcome ? `Dear ${esc(reg.first_name)}` : `Dear ${esc(reg.first_name)}`,
+      `${welcome ? `<p>We are pleased to confirm your admission to <b>${esc(name)}</b> at Skill Mountain Academy. Your payment has been received and your place is secured.</p>` : "<p>Thank you. We have received your payment.</p>"}
+       ${table([...(regNo ? [["Registration No", regNo] as [string, string]] : []), ...rows])}${rest}
+       ${welcome ? `<p>Please keep your registration number for all correspondence with the Academy.</p><h3 style="font-weight:normal">Your curriculum</h3>${button(`${site}${p?.curriculum ?? "/"}`, "Open the curriculum")}<h3 style="font-weight:normal">Your weekly class time</h3>${booking}<p>A separate email brings your private link to your learning space.</p>` : ""}`),
   });
+  // 2. Access to the learning space: a fresh single-use sign-in link.
+  if (welcome && student && student.status === "active" && env.DB) await sendSignInLink(env, env.DB, student, true);
   // Group members get their own welcome when the lead's first payment arrives.
   if (welcome && order.group_size > 1) {
     for (const m of await repo.groupMembers(reg.id)) {

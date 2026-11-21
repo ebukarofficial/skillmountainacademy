@@ -229,7 +229,8 @@ route("GET", "/api/app/student/assignments", ["student"], async (c) => {
     const today = lagosDate(new Date());
     const monday = addDays(today, -((weekdayOf(today) + 6) % 7));
     from = lagosToIso(monday, "00:00");
-    to = lagosToIso(addDays(monday, 7), "00:00");
+    // This week, plus the next two weeks, so work due early next week shows on a Saturday too.
+    to = lagosToIso(addDays(today, 15), "00:00");
   }
   const rows = await listAssignments(c.db, { studentId: c.user.id, from, to, limit: 300 });
   // Overdue work from earlier weeks stays visible until it is submitted.

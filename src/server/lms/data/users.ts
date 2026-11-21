@@ -7,6 +7,7 @@ export type User = {
   photo_key: string | null; student_no: string | null; specialization: string | null; qualifications: string | null; links: string | null;
   registration_id: string | null; created_at: string; last_login_at: string | null;
   verification?: string | null; verification_checks?: string | null; highest_qualification?: string | null; experience?: string | null; public_profile?: number;
+  staff_no?: string | null; email_prefs?: string | null;
 };
 // Instructors can sign in only once their verification is approved (see lib/admissions.ts). If migration 0004 has
 // not run yet the column does not exist (undefined), and instructors keep working as before.
@@ -15,7 +16,8 @@ export const canSignIn = (u: Pick<User, "status" | "role" | "verification">) => 
 
 export const getUser = (db: DB, id: string) => one<User>(db, "SELECT * FROM users WHERE id = ?1", id);
 export const getUserByEmail = (db: DB, email: string) => one<User>(db, "SELECT * FROM users WHERE email = ?1", email.toLowerCase());
-export const createUser = (db: DB, u: User) => insert(db, "users", u);
+// Columns left undefined are not written, so newer optional columns are only touched when they have a value.
+export const createUser = (db: DB, u: User) => insert(db, "users", Object.fromEntries(Object.entries(u).filter(([, v]) => v !== undefined)) as Record<string, string | number | null>);
 export const updateUser = (db: DB, id: string, patch: Partial<User>) => update(db, "users", id, patch);
 
 export function listUsers(db: DB, f: { role?: string; status?: string; q?: string; limit: number; offset: number }) {
@@ -54,3 +56,16 @@ export const listAudit = (db: DB, limit: number, offset: number) => all<Record<s
 
 export const logError = (db: DB, route: string, message: string) =>
   insert(db, "error_log", { id: crypto.randomUUID(), at: new Date().toISOString(), route, message: message.slice(0, 500) });
+
+// Institutional number sequences (migration 0005). One atomic statement, so two admissions can never share a number.
+export const nextSeq = async (db: DB, name: string) =>
+  (await one<{ last: number }>(db, "INSERT INTO id_sequences (name, last) VALUES (?1, 1) ON CONFLICT(name) DO UPDATE SET last = last + 1 RETURNING last", name))!.last;
+
+// Email preferences of several users at once (null when the column does not exist yet or nothing was chosen).
+export const emailPrefsFor = async (db: DB, ids: string[]) => {
+  try {
+    return await all<{ id: string; email_prefs: string | null }>(db, "SELECT id, email_prefs FROM users WHERE id IN (SELECT value FROM json_each(?1))", JSON.stringify(ids));
+  } catch { return []; }
+};
+// A new sign-in link replaces any earlier unused ones.
+export const revokeTokens = (db: DB, userId: string, at: string) => run(db, "UPDATE auth_tokens SET used_at = ?2 WHERE user_id = ?1 AND used_at IS NULL", userId, at);

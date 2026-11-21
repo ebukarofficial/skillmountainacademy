@@ -79,6 +79,9 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
     return await found.r.handler(c);
   } catch (e) {
     if (!(e instanceof ApiError)) exec.waitUntil(logError(db, url.pathname, String((e as Error)?.stack ?? e)).catch(() => undefined));
+    // A missing column or table means the database has not had its latest update: say so plainly.
+    if (!(e instanceof ApiError) && /no such (column|table)|has no column named/i.test(String((e as Error)?.message ?? e)))
+      throw new ApiError(503, "schema_outdated", "The database needs its latest update. Run npm run db:migrate, then try again.");
     throw e;
   }
 }

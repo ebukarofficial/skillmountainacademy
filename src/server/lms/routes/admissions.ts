@@ -16,6 +16,7 @@ import {
 import { deleteUserSessions, getUser, updateUser } from "../data/users";
 import { sendFile } from "./coursework";
 import { sendSignInLink } from "./auth";
+import { newStaffNo } from "../ids";
 
 const SLUGS = PROGRAMMES.map((p) => p.slug);
 const isoOrThrow = (ch: Checker, v: unknown, label: string) => {
@@ -175,6 +176,8 @@ route("PATCH", "/api/app/admin/recruitment/:id", ["admin"], async (c) => {
   if (to !== from) {
     patch.verification = to;
     patch.status = to === "approved" ? "active" : to === "suspended" || to === "rejected" ? "suspended" : u.status;
+    // The faculty number is issued once, on first approval, and kept for good.
+    if (to === "approved" && !(await getUser(c.db, u.id))?.staff_no) { const no = await newStaffNo(c.db, "instructor"); if (no) patch.staff_no = no; }
     if (to !== "approved") patch.public_profile = 0;
   }
   await updateUser(c.db, u.id, patch as Parameters<typeof updateUser>[2]);
