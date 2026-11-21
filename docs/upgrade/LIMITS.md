@@ -80,3 +80,14 @@ a paid Resend plan is likely needed above about 15 classes a day.
 `POST /api/app/admin/admit` runs at most a few times a day: about 15 D1 queries (one batch for the order and instalments,
 one sequence update), and up to 3 Resend calls after the response. Registration numbers use one `INSERT ... ON CONFLICT ...
 RETURNING` query each. Notifications poll `GET /api/app/notifications` once a minute per open dashboard (1 D1 read).
+
+## Final refinement (added 21 Nov 2026)
+- **Admissions assistant:** one Workers AI call per question, limited to 8 a minute and 60 a day per visitor; one D1 write
+  each. The daily cron deletes questions older than 180 days in one statement.
+- **Book a call:** 4 requests an hour per visitor; one D1 write and two Resend calls after the response.
+- **Monitoring** (`GET /api/app/admin/monitoring`) computes each active enrolment's record on request (about 4 D1 queries
+  per enrolment, capped at 400 enrolments). At several hundred active students, move it to a nightly summary table.
+- **Engagement alerts** are calculated when a dashboard is opened; there is no scheduled alert email yet.
+- **Internship progress** is derived from the start date and the programme's published durations; there is no separate
+  internship task tracker.
+- **Worker bundle** about 205 KiB (Free plan allows 3 MiB); the test ceiling is 300 KiB.

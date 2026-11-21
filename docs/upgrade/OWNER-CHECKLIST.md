@@ -231,3 +231,21 @@ mailbox's own spam scanning (Northwest webmail). Gmail and Outlook addresses usu
 4. Sign-in pages show a different famous quotation on each visit over a faint photo (different for students, faculty and admins).
 5. Abuja and Nigeria were removed from the site, sign-in pages and emails. They remain only in the Privacy Policy and Terms
    (data-protection regulator, governing law and the business address), which the law expects there. Ask your lawyer before changing those.
+
+## K. Final refinement (21 Nov 2026)
+1. **Run the database migration** before deploying the Worker: `npm run db:migrate` (applies `0007_refinement.sql`). It only
+   adds the AI Automation row, new tables and new columns; existing records are untouched.
+2. **No new secrets.** The admissions assistant uses the existing Workers AI binding; call requests use Resend and Turnstile.
+3. **AI Automation photo.** The programme uses the Academy photo for now. Send a licensed photo and it will replace it in
+   `lib/photos.ts`. Upload a curriculum PDF if you have one.
+4. **Paystack currency.** Payments stay in naira. Paystack does not support GBP or EUR for Nigerian businesses, and USD only
+   with an approved domiciliary account. Visitors see their own currency as a dated approximation and the naira amount
+   before paying. Tell us if Paystack approves USD for your account.
+5. **WhatsApp.** The public WhatsApp chat button was replaced by the admissions assistant and Book a call. No WhatsApp
+   Business API is connected, so staff are notified by email and in the dashboard only.
+6. **Review the copy** on the homepage, About, Admissions, Faculty, Learning Experience and the AI Automation page,
+   including the pre-footer statement (an original line attributed to the Academy, not a quotation).
+7. **Guardian contact.** Before ticking "Contact with the guardian is authorised" for a student, make sure you hold written
+   consent; the note you enter is kept with the record.
+8. **Assistant questions** are kept for 180 days (privacy policy section 6 says so). Check Admin > Admissions > Assistant
+   enquiries regularly for questions marked for follow-up.

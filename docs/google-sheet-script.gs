@@ -39,7 +39,8 @@ var FEES = {
   "Cybersecurity": 650000,
   "Cloud Engineering": 450000,
   "DevOps Engineering": 500000,
-  "Cloud & DevOps Engineering": 650000
+  "Cloud & DevOps Engineering": 650000,
+  "AI Automation": 300000
 };
 
 // Google Drive link to each curriculum (share as "Anyone with the link can view"). Replace the examples.

@@ -3,7 +3,8 @@
 This ZIP is the live skillmountainacademy.com project, upgraded by Claude following `docs/upgrade/SPEC.md`.
 ## Status
 
-**21 Nov 2026 (latest):** premium institutional experience done (section at the end). Owner steps: OWNER-CHECKLIST section G.
+**21 Nov 2026 (latest):** final refinement brief done (section "Final refinement" at the end). Owner steps: OWNER-CHECKLIST section K.
+Earlier the same day: premium institutional experience (OWNER-CHECKLIST section G).
 
 | Phase | State |
 |---|---|
@@ -483,3 +484,47 @@ Confirm links carry `&p=<portal>` so /app/confirm/ greets each role correctly.
   be subtle"). Admin gained **Reports** (summary from overview/finance/academics, CSV downloads built in the browser)
   and **Website content** (admission status shown per programme, published faculty, curricula; fixed copy explained).
 - Before/after screenshots: `docs/upgrade/screens/before-after.png`.
+
+## Final refinement (owner brief, 21 Nov 2026: "FINAL WEBSITE REFINEMENT, BRAND PRESENTATION & PLATFORM IMPROVEMENT")
+Migration **0007_refinement.sql** (additive only): AI Automation programme row; tables `call_bookings`, `assistant_enquiries`,
+`weekly_items`, `app_settings`, `contact_log`; columns `class_sessions.attendance_detail`, `users.meet_link` and the
+`users.guardian_*` fields. Run `npm run db:migrate` before deploying the Worker (missing columns answer 503 until then).
+
+- **Colours.** Public and dashboard background `#FFFDF0` (`bg-paper` on `<body>` and the dashboard shell; globals.css is
+  untouched); cards, tables and forms white; investment and payment panels `#F8F8F9` (`PANEL_BG` in app/components.tsx);
+  footer `bg-ink`. Blue and orange remain the action colours. The colour snapshot records the authorised `#f8f8f9` uses
+  and the removal of the WhatsApp green.
+- **AI Automation.** `lib/config.ts` (`fullPaymentOnly: true`, ₦300,000, 1 month training + 1 month internship), copy in
+  `lib/programme-content.ts`, Academy photo until a dedicated one is supplied (`lib/photos.ts`). Instalments are refused
+  by `/api/register`, `/api/app/admin/admit` and `/api/quote`, and hidden in checkout, the admin admit form and trust lines.
+- **Currency.** `GET /api/quote?programme&country&plan` (src/server/routes/geo.ts) converts on the server from the KV rates
+  (refreshed by cron every 12 h, timestamped). NG→NGN, GB→GBP, euro area→EUR, everyone else USD. Paystack (verified:
+  NGN for Nigerian businesses; USD only with an approved domiciliary account; no GBP/EUR) charges naira, and the payment
+  step states the naira amount before payment. `QuotePrice` (app/currency.tsx) shows the selected currency only.
+- **Public pages.** Homepage (slider fixes, "Choose a discipline.", learning proposition, nine programmes, "Before you
+  apply" 4×4 accordion from `FAQ_GROUPS`, pre-footer statement attributed to the Academy), programme page (facts block,
+  weekly commitment, no section labels), Faculty (horizontal cards, circular `VerifiedMark`), Learning Experience,
+  About and Admissions rewritten to the brief.
+- **Admissions assistant** (`app/assistant.tsx`, `POST /api/assistant/ask`, `src/server/lms/routes/desk.ts`) replaces the
+  WhatsApp button: answers only from programme config, live admission status, FAQ and standards; `[[HANDOFF]]` offers a
+  call or email. Each question is logged (`assistant_enquiries`) with programme, answered and follow-up flags; deleted
+  after 180 days by the daily cron; never shown to other visitors; not used for marketing. Admin > Admissions > Assistant
+  enquiries.
+- **Book a call** (`app/book-call.tsx`, `POST /api/bookings`): saved, emailed to Admissions and the applicant, notified in
+  the admin dashboard; Admin > Admissions > Call requests assigns an administrator and records status and notes. No
+  automatic calls. There is no WhatsApp Business integration, so no WhatsApp notification is sent.
+- **Instructor.** `app/app/instructor-records.tsx`: My Students cards (`GET /api/app/instructor/records`: sessions,
+  attendance, late/excused, assignment/test/assessment averages, academic average: no GPA scale exists), Class Sessions
+  (My schedule + Live teaching screen; Meet opens in a new tab, never embedded), Attendance (week, month, per session;
+  outcome buttons Completed / Attended late / Student missed / Excused absence), Google Meet settings
+  (`GET|PUT /api/app/instructor/meet-link`, apply to classes without a link or to all).
+- **Weekly checklist** (`app/app/weekly.tsx`, `src/server/lms/routes/engagement.ts`): lesson, assignment, weekly test and AI
+  revision are ticked only from records; videos, practical exercises, classwork and questions by the student; instructors
+  add tasks. Only the current week can change.
+- **Engagement alerts** (`src/server/lms/rules.ts`): thresholds for missed classes, overdue assignments, missed
+  assessments, low average and days without a class, editable in Admin > Students > Monitoring.
+- **Admin.** Students > Monitoring (records, alerts, phase: training/internship month, weekly checklist, last contact;
+  per student: editable email from a respectful template, guardian details with recorded authorisation, guardian contact
+  only when authorised, call and attempt log). Programmes > Investment and currency (rates with time and source,
+  refresh, every programme's price in NGN/USD/GBP/EUR, payment terms).
+- **Tests:** `tests/refinement.test.ts` (11 tests) plus updated earlier tests. 162 tests pass.

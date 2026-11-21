@@ -53,7 +53,6 @@ app/globals.css:8:#1e0e6f
 app/globals.css:9:#5b2270
 app/layout.tsx:35:#fcf9db
 app/page.tsx:408:#f7892b
-app/page.tsx:427:#25d366
 docs/google-sheet-script.gs:190:#c8233a
 docs/google-sheet-script.gs:190:#ffffff
 lib/config.ts:76:#ffb35c
@@ -61,3 +60,9 @@ lib/config.ts:76:#ffb35c
 6d373c29264561ecdf66d62df80556348078091268d4826b9b9116c2b520a9b6  assets/sma-logo-white.png
 0ebc48324435e48b6a515fb4dc2b04a1a6ecbe71d148bcac495ea85fe4bb4f15  assets/sma-logo.png
 c23d9e7c223656eb232c2f253596014ed2c6d49ee455c51fbd15a6c23e04848a  app/icon.png
+app/book-call.tsx:60:#f8f8f9
+app/checkout/flow.tsx:154:#f8f8f9
+app/checkout/server-pay.tsx:96:#f8f8f9
+app/components.tsx:215:#f8f8f9
+app/currency.tsx:158:#f8f8f9
+app/hold.tsx:74:#f8f8f9
