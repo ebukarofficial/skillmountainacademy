@@ -88,8 +88,8 @@ test("webhook: bad signature refused; valid charge recorded once (idempotent); w
   assert.equal(inst?.status, "paid");
   assert.ok(await w.waitFor((c) => c.filter((x) => x.url.includes("api.resend.com")).length >= emailsBefore + 2), "welcome + owner emails");
   await new Promise((r) => setTimeout(r, 300));
-  const welcome = w.calls.filter((x) => x.url.includes("api.resend.com") && x.body.includes("Welcome to Skill Mountain Academy"));
-  assert.equal(welcome.filter((x) => x.body.includes(init.email)).length, 1, "welcome sent once even though the webhook came twice");
+  const welcome = w.calls.filter((x) => x.url.includes("api.resend.com") && x.body.includes("Admission confirmed"));
+  assert.equal(welcome.filter((x) => x.body.includes(init.email)).length, 1, "admission confirmation sent once even though the webhook came twice");
   assert.ok(w.calls.some((x) => x.url.includes("script.google.com") && x.body.includes('"action":"payment"') && x.body.includes(reg.reference)), "payment mirrored to the sheet");
 
   const reg2 = await register();

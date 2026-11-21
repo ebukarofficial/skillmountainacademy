@@ -147,7 +147,9 @@ test("reminders: 24 h, 1 h, 15 min to student and instructor, once each; missing
   assert.equal(w.calls.slice(before2).filter((x) => x.url.includes("api.resend.com") && /stub@example.com/.test(x.body)).length, 0, "not sent twice");
   const ov = await stuB.json<{ nextSession: { joinOpen: boolean; meetUrl: string } }>("GET", "/api/app/student/overview");
   assert.equal(ov.nextSession.meetUrl, "https://meet.google.com/qwe-rtyu-iop");
-  assert.equal(ov.nextSession.joinOpen, true, "Join button opens 15 minutes before");
+  // The join window is judged against the real clock; T may have been moved an hour ahead to avoid the 05:00 UTC daily run.
+  if (T.getTime() + 10 * 60_000 - Date.now() <= 15 * 60_000) assert.equal(ov.nextSession.joinOpen, true, "Join button opens 15 minutes before");
+  else assert.equal(ov.nextSession.joinOpen, false, "not yet open");
 });
 
 test("daily run creates upcoming classes once (no duplicates)", async () => {

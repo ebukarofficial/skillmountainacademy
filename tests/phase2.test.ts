@@ -76,9 +76,9 @@ test("no job placement, job guarantee or income claims anywhere", () => {
 
 test("programme pages: one per programme, with Course data, price, curriculum, career package, trust lines and built-in enrolment", () => {
   const page = read("app/programmes/[slug]/page.tsx");
-  for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<HoldPrice", "<CurriculumActions", "<CareerLaunch", "<TrustLines", 'href="#enrol"', "Proceed to enrolment", "<EnrolSection p={p} />", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
-  // The nine sections of the brief, in order.
-  const order = ["The discipline", "The learning experience", "What you will master", "Learning methodology", "Faculty and instruction", "Curriculum", "Programme outcomes", "Programme structure"].map((t) => page.indexOf(`title="${t}"`)).concat(page.indexOf("Investment and enrolment</h2>"));
+  for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<HoldPrice", "<CurriculumActions", "<CareerLaunch", "<TrustLines", 'href="#enrol"', "Apply for Admission", "<EnrolSection p={p} />", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
+  // Each section has one editorial purpose, in this order (the institutional brief removed the repeated ones).
+  const order = ["The discipline", "Who it suits", "What you will be able to do", "Curriculum", "Programme structure", "Faculty"].map((t) => page.indexOf(`title="${t}"`)).concat(page.indexOf("Admission and investment</h2>"));
   assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `sections out of order: ${order}`);
   for (const p of PROGRAMMES) {
     const html = built(`programmes/${p.slug}/index.html`);

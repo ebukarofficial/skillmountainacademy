@@ -7,10 +7,12 @@ export type ProgrammeCopy = {
   opportunities: string[]; // kinds of work the skill can support (never a promise)
   mastery: string[];       // capabilities, not topics
   outcomes: string[];      // what a student should be able to show at the end
+  suitedTo?: string;       // who the programme suits (the Cloud track uses lib/config.ts audience instead)
 };
 
 export const PROGRAMME_COPY: Record<string, ProgrammeCopy> = {
   graphics: {
+    suitedTo: "Beginners and early-career creatives who want a professional command of design and its tools.",
     discipline: "Visual communication for brands, print and digital media.",
     intro: [
       "Graphic design is the discipline of making ideas visible: shaping how organisations, products and messages are seen and understood. It joins visual judgement with technical command of professional software.",
@@ -21,6 +23,7 @@ export const PROGRAMME_COPY: Record<string, ProgrammeCopy> = {
     outcomes: ["A portfolio of finished brand projects, from brief to final files", "Print-ready and screen-ready artwork prepared to professional specifications", "The ability to take a client brief through concept, revision and delivery"],
   },
   uiux: {
+    suitedTo: "Beginners, graphic designers and developers moving into digital product design. No coding is required.",
     discipline: "Research-led design of digital products people can use.",
     intro: [
       "Product design is the practice of understanding what people need and designing digital products that meet those needs clearly. It brings together research, structure, interaction and visual design.",
@@ -31,6 +34,7 @@ export const PROGRAMME_COPY: Record<string, ProgrammeCopy> = {
     outcomes: ["Product design case studies documenting research, decisions and results", "Interactive prototypes ready for testing and handover", "A working method you can apply to an unfamiliar product problem"],
   },
   webdev: {
+    suitedTo: "Beginners comfortable using a computer, and self-taught developers who want structure and review.",
     discipline: "Building and shipping modern websites and web applications.",
     intro: [
       "Web development is the craft of building the sites and applications people use every day, from the structure of a page to the logic and data behind it.",
@@ -41,6 +45,7 @@ export const PROGRAMME_COPY: Record<string, ProgrammeCopy> = {
     outcomes: ["Live, deployed web projects you built and can explain line by line", "A public GitHub record of your work", "The ability to plan, build and ship a small application independently"],
   },
   marketing: {
+    suitedTo: "Business owners, early-career marketers and beginners who want to grow an audience online with evidence.",
     discipline: "Strategy, content and measurement for growth online.",
     intro: [
       "Digital marketing is the discipline of reaching and persuading people online: understanding an audience, creating content for it, and measuring what works.",
@@ -51,6 +56,7 @@ export const PROGRAMME_COPY: Record<string, ProgrammeCopy> = {
     outcomes: ["A documented campaign plan built on audience research", "Content and campaign work you have run and measured", "Reports that show what worked, what did not and what to do next"],
   },
   cybersecurity: {
+    suitedTo: "Beginners with an interest in technology, and IT professionals moving into security.",
     discipline: "Protecting systems, networks and data from real threats.",
     intro: [
       "Cybersecurity is the practice of defending systems, networks and information against attack, misuse and failure. It demands technical depth, method and sound judgement.",

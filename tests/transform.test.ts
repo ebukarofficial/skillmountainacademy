@@ -21,10 +21,11 @@ test("hero: the approved slider is kept; no currency control, price or register 
   assert.doesNotMatch(home, /\/checkout\/\?p=/, "the home page sends visitors to programme pages, not straight to payment");
 });
 
-test("navigation: Home, About, Programmes, Our Faculty, The Learning Experience, Admissions, plus sign-in", () => {
+test("navigation: Home, About, Programmes, Our Faculty, The Learning Experience, Admissions; Apply, and no public sign-in", () => {
   assert.deepEqual(NAV.map(([, t]) => t), ["Home", "About", "Programmes", "Our Faculty", "The Learning Experience", "Admissions"]);
   for (const [h] of NAV.slice(1)) assert.ok(existsSync(join(ROOT, "app", h.replace(/^\/|\/$/g, ""), "page.tsx")), `page for ${h}`);
-  assert.match(read("app/header.tsx"), /Sign in/);
+  assert.match(read("app/header.tsx"), />Apply</);
+  assert.doesNotMatch(read("app/header.tsx"), /href="\/app\//, "no sign-in link on the public site");
   const map = built("sitemap.xml");
   if (map) for (const [h] of NAV.slice(1)) assert.ok(map.includes(h), `sitemap ${h}`);
 });

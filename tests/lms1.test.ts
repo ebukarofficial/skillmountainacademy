@@ -76,8 +76,8 @@ test("admin manages users: create with student number, invite, edit, suspend (se
   const { admin } = await setup(w);
   const before = w.calls.length;
   const created = await admin.json<{ user: { id: string; studentNo: string; role: string } }>("POST", "/api/app/admin/users", { email: "NEW@Example.com", role: "student", fullName: "New Student", phone: "08030000000" });
-  assert.match(created.user.studentNo, /^SMA\d{2}-[A-Z0-9]{5}$/);
-  assert.ok(await w.waitFor((c) => c.slice(before).some((x) => x.url.includes("api.resend.com") && x.body.includes("new@example.com") && x.body.includes("account is ready"))), "invite email");
+  assert.match(created.user.studentNo, /^SMA\/\d{2}\/\d{6}$/);
+  assert.ok(await w.waitFor((c) => c.slice(before).some((x) => x.url.includes("api.resend.com") && x.body.includes("new@example.com") && x.body.includes("learning space is ready"))), "invite email");
   assert.equal((await admin.send("POST", "/api/app/admin/users", { email: "new@example.com", role: "student", fullName: "Dup" })).status, 409);
   const stu = await signIn(w, "new@example.com");
   await admin.json("PATCH", `/api/app/admin/users/${created.user.id}`, { status: "suspended" });

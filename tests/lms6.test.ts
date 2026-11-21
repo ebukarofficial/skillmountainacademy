@@ -21,16 +21,19 @@ test("the confirm page signs in only on a click (POST), never on page load", () 
   assert.doesNotMatch(src, /useEffect/);
 });
 
-test("each role gets its dashboard; the student's centre column (next class) comes first on phones", () => {
+test("each role gets its own workspace in the shared shell, with the brief's sections", () => {
   const page = read("app/app/page.tsx");
   for (const r of ["StudentDashboard", "InstructorDashboard", "AdminDashboard"]) assert.ok(page.includes(`<${r}`));
+  for (const f of ["student", "instructor", "admin"]) assert.match(read(`app/app/${f}.tsx`), /<AppShell me=\{me\} nav=\{nav\}/, f);
   const stu = read("app/app/student.tsx");
-  assert.match(stu, /order-1 space-y-5 lg:order-2">\s*<NextClass/);
-  for (const s of ["This week's assignments", "Quizzes and assessments", "Graded work", "Learning materials", "Upcoming classes", "Learning assistant", "My programme", "My progress", "Payments", "Join live session", "Meet link pending"]) assert.ok(stu.includes(s), s);
+  for (const s of ["Welcome to your learning space.", "Registration No", "<NextClass", "Your responsibilities", "Classes and calendar", "Coursework", "Learning materials", "Learning assistant", "Messages", "Progress", "Academic record", "Admitted", "Payments", "Email preferences", "Join the live session", "has not added the"]) assert.ok(stu.includes(s), s);
   const ins = read("app/app/instructor.tsx");
-  for (const s of ["Attendance to record", "My schedule", "Next 7 days", "Add link", "Completed", "Student missed", "To mark", "Set work", "My performance"]) assert.ok(ins.includes(s), s);
+  for (const s of ["Attendance to record", "My schedule", "Next 7 days", "Add link", "Completed", "Student missed", "Waiting to be marked", "Set work", "My performance", "Staff No"]) assert.ok(ins.includes(s), s);
   const adm = read("app/app/admin.tsx");
-  for (const s of ["Overview", "Users", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Materials", "Platform", "Fixed weekly class time", "Confirm bank payment"]) assert.ok(adm.includes(s), s);
+  for (const s of ["Overview", "Admit a student", "/api/app/admin/admit", "People", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Materials", "Platform", "Fixed weekly class time", "Confirm bank payment"]) assert.ok(adm.includes(s), s);
+  const shell = read("app/app/shell.tsx");
+  for (const s of ["Notifications", "Sign out", "My account", "aria-current"]) assert.ok(shell.includes(s), s);
+  assert.doesNotMatch([stu, ins, adm, shell].join("\n"), /--font-serif|bg-cream/, "dashboards use the modern sans and white cards");
 });
 
 test("dashboards use only existing colour tokens (no hex values) and never show a made-up Meet link", () => {
@@ -40,8 +43,12 @@ test("dashboards use only existing colour tokens (no hex values) and never show 
   assert.doesNotMatch(read("app/app/student.tsx"), /meet\.google\.com\//, "links come only from the instructor");
 });
 
-test("footers link to sign-in", () => {
-  assert.match(read("app/header.tsx"), /href="\/app\/login\/"/);
+test("the public site has no sign-in links; students and staff have their own private entrances", () => {
+  for (const f of ["app/header.tsx", "app/site-parts.tsx", "app/page.tsx"]) assert.doesNotMatch(read(f), /href="\/app\/(login|staff)\/"/, f);
   assert.match(read("app/page.tsx"), /<SiteFooter \/>/);
-  assert.match(read("app/site-parts.tsx"), /href="\/app\/login\/"/);
+  assert.match(read("app/app/login/page.tsx"), /<EntryPage kind="student" \/>/);
+  assert.match(read("app/app/staff/page.tsx"), /<EntryPage kind="staff" \/>/);
+  const entry = read("app/app/entry.tsx");
+  for (const s of ["Welcome to your learning space.", "localStorage", "next", "Turnstile"]) assert.ok(entry.includes(s), s);
+  for (const f of ["app/app/login/page.tsx", "app/app/staff/page.tsx"]) assert.match(read(f), /index: false/, `${f} is not indexed`);
 });
