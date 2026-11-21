@@ -11,6 +11,11 @@ import { handleGeo } from "./server/routes/geo";
 import { handleHold } from "./server/routes/hold";
 import { handleOrderStatus, handlePayLink, handleWebhook } from "./server/routes/payments";
 import { handleLms } from "./server/lms";
+import { onEmailFailure } from "./server/email";
+import { logError } from "./server/lms/data/users";
+
+// Every email that fails is written to the error log (Admin > Platform > Recent errors) with Resend's reason.
+const recordEmailFailures = (env: AppEnv) => { if (env.DB) onEmailFailure((subject, reason) => logError(env.DB!, "email", `"${subject}" was not sent. ${reason}`)); };
 
 type Handler = (req: Request, env: AppEnv, ctx: ExecutionContext) => Promise<Response>;
 
@@ -34,7 +39,8 @@ const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
 export default {
   async fetch(req: Request, env: AppEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
-    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req); // safety net: the website
+    if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
+    recordEmailFailures(env); // safety net: the website
     const path = url.pathname.replace(/\/+$/, "");
     const route = ROUTES[path];
     const handler = route?.[req.method as "GET" | "POST"];
@@ -54,6 +60,7 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: AppEnv, ctx: ExecutionContext): Promise<void> {
+    recordEmailFailures(env);
     ctx.waitUntil(runSchedule(env, new Date(controller.scheduledTime), controller.cron).then((r) => console.log("schedule", JSON.stringify(r))));
   },
 } satisfies ExportedHandler<AppEnv>;

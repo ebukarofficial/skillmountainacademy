@@ -11,7 +11,8 @@ import {
   ordersList, overviewStats, paymentHistory, platformStats, ratingsFor, recentErrors, recordManualPayment, revenueByMonth, studentOrders, totalUnreadMessages,
   unreadFrom, upsertRating,
 } from "../data/reports";
-import { getUser } from "../data/users";
+import { getUser, logError } from "../data/users";
+import { deliver, esc, letter } from "../../email";
 import { notify } from "../notify";
 import { afterPayment } from "../../routes/payments";
 import { payLink } from "../../routes/payments";
@@ -199,3 +200,13 @@ route("GET", "/api/app/student/payments", ["student"], async (c) => {
   return ok({ orders: out, history: history.map((h) => ({ naira: naira(h.amount_kobo), paidAt: h.paid_at, method: h.provider, reference: h.reference, part: h.seq })) });
 });
 
+
+// Sends a test email at once and reports Resend's answer, so the owner can see why email is not arriving.
+route("POST", "/api/app/admin/test-email", ["admin"], async (c) => {
+  const started = Date.now();
+  const r = await deliver(c.env, { to: c.user.email, subject: "Test email from Skill Mountain Academy",
+    html: letter("Test email", `Dear ${esc(c.user.full_name.split(" ")[0])}`, `<p>This is a test sent from Admin &gt; Platform. If you can read it, email delivery works.</p><p style="opacity:.7;font-size:14px">Sent ${new Date().toISOString()}</p>`, "admin") });
+  if (!r.ok) await logError(c.db, "email", `"Test email" was not sent. ${r.reason}`);
+  await c.audit("email.test", "user", c.user.id, { ok: r.ok });
+  return ok({ sent: r.ok, to: c.user.email, reason: r.reason, ms: Date.now() - started, from: c.env.EMAIL_FROM || "Skill Mountain Academy <admission@skillmountainacademy.com>" });
+});

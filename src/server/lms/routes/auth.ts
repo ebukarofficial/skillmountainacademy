@@ -14,7 +14,7 @@ import { verifyTurnstile } from "../../turnstile";
 import { EMAIL_RE } from "../../validate";
 import { Repo } from "../../repo";
 import { ALL, ok, publicRoute, route, SESSION_COOKIE, SESSION_DAYS } from "../api";
-import { audit, canSignIn, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, getUser, getUserByEmail, updateUser, type User } from "../data/users";
+import { audit, canSignIn, logError, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, getUser, getUserByEmail, updateUser, type User } from "../data/users";
 import { selfView } from "../views";
 import { newStaffNo } from "../ids";
 
@@ -89,7 +89,7 @@ publicRoute("POST", "/api/auth/request", async (c) => {
     await audit(c.db, { actor_id: user.id, action: "admin.bootstrap", target_type: "user", target_id: user.id, ip_hash: c.ipHash });
   }
   if (user && canSignIn(user)) {
-    if (portal === null || portalOf(user.role) === portal) c.exec.waitUntil(sendSignInLink(c.env, c.db, user, false, safeNext(b.next)));
+    if (portal === null || portalOf(user.role) === portal) c.exec.waitUntil(sendSignInLink(c.env, c.db, user, false, safeNext(b.next)).catch((e) => logError(c.db, "/api/auth/request", `Sign-in email for ${user!.email} failed: ${String((e as Error)?.stack ?? e)}`)));
     else c.exec.waitUntil(sendWrongEntrance(c.env, user));
   }
   // Same answer whether or not the address has an account, so nobody can probe for accounts.

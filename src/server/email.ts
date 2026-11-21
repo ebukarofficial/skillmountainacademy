@@ -25,10 +25,11 @@ export function plainText(html: string): string {
     .replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-export async function sendEmail(env: AppEnv, m: Mail): Promise<boolean> {
+// Sends one email and reports exactly what happened, so a failure can be shown to the Academy instead of vanishing.
+export async function deliver(env: AppEnv, m: Mail): Promise<{ ok: boolean; reason: string }> {
   if (!env.RESEND_API_KEY) {
     console.warn("email skipped: RESEND_API_KEY is not set", m.subject);
-    return false;
+    return { ok: false, reason: "RESEND_API_KEY is not set on the Worker (Settings > Variables and Secrets)." };
   }
   try {
     const r = await fetch("https://api.resend.com/emails", {
@@ -43,12 +44,24 @@ export async function sendEmail(env: AppEnv, m: Mail): Promise<boolean> {
         reply_to: m.replyTo || env.ADMIN_EMAIL || "admission@skillmountainacademy.com",
       }),
     });
-    if (!r.ok) console.error("resend error", r.status, await r.text());
-    return r.ok;
+    if (r.ok) return { ok: true, reason: "accepted by Resend" };
+    const t = (await r.text()).slice(0, 400);
+    console.error("resend error", r.status, t);
+    return { ok: false, reason: `Resend refused the email (HTTP ${r.status}): ${t}` };
   } catch (e) {
     console.error("resend failed", e);
-    return false;
+    return { ok: false, reason: `Could not reach Resend: ${String((e as Error)?.message ?? e)}` };
   }
+}
+
+// Hook for recording failures (the learning platform points this at its error log, shown under Admin > Platform).
+let failureLog: ((subject: string, reason: string) => Promise<unknown>) | null = null;
+export const onEmailFailure = (f: typeof failureLog) => { failureLog = f; };
+
+export async function sendEmail(env: AppEnv, m: Mail): Promise<boolean> {
+  const r = await deliver(env, m);
+  if (!r.ok && failureLog) await failureLog(m.subject, r.reason).catch(() => undefined);
+  return r.ok;
 }
 
 // Official correspondence layout: logo header, a hero with the student photo on the right, the message, and a branded
