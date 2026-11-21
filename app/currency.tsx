@@ -3,8 +3,8 @@
 // request.cf.country, or the browser's time zone and language as a fallback), then the country the student selects
 // at enrolment. Students are never asked to pick a currency. Prices are always set and charged in naira; other
 // currencies are shown as approximate guidance at the cached rate.
-import { useSyncExternalStore } from "react";
-import { CURRENCIES, currencyForCountry, display, guessCountry, type Currency, type Rates } from "@/lib/pricing";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { approx, CURRENCIES, currencyForCountry, display, guessCountry, money, type Currency, type Rates } from "@/lib/pricing";
 import { countries, countryCode, countryName } from "@/lib/countries";
 
 type State = { currency: Currency; rates: Rates | null; detected: Currency; country: string | null; ready: boolean };
@@ -118,7 +118,7 @@ export function CurrencySwitcher({ dark = false }: { dark?: boolean }) {
     <label className="relative inline-flex items-center">
       <span className="sr-only">Show prices in</span>
       <select value={currency} onChange={(e) => setCurrency(e.target.value as Currency)}
-        className={`h-11 cursor-pointer appearance-none rounded-full py-0 pl-4 pr-8 font-display text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand-orange ${dark ? "bg-white/15 text-white" : "bg-paper text-ink"}`}>
+        className={`h-11 cursor-pointer appearance-none rounded-full py-0 pl-4 pr-8 font-display text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand-orange ${dark ? "bg-white/15 text-white" : "bg-white text-ink"}`}>
         {CURRENCIES.map((c) => <option key={c} value={c} disabled={c !== "NGN" && !rates} className="text-ink">{c === "NGN" ? "₦ NGN" : c === "USD" ? "$ USD" : c === "GBP" ? "£ GBP" : "€ EUR"}</option>)}
       </select>
       <span aria-hidden="true" className="pointer-events-none absolute right-3 text-xs">▾</span>
@@ -155,9 +155,53 @@ export function PayCurrency() {
   const { currency, country } = useCurrency();
   const name = countryName(country);
   return (
-    <div className="rounded-md bg-cream px-4 py-3 text-sm" data-pay-currency>
+    <div className="rounded-md bg-[#f8f8f9] px-4 py-3 text-sm" data-pay-currency>
       <b className="font-display">{currency === "NGN" ? "Amounts in naira (₦)" : `Amounts also shown in ${currency}`}</b>
       <span className="block text-ink/70">{currency === "NGN" ? (name && name !== "Nigeria" ? `Exchange rates are unavailable right now, so amounts are shown in naira.` : "Payment is in naira.") : `Based on your country${name ? ` (${name})` : ""}. A guide only: you pay in naira (₦).`}</span>
+    </div>
+  );
+}
+
+// The server's quote for a programme (GET /api/quote): the amount in the currency of the visitor's country of
+// residence, and, separately, what Paystack actually charges (always naira). Conversion happens only on the server.
+export type Quote = {
+  ok: true; programme: string; country: string | null; currency: Currency; plan: "full" | "parts"; fullPaymentOnly: boolean;
+  display: { total: number; parts: number[]; approximate: boolean };
+  charge: { currency: "NGN"; total: number; parts: number[]; provider: string };
+  rate: number; ratesUpdatedAt: string | null; source: string | null;
+};
+export function useQuote(slug: string, plan: "full" | "parts" = "full"): Quote | null | "unavailable" {
+  const { country, ready } = useCurrency();
+  const [q, setQ] = useState<Quote | null | "unavailable">(null);
+  useEffect(() => {
+    if (!ready) return;
+    let live = true;
+    fetch(`/api/quote?programme=${encodeURIComponent(slug)}&plan=${plan}${country ? `&country=${country}` : ""}`, { headers: { accept: "application/json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live) setQ(j?.ok ? (j as Quote) : "unavailable"); })
+      .catch(() => { if (live) setQ("unavailable"); });
+    return () => { live = false; };
+  }, [slug, plan, country, ready]);
+  return q;
+}
+
+const updated = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "");
+
+// The programme investment: the visitor's own currency is the main figure. For currencies other than naira, a short
+// line explains that it is a guide at a dated exchange rate and that the exact naira charge is shown before payment.
+export function QuotePrice({ slug, fallbackNaira, size = "lg" }: { slug: string; fallbackNaira: number; size?: "md" | "lg" }) {
+  const q = useQuote(slug);
+  const big = `font-display font-extrabold tabular-nums ${size === "lg" ? "text-3xl" : "text-2xl"}`;
+  if (q === null) return <span className={`${big} text-ink/25`} aria-busy="true">…</span>;
+  if (q === "unavailable") return <span className={big}>{money(fallbackNaira, "NGN")}</span>;
+  return (
+    <div data-quote={q.currency}>
+      <span className={big}>{q.display.approximate ? approx(q.display.total, q.currency) : money(q.display.total, q.currency)}</span>
+      {q.currency !== "NGN" && (
+        <p className="mt-1 text-xs leading-relaxed text-ink/65">
+          Guide amount in {q.currency} at the exchange rate of {updated(q.ratesUpdatedAt)}. Payment is processed in naira by {q.charge.provider}; the exact amount charged is shown before you pay.
+        </p>
+      )}
     </div>
   );
 }

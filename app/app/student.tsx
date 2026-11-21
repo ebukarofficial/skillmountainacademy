@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import type { Me } from "./page";
 import { Messages, ProfileEditor, ProgressView, type Progress } from "./shared";
+import { StudentWeekly } from "./weekly";
 import { api, Avatar, Badge, Bar, Btn, Card, Empty, inputCls, Msg, naira, PageTitle, upload, useAction, useLoad, useNow, useTab, VerifiedBadge, when } from "./ui";
 import { AppShell, Icon, NotificationsPage, targetOf, useNotifications, type NavItem, type Note } from "./shell";
 import { AcademicCalendar, UpcomingList, type CalEvent } from "./calendar";
@@ -271,6 +272,7 @@ export function StudentDashboard({ me }: { me: Me }) {
         <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <NextClass s={ov.data?.nextSession ?? null} now={now} />
+            <StudentWeekly />
             <Card title="Your Academic Tasks" action={tasks.length ? <span className="text-sm text-ink/70">{tasks.length} to complete</span> : null}>
               {tasks.length ? (<>
                 {/* Phones: one stacked item per task. */}

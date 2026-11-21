@@ -6,11 +6,11 @@ import { BUSINESS, MESSAGE, PROGRAMMES, SITE_URL, duration, type Programme } fro
 import { learnList } from "@/lib/curricula";
 import { programmeCopy } from "@/lib/programme-content";
 import { FOCUS, PHOTO } from "@/lib/photos";
-import { CloudBadges } from "../../components";
+import { CloudBadges, PANEL_BG } from "../../components";
 import { HoldPrice } from "../../hold";
-import { Approx, CountrySelect } from "../../currency";
+import { CountrySelect } from "../../currency";
 import { AdmissionBadge } from "../../admissions-status";
-import { Arrow, Eyebrow, SERIF, btnPrimary } from "../../brand";
+import { Arrow, SERIF, btnPrimary } from "../../brand";
 import { FacultyList } from "../../faculty/faculty-list";
 import { CareerLaunch, CurriculumActions, MessageStrip, SiteFooter, SiteHeader, TrustLines } from "../../site-parts";
 import { EnrolSection } from "./enrol";
@@ -54,11 +54,10 @@ function courseJsonLd(p: Programme) {
   };
 }
 
-function Section({ id, n, title, children }: { id: string; n: number; title: string; children: React.ReactNode }) {
+function Section({ id, title, children }: { id: string; n?: number; title: string; children: React.ReactNode }) {
   return (
     <section id={id} aria-labelledby={`${id}-h`} className="scroll-mt-24 border-t border-ink/10 py-14">
-      <p className="font-display text-sm font-semibold text-brand-red">Section {n}</p>
-      <h2 id={`${id}-h`} className={`${SERIF} mt-1 text-3xl leading-tight`}>{title}</h2>
+      <h2 id={`${id}-h`} className={`${SERIF} text-3xl leading-tight`}>{title}</h2>
       <div className="mt-6">{children}</div>
     </section>
   );
@@ -71,10 +70,12 @@ export default async function ProgrammePage({ params }: Params) {
   if (!p) notFound();
   const copy = programmeCopy(p.slug);
   const facts: [string, string][] = [
-    ["Duration", duration(p)],
-    ["Format", "One-on-one, live online"],
-    ["Level", p.level],
-    ["Weekly session", "45 to 60 minutes"],
+    ["Duration", `${duration(p)}.`],
+    ["Format", "Live instruction."],
+    ["Instruction", "One-on-one live session with an assigned instructor."],
+    ["Level", `${p.level}.`],
+    ["Live session", "45–60 minutes each week."],
+    ["Independent study", "10–20 hours per week."],
   ];
   return (
     <>
@@ -88,8 +89,7 @@ export default async function ProgrammePage({ params }: Params) {
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-10 lg:grid-cols-[1.1fr_.9fr] lg:pt-14">
             <div>
               <nav aria-label="Breadcrumb" className="text-sm text-ink/60"><Link href="/programmes/" className="hover:text-brand-red">Programmes</Link> <span aria-hidden="true">/</span> {p.name}</nav>
-              <Eyebrow className="mt-6">{p.tag} · {p.level}</Eyebrow>
-              <h1 className={`${SERIF} mt-2 text-4xl leading-[1.1] sm:text-[2.75rem]`}>{p.name}</h1>
+              <h1 className={`${SERIF} mt-6 text-4xl leading-[1.1] sm:text-[2.75rem]`}>{p.name}</h1>
               {p.track === "cloud" && <CloudBadges className="mt-4" />}
               <p className="mt-5 font-display text-lg font-medium text-ink">{copy.discipline}</p>
               <p className="mt-3 max-w-xl text-lg leading-relaxed text-ink/70">{p.blurb}</p>
@@ -103,11 +103,11 @@ export default async function ProgrammePage({ params }: Params) {
               <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name} online`} fill priority sizes="(max-width: 1024px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
             </div>
           </div>
-          <dl className="mx-auto grid max-w-6xl grid-cols-2 border-t border-ink/10 px-5 lg:grid-cols-4">
-            {facts.map(([k, v], i) => (
-              <div key={k} className={`py-6 pr-4 ${i % 2 ? "pl-4 sm:pl-6" : ""} ${i ? "lg:border-l lg:border-ink/10 lg:pl-6" : ""}`}>
+          <dl className="mx-auto grid max-w-6xl gap-x-8 border-t border-ink/10 px-5 sm:grid-cols-2 lg:grid-cols-3">
+            {facts.map(([k, v]) => (
+              <div key={k} className="border-b border-ink/10 py-5 sm:[&:nth-last-child(-n+2)]:border-b-0 lg:[&:nth-last-child(-n+3)]:border-b-0">
                 <dt className="font-display text-sm font-semibold text-ink/70">{k}</dt>
-                <dd className="mt-1.5 text-ink/85">{v}</dd>
+                <dd className="mt-1 text-ink/90">{v}</dd>
               </div>
             ))}
           </dl>
@@ -115,20 +115,20 @@ export default async function ProgrammePage({ params }: Params) {
 
         <div className="mx-auto grid max-w-6xl gap-12 px-5 lg:grid-cols-[1fr_22rem]">
           <div>
-            <Section id="overview" n={1} title="Programme introduction">
+            <Section id="overview" title="Programme introduction">
               <div className="max-w-2xl space-y-4 text-lg leading-relaxed text-ink/75">{copy.intro.map((t) => <p key={t}>{t}</p>)}</div>
               <h3 className="mt-8 font-display text-base font-semibold">Where it is practised</h3>
               <div className="mt-2"><Lines items={copy.opportunities} /></div>
             </Section>
 
-            <Section id="outcomes" n={2} title="Learning outcomes">
+            <Section id="outcomes" title="Learning outcomes">
               <p className="text-lg text-ink/75">By the end of the programme you will be able to:</p>
               <ol className="mt-3">
                 {copy.mastery.map((t, i) => <li key={t} className="flex gap-4 border-t border-ink/10 py-4"><span className="w-7 shrink-0 font-display text-lg font-semibold text-brand-red">{i + 1}.</span><span className="text-lg text-ink/85">{t}</span></li>)}
               </ol>
             </Section>
 
-            <Section id="suited" n={3} title="Intended audience">
+            <Section id="suited" title="Intended audience">
               <p className="max-w-2xl text-lg leading-relaxed text-ink/75">{p.audience ?? copy.suitedTo}</p>
               <dl className="mt-6 grid gap-x-8 sm:grid-cols-2">
                 <div className="border-t border-ink/10 py-4"><dt className="font-display font-semibold">Level</dt><dd className="mt-1 text-ink/75">{p.level}</dd></div>
@@ -136,60 +136,55 @@ export default async function ProgrammePage({ params }: Params) {
               </dl>
             </Section>
 
-            <Section id="curriculum" n={4} title="Curriculum">
+            <Section id="curriculum" title="Curriculum">
               <ol>
                 {learnList(p).map((l, i) => <li key={l} className="flex gap-5 border-t border-ink/10 py-3"><span className="w-6 shrink-0 font-display font-semibold text-ink/65">{i + 1}</span><span className="text-ink/85">{l}</span></li>)}
               </ol>
               <div className="mt-6"><CurriculumActions p={p} /></div>
             </Section>
 
-            <Section id="structure" n={5} title="Programme duration">
-              <dl className="grid gap-x-8 sm:grid-cols-2">
-                {([
-                  ["Duration", `${duration(p)}.`],
-                  ["Sessions", "One fixed weekly session of 45 to 60 minutes, live and one-on-one on Google Meet."],
-                  ["Coursework", "Weekly assignments, quizzes and instructor-marked assessments, with written feedback."],
-                  ["Completion", "Judged on your coursework, assessments and practical work. Students who meet the requirements receive a Skill Mountain Academy certificate."],
-                ] as [string, string][]).map(([k, v]) => <div key={k} className="border-t border-ink/10 py-4"><dt className="font-display font-semibold">{k}</dt><dd className="mt-1 text-ink/75">{v}</dd></div>)}
-              </dl>
-              <p className="mt-4 text-ink/75">The weekly rhythm, the live workspace and the learning assistant are described on <Link href="/learning-experience/" className="font-semibold text-indigo underline">The Learning Experience</Link>.</p>
+            <Section id="structure" title="Weekly commitment">
+              <p className="max-w-2xl text-lg leading-relaxed text-ink/75">Over {duration(p)}, each week combines one 45–60 minute live session with your instructor and 10–20 hours of independent study. The study time is spread across the week to suit you; it is not one continuous sitting.</p>
+              <h3 className="mt-8 font-display text-base font-semibold">Independent study includes</h3>
+              <ul className="mt-2 grid gap-x-8 sm:grid-cols-2">
+                {["Weekly assignments and classwork", "Practical tasks and projects", "Quizzes and revision", "Video lessons and reading", "Revision with the learning assistant", "Reviewing previous sessions", "Preparing questions for your instructor", "Other activities your instructor sets"].map((t) => <li key={t} className="border-t border-ink/10 py-3 text-ink/80">{t}</li>)}
+              </ul>
+              <p className="mt-5 text-ink/75">Your dashboard shows each week&apos;s checklist and records what you complete. Students who meet the programme&apos;s requirements receive a Skill Mountain Academy certificate.</p>
             </Section>
 
-            <Section id="practical" n={6} title="Practical work">
+            <Section id="practical" title="Practical work">
               <p className="max-w-2xl text-lg leading-relaxed text-ink/75">Throughout the programme you produce finished work, reviewed by your instructor. By the end you should be able to show:</p>
               <div className="mt-4"><Lines items={copy.outcomes} /></div>
             </Section>
 
-            <Section id="internship" n={7} title="Internship">
+            <Section id="internship" title="Internship">
               <p className="max-w-2xl text-lg leading-relaxed text-ink/75">After the training comes a {p.internshipMonths}-month practical phase on structured projects, reviewed by your instructor.</p>
               <div className="mt-8"><CareerLaunch p={p} /></div>
             </Section>
 
-            <Section id="faculty" n={8} title="Faculty">
+            <Section id="faculty" title="Faculty">
               <FacultyList programme={p.slug} />
             </Section>
           </div>
 
           {/* Investment and enrolment: sticky on desktop, in the flow of the page on mobile */}
           <aside aria-labelledby="investment" className="lg:py-14">
-            <div className="rounded-lg border border-ink/10 bg-paper p-6 lg:sticky lg:top-24">
+            <div className={`rounded-lg border border-ink/10 ${PANEL_BG} p-6 lg:sticky lg:top-24`}>
               <p id="investment" className="font-display text-sm font-semibold text-brand-red">Programme investment</p>
               <p className={`${SERIF} mt-2 text-2xl leading-tight`}>{p.name}</p>
               <div className="mt-4"><HoldPrice p={p} /></div>
-              <Approx naira={p.price} className="mt-1 block text-sm text-ink/60" />
-              <p className="mt-2 text-sm text-ink/65">Pay in full, or in 3 parts (50%, 30%, 20%).</p>
+              <p className="mt-2 text-sm text-ink/65">{p.fullPaymentOnly ? "Paid in full at admission." : "Pay in full, or in 3 parts (50%, 30%, 20%)."}</p>
               <div className="mt-5"><CountrySelect compact /></div>
-              <p className="mt-2 text-sm text-ink/70">Your country sets the currency used for guide amounts. Payment is processed in naira.</p>
+              <p className="mt-2 text-sm text-ink/70">The amount above updates to the currency of the country you select.</p>
               <a href="#enrol" className={`${btnPrimary} mt-6 w-full`}>Apply for Admission</a>
-              <div className="mt-6 border-t border-ink/10 pt-5"><TrustLines /></div>
+              <div className="mt-6 border-t border-ink/10 pt-5"><TrustLines fullPaymentOnly={!!p.fullPaymentOnly} /></div>
             </div>
           </aside>
         </div>
 
-        <section id="enrol" aria-labelledby="enrol-h" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
+        <section id="enrol" aria-labelledby="enrol-h" className="scroll-mt-20 border-t border-ink/10 bg-white py-16 sm:py-20">
           <div className="mx-auto max-w-3xl px-5">
-            <p className="font-display text-sm font-semibold text-brand-red">Section 9</p>
-            <h2 id="enrol-h" className={`${SERIF} mt-1 text-3xl leading-tight`}>Admission and investment</h2>
+            <h2 id="enrol-h" className={`${SERIF} text-3xl leading-tight`}>Admission and investment</h2>
             <p className="mt-3 text-ink/75">Complete the admission form and pay here. Your place is confirmed once your payment is verified; your registration number and access email follow.</p>
             <div className="mt-8"><EnrolSection p={p} /></div>
           </div>

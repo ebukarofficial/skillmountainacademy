@@ -20,7 +20,7 @@ export function LegalShell({ title, intro, items, updated = LEGAL_UPDATED }: { t
             <section key={t} className="border-t border-ink/10 pt-5"><h2 className="font-display text-lg font-semibold">{t}</h2><p className="mt-1.5 leading-relaxed text-ink/80">{d}</p></section>
           ))}
         </div>
-        <section className="mt-10 rounded-lg border border-ink/10 bg-paper p-6">
+        <section className="mt-10 rounded-lg border border-ink/10 bg-white p-6">
           <h2 className="font-display text-lg font-bold">Business details</h2>
           <p className="mt-1 text-ink/80">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}<br />Phone: {BUSINESS.phone}<br />Email: <a className="font-semibold text-brand-red underline" href={`mailto:${BUSINESS.email}`}>{BUSINESS.email}</a></p>
         </section>

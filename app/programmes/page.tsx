@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PROGRAMMES, duration } from "@/lib/config";
+import { PROGRAMMES, PROGRAMME_COUNT, duration } from "@/lib/config";
 import { CloudBadges } from "../components";
 import { Arrow, PageHero, SERIF, btnOutline } from "../brand";
 import { Catalogue } from "./catalogue";
@@ -17,11 +17,11 @@ export default function ProgrammesPage() {
     <>
       <SiteHeader />
       <main id="main" className="overflow-x-clip">
-        <PageHero eyebrow="Programme catalogue" title="Programmes"
-          lede="Eight programmes in design, engineering, security, cloud and marketing. Filter by discipline or search, then open a programme for its curriculum, duration, internship and investment." />
+        <PageHero title="Programmes"
+          lede={`${PROGRAMME_COUNT[0].toUpperCase()}${PROGRAMME_COUNT.slice(1)} programmes in design, engineering, security, cloud, marketing and AI automation. Filter by discipline or search, then open a programme for its curriculum, duration, internship and investment.`} />
         <Catalogue />
         <section aria-labelledby="cloud-track" className="mx-auto max-w-6xl px-5 py-14">
-          <div className="rounded-xl border border-ink/10 bg-paper p-6 sm:p-10">
+          <div className="rounded-xl border border-ink/10 bg-white p-6 sm:p-10">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h2 id="cloud-track" className={`${SERIF} text-3xl sm:text-4xl`}>Choosing within the Cloud track</h2>

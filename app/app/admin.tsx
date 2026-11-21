@@ -8,6 +8,8 @@ import { statusLabel, type PublicStatus } from "@/lib/admissions";
 import { api, Badge, Btn, Card, Empty, Field, inputCls, Msg, naira, PageTitle, Stat, useAction, useLoad, useNow, useTab, when } from "./ui";
 import { MaterialsManager } from "./shared";
 import { AdmissionsAdmin, RecruitmentAdmin } from "./admissions-admin";
+import { AssistantEnquiries, CallRequests } from "./desk-admin";
+import { CurrencySettings, Monitoring } from "./monitoring-admin";
 
 const TABS = ["overview", "students", "instructors", "programmes", "admissions", "payments", "records", "allocation", "attendance", "assessments", "materials", "content", "reports", "notifications", "security"] as const;
 type Tab = (typeof TABS)[number];
@@ -341,7 +343,10 @@ function Admit() {
   const [plan, setPlan] = useState<"full" | "parts">("full");
   const [prog, setProg] = useState(PROGRAMMES[0]?.slug ?? "");
   const { busy, msg, run } = useAction();
-  const price = PROGRAMMES.find((p) => p.slug === prog)?.price ?? 0;
+  const progObj = PROGRAMMES.find((p) => p.slug === prog);
+  const price = progObj?.price ?? 0;
+  const fullOnly = !!progObj?.fullPaymentOnly;
+  const effPlan = fullOnly ? "full" : plan;
   return (
     <div className="grid gap-5 [&>*]:min-w-0 lg:grid-cols-[1.4fr_1fr]">
       <Card title="Student details">
@@ -349,7 +354,7 @@ function Admit() {
           e.preventDefault();
           const form = e.currentTarget;
           const f = Object.fromEntries(new FormData(form)) as Record<string, string>;
-          run(() => api("/api/app/admin/admit", { method: "POST", body: { ...f, paidParts: plan === "full" ? 1 : Number(f.paidParts), instructorId: f.instructorId || null } }),
+          run(() => api("/api/app/admin/admit", { method: "POST", body: { ...f, plan: effPlan, paidParts: effPlan === "full" ? 1 : Number(f.paidParts), instructorId: f.instructorId || null } }),
             `${f.firstName} ${f.surname} was admitted. Their registration number, admission confirmation and sign-in link have been emailed to ${f.email}.`, () => form.reset());
         }}>
           <Field label="First name"><input name="firstName" required autoComplete="off" className={inputCls} /></Field>
@@ -358,8 +363,8 @@ function Admit() {
           <Field label="Phone"><input name="phone" autoComplete="off" className={inputCls} /></Field>
           <Field label="Country"><input name="country" className={inputCls} /></Field>
           <Field label="Programme"><select name="programme" value={prog} onChange={(e) => setProg(e.target.value)} className={inputCls}>{PROGRAMMES.map((p) => <option key={p.slug} value={p.slug}>{p.name}</option>)}</select></Field>
-          <Field label="Payment plan"><select name="plan" value={plan} onChange={(e) => setPlan(e.target.value as "full" | "parts")} className={inputCls}><option value="full">Paid in full</option><option value="parts">Paying in 3 parts</option></select></Field>
-          {plan === "parts" ? <Field label="Parts already paid"><select name="paidParts" className={inputCls}><option value="1">Part 1 (50%)</option><option value="2">Parts 1 and 2 (80%)</option><option value="3">All 3 parts</option></select></Field> : <div className="hidden sm:block" />}
+          <Field label="Payment plan">{fullOnly ? <p className="py-2.5 text-sm text-ink/75">Paid in full: {progObj?.name} is not offered in instalments.</p> : <select name="plan" value={plan} onChange={(e) => setPlan(e.target.value as "full" | "parts")} className={inputCls}><option value="full">Paid in full</option><option value="parts">Paying in 3 parts</option></select>}</Field>
+          {effPlan === "parts" ? <Field label="Parts already paid"><select name="paidParts" className={inputCls}><option value="1">Part 1 (50%)</option><option value="2">Parts 1 and 2 (80%)</option><option value="3">All 3 parts</option></select></Field> : <div className="hidden sm:block" />}
           <Field label="Payment reference (bank or receipt)"><input name="paymentReference" placeholder="e.g. UBA transfer ref" className={inputCls} /></Field>
           <Field label="Instructor"><select name="instructorId" className={inputCls}><option value="">Assign later</option>{instructors.map((u) => <option key={u.id} value={u.id}>{u.fullName}</option>)}</select></Field>
           <div className="sm:col-span-2 flex flex-wrap items-center gap-3 border-t border-ink/[0.07] pt-4">
@@ -468,9 +473,9 @@ function WebsiteContent({ go }: { go: (t: Tab) => void }) {
 
 const TITLES: Record<Tab, [string, string?]> = {
   overview: ["Institutional overview", "Figures across the Academy, and what needs action."],
-  students: ["Students", "Every student account. Admit a student who paid outside the website from Admissions."],
+  students: ["Students", "Monitor progress and engagement, contact students, and manage accounts. Admit a student who paid outside the website from Admissions."],
   instructors: ["Instructors", "Verification of new instructors, and teaching activity."],
-  programmes: ["Programmes", "The eight programmes' modules and topics, which drive each student's progress."],
+  programmes: ["Programmes", "Each programme's modules and topics, its investment in each currency, and the exchange rates used on the website."],
   admissions: ["Admissions", "Admit students, and set each programme's intake, capacity and the status shown on the website."],
   payments: ["Payments", "Payments received, balances outstanding, and every order."],
   records: ["Academic records", "Completion, marks and students needing attention."],
@@ -486,9 +491,11 @@ const TITLES: Record<Tab, [string, string?]> = {
 
 export function AdminDashboard({ me }: { me: Me }) {
   const [tab, setTab] = useTab(TABS, "overview");
-  const [admSeg, setAdmSeg] = useState<"admit" | "intake">("admit");
+  const [admSeg, setAdmSeg] = useState<"admit" | "intake" | "calls" | "enquiries">("admit");
   const [paySeg, setPaySeg] = useState<"summary" | "orders">("summary");
   const [insSeg, setInsSeg] = useState<"verification" | "activity" | "accounts">("verification");
+  const [stuSeg, setStuSeg] = useState<"monitoring" | "accounts">("monitoring");
+  const [progSeg, setProgSeg] = useState<"content" | "investment">("content");
   const nav: NavItem<Tab>[] = [
     { id: "overview", label: "Overview", icon: "home" },
     { id: "students", label: "Students", icon: "users" },
@@ -511,15 +518,21 @@ export function AdminDashboard({ me }: { me: Me }) {
     <AppShell me={me} nav={nav} tab={tab} setTab={setTab} primary={8}>
       {tab === "notifications" ? <NotificationsPage ids={TABS as unknown as string[]} onGo={(t) => setTab(t as Tab)} /> : <PageTitle title={title} sub={sub} action={tab === "students" ? <Btn small onClick={() => { setAdmSeg("admit"); setTab("admissions"); }}>Admit a student</Btn> : undefined} />}
       {tab === "overview" && <Overview go={setTab} />}
-      {tab === "students" && <Users fixedRole="student" title="Students" addRoles={["student"]} />}
+      {tab === "students" && <>
+        <Segments value={stuSeg} onChange={setStuSeg} items={[["monitoring", "Monitoring"], ["accounts", "Accounts"]]} />
+        {stuSeg === "monitoring" ? <Monitoring /> : <Users fixedRole="student" title="Students" addRoles={["student"]} />}
+      </>}
       {tab === "instructors" && <>
         <Segments value={insSeg} onChange={setInsSeg} items={[["verification", "Verification"], ["activity", "Teaching activity"], ["accounts", "Accounts"]]} />
         {insSeg === "verification" ? <RecruitmentAdmin /> : insSeg === "activity" ? <Instructors /> : <Users fixedRole="instructor" title="Instructor accounts" addRoles={["instructor"]} />}
       </>}
-      {tab === "programmes" && <Courses />}
+      {tab === "programmes" && <>
+        <Segments value={progSeg} onChange={setProgSeg} items={[["content", "Modules and topics"], ["investment", "Investment and currency"]]} />
+        {progSeg === "content" ? <Courses /> : <CurrencySettings />}
+      </>}
       {tab === "admissions" && <>
-        <Segments value={admSeg} onChange={setAdmSeg} items={[["admit", "Admit a student"], ["intake", "Intake and capacity"]]} />
-        {admSeg === "admit" ? <Admit /> : <AdmissionsAdmin />}
+        <Segments value={admSeg} onChange={setAdmSeg} items={[["admit", "Admit a student"], ["intake", "Intake and capacity"], ["calls", "Call requests"], ["enquiries", "Assistant enquiries"]]} />
+        {admSeg === "admit" ? <Admit /> : admSeg === "intake" ? <AdmissionsAdmin /> : admSeg === "calls" ? <CallRequests /> : <AssistantEnquiries />}
       </>}
       {tab === "payments" && <>
         <Segments value={paySeg} onChange={setPaySeg} items={[["summary", "Payments and balances"], ["orders", "Orders"]]} />

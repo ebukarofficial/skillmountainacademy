@@ -7,7 +7,7 @@ import { BANK, CFG, FLAGS, type Programme } from "@/lib/config";
 import { approx, convertParts, dueDays, lagosDate, money, planParts, type Plan } from "@/lib/pricing";
 import { TERMS_VERSION } from "@/lib/terms";
 import { BankDetails } from "../components";
-import { useCurrency, FxNote, PayCurrency } from "../currency";
+import { useCurrency, useQuote, FxNote, PayCurrency } from "../currency";
 import { useHold } from "../hold";
 import { Turnstile } from "../turnstile";
 
@@ -57,7 +57,13 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
   const days = dueDays(p);
   const today = new Date();
   // Converted parts come from convertParts, so they add up exactly to the converted total shown below them.
-  const amount = (i: number) => (shown && currency !== "NGN" ? `${money(parts[i], "NGN")} (${approx(shown[i], currency)})` : money(parts[i], "NGN"));
+  // The server's quote is the source of display amounts for the standard price (no group class, no timed offer).
+  const quote = useQuote(p.slug, plan);
+  const q = quote && quote !== "unavailable" && !(group && groupOn) && !(active && p.timedPrice != null) && quote.charge.total === total ? quote : null;
+  const amount = (i: number) => (q ? (q.display.approximate ? approx(q.display.parts[i], q.currency) : money(q.display.parts[i], q.currency))
+    : shown && currency !== "NGN" ? approx(shown[i], currency) : money(parts[i], "NGN"));
+  const totalShown = q ? (q.display.approximate ? approx(q.display.total, q.currency) : money(q.display.total, q.currency)) : shown && currency !== "NGN" ? approx(shown.reduce((a, b) => a + b, 0), currency) : money(total, "NGN");
+  const foreign = q ? q.currency !== "NGN" : !!shown && currency !== "NGN";
 
   async function submit() {
     setErr("");
@@ -87,13 +93,13 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
     <div className="space-y-4">
       <h1 className="font-display text-2xl font-extrabold">Review and pay</h1>
       <PayCurrency />
-      <div className="rounded-md bg-cream p-4 text-sm">
+      <div className="rounded-md bg-[#f8f8f9] p-4 text-sm">
         <p><b>{[d.firstName, d.middleName, d.surname].filter(Boolean).join(" ")}</b> · {d.email} · {d.phone}</p>
         <button type="button" onClick={onBack} className="mt-1 font-semibold text-brand-red underline">Edit my details</button>
       </div>
 
       {groupOn && (
-        <fieldset className="rounded-md bg-cream p-4" data-group-option>
+        <fieldset className="rounded-md bg-[#f8f8f9] p-4" data-group-option>
           <legend className="sr-only">Group class</legend>
           <label className="flex items-start gap-3"><input type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} className="mt-1 h-5 w-5 accent-indigo" />
             <span><b className="font-display">Learn with 1 or 2 friends</b><span className="block text-sm text-ink/70">You share one live class and one price. Each learner has their own record, grades and attendance.</span></span></label>
@@ -117,8 +123,8 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
       <fieldset>
         <legend className="font-display font-bold">How would you like to pay?</legend>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
-          {([["full", "Pay in full", `${amount(0)} today`], ["parts", "Pay in 3 parts", "50% today, then 30% and 20%"]] as const).map(([v, t, s]) => (
-            <label key={v} className={`flex cursor-pointer items-start gap-3 rounded-md border-2 px-4 py-3 transition ${plan === v ? "border-indigo bg-white" : "border-transparent bg-cream"}`}>
+          {([["full", "Pay in full", `${amount(0)} today`], ["parts", "Pay in 3 parts", "50% today, then 30% and 20%"]] as const).filter(([v]) => v === "full" || !p.fullPaymentOnly).map(([v, t, s]) => (
+            <label key={v} className={`flex cursor-pointer items-start gap-3 rounded-md border-2 px-4 py-3 transition ${plan === v ? "border-indigo bg-white" : "border-transparent bg-[#f8f8f9]"}`}>
               <input type="radio" name="plan" checked={plan === v} onChange={() => setPlan(v)} className="mt-1 h-5 w-5 accent-indigo" />
               <span><span className="block font-display font-bold">{t}</span><span className="text-sm text-ink/70">{s}</span></span>
             </label>
@@ -127,7 +133,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
       </fieldset>
 
       {plan === "parts" && (
-        <div className="rounded-md bg-cream p-4 text-sm" data-instalments>
+        <div className="rounded-md bg-[#f8f8f9] p-4 text-sm" data-instalments>
           <table className="w-full">
             <tbody>
               {parts.map((_, i) => (
@@ -137,7 +143,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
                   <td className="py-1.5 text-right text-ink/70">{i === 0 ? "Today" : dateText(lagosDate(today, days[i]))}</td>
                 </tr>
               ))}
-              <tr><td className="pt-2 font-bold">Total</td><td className="pt-2 font-bold">{money(total, "NGN")}{shown && currency !== "NGN" ? ` (${approx(shown.reduce((a, b) => a + b, 0), currency)})` : ""}</td><td /></tr>
+              <tr><td className="pt-2 font-bold">Total</td><td className="pt-2 font-bold">{totalShown}</td><td /></tr>
             </tbody>
           </table>
           <p className="mt-3">We email a secure Paystack link for parts 2 and 3 on their due dates, with a reminder 3 days before.</p>
@@ -149,7 +155,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
         <legend className="font-display font-bold">Payment method</legend>
         <div className="mt-2 grid gap-3">
           {([["paystack", "Pay online with Paystack", payments ? "Card, bank transfer or USSD. Confirmed automatically." : "Online payment is being set up. Please use bank transfer for now."], ["bank", "Bank transfer", `Pay to our ${BANK.bank} account, then send us your teller.`]] as const).map(([v, t, s]) => (
-            <label key={v} className={`flex items-start gap-3 rounded-md border-2 px-4 py-3 transition ${v === "paystack" && !payments ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${method === v ? "border-indigo bg-white" : "border-transparent bg-cream"}`}>
+            <label key={v} className={`flex items-start gap-3 rounded-md border-2 px-4 py-3 transition ${v === "paystack" && !payments ? "cursor-not-allowed opacity-60" : "cursor-pointer"} ${method === v ? "border-indigo bg-white" : "border-transparent bg-[#f8f8f9]"}`}>
               <input type="radio" name="method" disabled={v === "paystack" && !payments} checked={method === v} onChange={() => setMethod(v)} className="mt-1 h-5 w-5 accent-indigo" />
               <span><span className="block font-display font-bold">{t}</span><span className="text-sm text-ink/70">{s}</span></span>
             </label>
@@ -158,12 +164,13 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
       </fieldset>
 
       <div className="rounded-md bg-indigo px-4 py-3 text-sm text-white" data-charge>
-        You pay <b>{money(parts[0], "NGN")}</b> now{plan === "parts" ? " (part 1 of 3)" : ""}. {method === "paystack" ? "Paystack charges in naira (NGN)." : "Transfer the amount in naira (NGN)."}
-        {shown && currency !== "NGN" ? <> That is {approx(shown[0], currency)} at today&apos;s rate; your bank converts it at its own rate.</> : null}
+        {foreign
+          ? <>Amount charged now{plan === "parts" ? " (part 1 of 3)" : ""}: <b>{money(parts[0], "NGN")}</b> in naira (NGN), about {q ? money(q.display.parts[0], q.currency) : amount(0)}. {method === "paystack" ? "Paystack charges in naira" : "Bank transfers are made in naira"}; your bank converts it at its own rate.</>
+          : <>You pay <b>{money(parts[0], "NGN")}</b> now{plan === "parts" ? " (part 1 of 3)" : ""}. {method === "paystack" ? "Paystack charges in naira (NGN)." : "Transfer the amount in naira (NGN)."}</>}
         <FxNote className="mt-1 text-white/70" />
       </div>
 
-      <label className="flex items-start gap-3 rounded-md bg-cream px-4 py-3 text-sm">
+      <label className="flex items-start gap-3 rounded-md bg-[#f8f8f9] px-4 py-3 text-sm">
         <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-brand-red" />
         <span>I have read and understood the <Link href="/terms/" target="_blank" className="font-semibold text-brand-red underline">Terms and Conditions</Link>, <Link href="/refunds/" target="_blank" className="font-semibold text-brand-red underline">Refund Policy</Link> and <Link href="/privacy/" target="_blank" className="font-semibold text-brand-red underline">Privacy Policy</Link>. I confirm the details are correct and I agree to SMA using them to process this registration. If the learner is under 18, I am their parent or guardian and I give this consent for them.</span>
       </label>
@@ -218,7 +225,7 @@ export function Confirming({ reference, trx, p }: { reference: string; trx: stri
     return () => clearTimeout(t);
   }, [reference, trx]);
   return (
-    <div className="mx-auto max-w-xl rounded-lg bg-paper p-6 text-center shadow-xl shadow-indigo/10 sm:p-8" role="status" aria-live="polite">
+    <div className="mx-auto max-w-xl rounded-lg bg-white p-6 text-center shadow-xl shadow-indigo/10 sm:p-8" role="status" aria-live="polite">
       {state === "wait" && <><h1 className="font-display text-2xl font-extrabold">Confirming your payment…</h1><p className="mt-3 text-ink/75">This usually takes a few seconds. Please keep this page open.</p></>}
       {(state === "paid" || state === "part") && <>
         <span className="bg-indigo mx-auto grid h-16 w-16 place-items-center rounded-full text-3xl text-white">✓</span>
@@ -227,7 +234,7 @@ export function Confirming({ reference, trx, p }: { reference: string; trx: stri
       </>}
       {state === "slow" && <><h1 className="font-display text-2xl font-extrabold">We are still confirming your payment</h1><p className="mt-3 text-ink/75">Paystack can take a few minutes. You will get an email as soon as it is confirmed. If money left your account and you hear nothing within an hour, contact us with your reference.</p></>}
       {state === "error" && <><h1 className="font-display text-2xl font-extrabold">We could not find that payment</h1><p className="mt-3 text-ink/75">If you paid, please contact us with your reference and we will check it for you.</p></>}
-      <p className="mt-5 rounded-md bg-cream px-4 py-3 text-sm">Your reference: <b>{reference}</b></p>
+      <p className="mt-5 rounded-md bg-[#f8f8f9] px-4 py-3 text-sm">Your reference: <b>{reference}</b></p>
       <div className="mt-5"><Link href="/" className="bg-indigo inline-block rounded-full px-8 py-3 font-display font-semibold text-white">Back to home</Link></div>
     </div>
   );

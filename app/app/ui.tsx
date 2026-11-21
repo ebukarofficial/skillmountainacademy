@@ -161,14 +161,11 @@ export function useTab<T extends string>(tabs: readonly T[], first: T): [T, (t: 
   return [tab, setTab];
 }
 
-// The verified badge shown next to an approved instructor's name.
+// The verified badge shown next to an approved instructor's name: a clean circle, round at every size.
 export function VerifiedBadge({ className = "", light = false }: { className?: string; light?: boolean }) {
   return (
-    <span title="Verified by Skill Mountain Academy" className={`inline-flex shrink-0 items-center align-middle ${className}`}>
-      <svg viewBox="0 0 24 24" aria-hidden="true" className={`h-[1.05em] w-[1.05em] ${light ? "text-white" : "text-indigo"}`}>
-        <path fill="currentColor" d="M12 1.5l2.6 1.9 3.2-.2 1 3.1 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3.1-3.2-.2L12 22.5l-2.6-1.9-3.2.2-1-3.1-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3.1 3.2.2z" />
-        <path fill="none" stroke="currentColor" className={light ? "text-indigo" : "text-white"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" d="M7.8 12.3l2.8 2.8 5.6-5.8" />
-      </svg>
+    <span title="Verified by Skill Mountain Academy" className={`inline-grid aspect-square h-[1.1em] w-[1.1em] shrink-0 place-items-center rounded-full align-middle ${light ? "bg-white text-indigo" : "bg-indigo text-white"} ${className}`}>
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="h-[62%] w-[62%]"><path d="M3.5 8.4 6.6 11.4 12.6 4.9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
       <span className="sr-only">Verified</span>
     </span>
   );

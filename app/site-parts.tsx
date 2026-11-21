@@ -1,5 +1,7 @@
 // Shared, server-rendered parts: the brand line, the Career Launch Package, trust lines, curriculum actions
 // and the footer. Colours come only from the existing tokens in app/globals.css.
+import { AssistantLauncher } from "./assistant";
+import { BookCallDialog } from "./book-call";
 import Image from "next/image";
 import Link from "next/link";
 import logoWhite from "@/assets/sma-logo-white.png";
@@ -34,11 +36,11 @@ export function CareerLaunch({ p }: { p: Programme }) {
   );
 }
 
-export function TrustLines() {
+export function TrustLines({ fullPaymentOnly = false }: { fullPaymentOnly?: boolean } = {}) {
   const items = [
     "Skill Mountain Academy certificate on completing the programme's requirements",
     "Online, one-on-one with your assigned instructor",
-    "Pay in full or in 3 parts (50%, 30%, 20%)",
+    fullPaymentOnly ? "Paid in full at admission" : "Pay in full or in 3 parts (50%, 30%, 20%)",
   ];
   return (
     <ul className="space-y-2.5 text-sm text-ink/75">
@@ -63,9 +65,13 @@ export function CurriculumActions({ p, dark = false }: { p: Programme; dark?: bo
 
 export function SiteFooter() {
   return (
-    <footer className="bg-black text-white/70">
+    <>
+    {/* Site-wide: the admissions assistant and the Book a call dialog (both open on request only). */}
+    <BookCallDialog />
+    <AssistantLauncher />
+    <footer className="bg-ink text-white/75">
       <div className="mx-auto max-w-6xl px-5">
-        <div className="grid gap-10 py-14 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
+        <div className="grid gap-10 py-14 [&>*]:min-w-0 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
           <div>
             <Image src={logoWhite} alt="Skill Mountain Academy" unoptimized className="h-12 w-auto" />
             <p className="mt-6 font-(family-name:--font-serif) text-2xl text-white">{MESSAGE.headline}</p>
@@ -84,7 +90,7 @@ export function SiteFooter() {
           </nav>
           <div>
             <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-white">Contact</p>
-            <p className="mt-4 text-sm leading-relaxed">Email: <a href={`mailto:${BUSINESS.email}`} className="font-semibold text-white underline">{BUSINESS.email}</a><br />Phone: <a href={`tel:${BUSINESS.phone.replace(/\s/g, "")}`} className="underline">{BUSINESS.phone}</a></p>
+            <p className="mt-4 text-sm leading-relaxed">Email: <a href={`mailto:${BUSINESS.email}`} className="break-all font-semibold text-white underline">{BUSINESS.email}</a><br />Phone: <a href={`tel:${BUSINESS.phone.replace(/\s/g, "")}`} className="underline">{BUSINESS.phone}</a></p>
             <p className="mt-4 text-sm text-white/55">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}</p>
           </div>
         </div>
@@ -100,5 +106,6 @@ export function SiteFooter() {
         </div>
       </div>
     </footer>
+    </>
   );
 }

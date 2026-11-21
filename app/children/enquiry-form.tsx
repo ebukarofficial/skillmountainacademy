@@ -19,7 +19,7 @@ export function EnquiryForm() {
   if (backend.mode === "checking") return <p className="py-8 text-center text-ink/70" role="status">Loading the enquiry form…</p>;
   if (backend.mode === "legacy") {
     return (
-      <div className="rounded-2xl bg-cream p-5 text-center" data-enquiry-fallback>
+      <div className="rounded-2xl bg-paper p-5 text-center" data-enquiry-fallback>
         <p className="font-medium">Our online enquiry form is not available right now. Please contact us directly and we will reply quickly.</p>
         <div className="mt-4 flex flex-wrap justify-center gap-3">
           <a href={wa} target="_blank" rel="noopener noreferrer" className="brand-bg rounded-full px-6 py-3 font-display font-semibold text-white">Message us on WhatsApp</a>
@@ -29,7 +29,7 @@ export function EnquiryForm() {
     );
   }
   if (sent) {
-    return <div role="status" className="rounded-2xl bg-cream p-6 text-center"><p className="font-display text-xl font-bold">Thank you. We received your enquiry.</p><p className="mt-2 text-ink/75">We will contact you within two working days. A confirmation is on its way to your email.</p></div>;
+    return <div role="status" className="rounded-2xl bg-paper p-6 text-center"><p className="font-display text-xl font-bold">Thank you. We received your enquiry.</p><p className="mt-2 text-ink/75">We will contact you within two working days. A confirmation is on its way to your email.</p></div>;
   }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -69,7 +69,7 @@ export function EnquiryForm() {
         </select>
       </label>
       <label className="block font-medium">Anything we should know? (optional)<textarea name="message" rows={3} maxLength={1000} className={input} placeholder="Your child's interests, experience or learning needs" /></label>
-      <label className="flex items-start gap-3 rounded-2xl bg-cream px-4 py-3 text-sm">
+      <label className="flex items-start gap-3 rounded-2xl bg-paper px-4 py-3 text-sm">
         <input type="checkbox" name="consent" required className="mt-1 h-5 w-5 shrink-0 accent-brand-red" />
         <span>I am this child&apos;s parent or guardian, and I agree to Skill Mountain Academy using these details to contact me about the children&apos;s package (see our <a href="/privacy/" className="font-semibold text-brand-red underline">Privacy Policy</a>).</span>
       </label>

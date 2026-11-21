@@ -1,20 +1,32 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { MODEL } from "@/lib/institution";
-import { Arrow, Eyebrow, NumberedList, PageHero, SERIF, SectionHead, btnLight, btnOutline } from "../brand";
+import { Arrow, PageHero, SERIF, btnLight, btnOutline } from "../brand";
 import { SiteFooter, SiteHeader } from "../site-parts";
 
 export const metadata: Metadata = {
   title: "The Learning Experience | Skill Mountain Academy",
-  description: "How a Skill Mountain Academy programme works: an assigned instructor, a fixed weekly one-on-one live session, guided practice with screen sharing, assignments, assessment, an AI learning assistant and an intensive practical phase.",
+  description: "How a Skill Mountain Academy programme is taught: an assigned instructor, a weekly one-on-one live session with screen sharing and guided practice, 10–20 hours of independent study, assignments and assessment, AI learning support and an internship.",
   alternates: { canonical: "/learning-experience/" },
 };
 
-const WEEK: [string, string][] = [
-  ["Before the session", "Your dashboard shows your next session, your assignments and any message from your instructor. The Google Meet link appears as soon as your instructor adds it, with reminders 24 hours, 1 hour and 15 minutes before."],
-  ["In the session", "Forty-five minutes to an hour, live and one-on-one. Your instructor explains, demonstrates on screen, then watches you work on yours and corrects you as you go."],
-  ["After the session", "Your instructor logs the session's outcome and sets the week's assignment. You submit it in your dashboard and receive a mark and written feedback."],
-  ["Between sessions", "The learning assistant helps you revise, explains concepts again and points you to approved materials. It will not write graded work for you."],
+// Each element is explained once, here. Other pages link to this one instead of repeating it.
+const ELEMENTS: [string, string][] = [
+  ["An assigned instructor", "One instructor teaches you throughout the programme, so your progress is followed by someone who knows your work."],
+  ["One-on-one instruction", "Sessions are for you alone. Explanations start from what you already understand and move at the pace your work shows you are ready for."],
+  ["Live sessions", "A weekly session of 45–60 minutes on Google Meet, at a fixed time agreed when you enrol."],
+  ["Screen sharing", "Your instructor demonstrates professional tools on screen; when asked, you share yours, so mistakes are seen and corrected as they happen."],
+  ["Guided practice", "Much of each session is spent working under supervision, applying the technique just shown."],
+  ["Assignments", "Weekly work set by your instructor, submitted in your dashboard and returned with a mark and written comments."],
+  ["Assessments", "Quizzes and periodic assessments check understanding of each stage before you move to the next."],
+  ["AI learning support", "A learning assistant, limited to your programme's approved materials, helps with revision between sessions. It does not complete graded work."],
+  ["Internship", "After training, a supervised practical phase of one to three months, depending on the programme, applies the discipline to complete projects."],
+];
+
+const WEEK: [string, string, string][] = [
+  ["Live session", "45–60 minutes", "Instruction and demonstration, then guided practice on your own screen. Your instructor sets the week's work at the end."],
+  ["Independent study", "10–20 hours", "Assignments and classwork, practical exercises, video lessons, quizzes, revision with the learning assistant, reviewing the last session and preparing questions for the next. Spread across the week as suits you."],
+  ["Submission", "By the deadline", "You submit the week's assignment and complete any quiz in your dashboard, where your weekly checklist records what is done."],
+  ["Review and feedback", "Before the next session", "Your instructor marks your work, writes feedback and reviews your progress, and the next session begins from there."],
 ];
 
 export default function LearningExperiencePage() {
@@ -22,56 +34,49 @@ export default function LearningExperiencePage() {
     <>
       <SiteHeader />
       <main id="main" className="overflow-x-clip">
-        <PageHero eyebrow="The Learning Experience" title="Taught, not merely shown."
-          lede="Students at Skill Mountain Academy learn through a structured relationship with one instructor. Technology supports that relationship. It does not replace it." />
+        <PageHero title="We teach by instruction and by showing."
+          lede="Every programme combines explanation with demonstration: your instructor tells you how the work is done, shows you, and then watches you do it." />
 
-        <section className="mx-auto max-w-6xl px-5 py-20">
-          <SectionHead eyebrow="The model" title="Eight elements of every programme." lede="The same structure runs through every discipline, adapted to its tools and standards." />
-          <div className="mt-10"><NumberedList items={MODEL} /></div>
+        <section aria-labelledby="elements" className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
+          <h2 id="elements" className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>How teaching is organised</h2>
+          <dl className="mt-10 grid gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
+            {ELEMENTS.map(([t, d]) => (
+              <div key={t} className="border-t border-ink/10 py-6">
+                <dt className="font-display text-lg font-semibold">{t}</dt>
+                <dd className="mt-2 leading-relaxed text-ink/75">{d}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
-        <section className="bg-indigo py-20 text-white">
+        <section aria-labelledby="week" className="border-y border-ink/10 bg-white py-16 sm:py-20">
           <div className="mx-auto max-w-6xl px-5">
-            <SectionHead light eyebrow="A week of study" title="What a typical week looks like." />
-            <div className="mt-10 grid gap-x-10 md:grid-cols-2">
-              {WEEK.map(([t, d]) => (
-                <div key={t} className="border-t border-white/15 py-6">
-                  <p className={`${SERIF} text-2xl`}>{t}</p>
-                  <p className="mt-2 leading-relaxed text-white/75">{d}</p>
-                </div>
+            <h2 id="week" className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>What a typical week looks like.</h2>
+            <p className="mt-4 max-w-2xl text-lg leading-relaxed text-ink/75">One live session and 10–20 hours of independent study form a single weekly cycle. Each week begins where the last one ended.</p>
+            <ol className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {WEEK.map(([t, when, d], i) => (
+                <li key={t} className="flex flex-col rounded-lg border border-ink/10 bg-white p-6">
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-indigo/90 font-display text-sm font-semibold text-white">{i + 1}</span>
+                  <p className="mt-4 font-display text-lg font-semibold">{t}</p>
+                  <p className="text-sm font-semibold text-brand-red">{when}</p>
+                  <p className="mt-2 leading-relaxed text-ink/75">{d}</p>
+                </li>
               ))}
-            </div>
+            </ol>
           </div>
         </section>
 
-        <section className="border-y border-ink/10 bg-paper/60 py-20">
-          <div className="mx-auto grid max-w-6xl gap-12 px-5 lg:grid-cols-2">
-            <div>
-              <Eyebrow>The live workspace</Eyebrow>
-              <h2 className={`${SERIF} mt-3 text-4xl leading-tight`}>Screen sharing, both ways.</h2>
-              <p className="mt-5 text-lg leading-relaxed text-ink/70">Sessions run on Google Meet. Your instructor shares their screen to demonstrate professional tools and processes. When asked, you share yours, so your instructor can see exactly what you are doing, spot mistakes and guide you through them. For design, development and other practical disciplines, this is where most learning happens.</p>
-            </div>
-            <div>
-              <Eyebrow>The AI learning assistant</Eyebrow>
-              <h2 className={`${SERIF} mt-3 text-4xl leading-tight`}>A companion, not a substitute.</h2>
-              <p className="mt-5 text-lg leading-relaxed text-ink/70">Your assistant is limited to your programme and the materials your instructors have approved. It explains difficult ideas, offers further examples and helps you prepare for assessments. It is deliberately not a general chatbot, and it will not produce answers to graded work.</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-6xl px-5 py-20">
+        <section aria-labelledby="practical" className="mx-auto max-w-6xl px-5 py-16 sm:py-20">
           <div className="grid gap-10 lg:grid-cols-2">
             <div>
-              <Eyebrow>Internship and practical application</Eyebrow>
-              <h2 className={`${SERIF} mt-3 text-4xl leading-tight`}>The practical phase.</h2>
-              <p className="mt-5 text-lg leading-relaxed text-ink/70">After the instructional phase, each programme continues into an intensive practical phase: two months for most programmes and three for Digital Marketing. Students work on real or carefully structured simulated projects, their instructor evaluates the work and returns corrections, and the finished work forms a portfolio.</p>
-              <p className="mt-4 text-ink/60">Where approved internship partners exist, we may connect students with practical opportunities. The practical phase is part of your learning. It is not a paid job, and we do not promise external placements or employment.</p>
+              <h2 id="practical" className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>The internship</h2>
+              <p className="mt-4 text-lg leading-relaxed text-ink/75">After training, students apply the discipline to complete projects, real or carefully structured, under their instructor&apos;s supervision. The finished work forms a portfolio.</p>
+              <p className="mt-3 text-ink/70">The internship is part of your studies. It is not paid employment, and the Academy does not promise external placements or jobs.</p>
             </div>
             <div>
-              <Eyebrow>Your private dashboard</Eyebrow>
-              <h2 className={`${SERIF} mt-3 text-4xl leading-tight`}>Everything in one place.</h2>
-              <ul className="mt-5">
-                {["Your weekly timetable and the next session's join link", "Assignments, quizzes and assessments, with marks and feedback", "Learning materials approved for your programme", "Progress, attendance and grades", "Private messages with your instructor", "Your payment plan and payment history"].map((t) => <li key={t} className="border-t border-ink/10 py-3 text-ink/75">{t}</li>)}
+              <h2 className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>Your learning space</h2>
+              <ul className="mt-4">
+                {["Your next session and its join link", "The week's checklist of study activities", "Assignments, quizzes and assessments, with feedback", "Approved learning materials", "Progress and attendance", "Messages with your instructor"].map((t) => <li key={t} className="border-t border-ink/10 py-3 text-ink/80">{t}</li>)}
               </ul>
             </div>
           </div>

@@ -71,7 +71,7 @@ export function HoldPrice({ p }: { p: Programme }) {
     return (
       <div>
         <Price p={p} size="lg" />
-        <p data-offer-ended className="mt-2 rounded-2xl bg-cream px-4 py-2 text-sm text-ink/80">Offer ended. The regular price applies.</p>
+        <p data-offer-ended className="mt-2 rounded-2xl bg-[#f8f8f9] px-4 py-2 text-sm text-ink/80">Offer ended. The regular price applies.</p>
       </div>
     );
   }
@@ -149,7 +149,7 @@ function ExitPrompt({ p, left }: { p: Programme; left: number }) {
   if (!open || left <= 0) return null;
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/60 p-4" onClick={close}>
-      <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="exit-title" aria-describedby="exit-desc" onClick={(e) => e.stopPropagation()} className="pop w-full max-w-md rounded-[2rem] bg-paper p-6 text-center shadow-2xl">
+      <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="exit-title" aria-describedby="exit-desc" onClick={(e) => e.stopPropagation()} className="pop w-full max-w-md rounded-[2rem] bg-white p-6 text-center shadow-2xl">
         <h2 id="exit-title" className="font-display text-2xl font-extrabold">Your offer price is still held</h2>
         <p id="exit-desc" className="mt-2 text-ink/75">{p.name} at <b><Money naira={p.timedPrice!} /></b> for about {Math.ceil(left / 60000)} more minute{Math.ceil(left / 60000) === 1 ? "" : "s"}. After that the regular price of <Money naira={p.price} /> applies.</p>
         <div className="mt-5 grid gap-2 sm:grid-cols-2">

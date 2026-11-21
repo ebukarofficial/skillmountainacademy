@@ -21,7 +21,7 @@ export function SiteHeader() {
     return () => document.removeEventListener("keydown", esc);
   }, [open]);
   return (
-    <header className="sticky top-0 z-40 border-b border-ink/10 bg-cream/95 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper/95 backdrop-blur">
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-3.5" aria-label="Main">
         <Link href="/" aria-label="Skill Mountain Academy home" className="shrink-0"><Image src={logo} alt="Skill Mountain Academy" priority unoptimized className="h-10 w-auto sm:h-11" /></Link>
         <ul className="hidden items-center gap-7 xl:flex">
@@ -37,7 +37,7 @@ export function SiteHeader() {
         </div>
       </nav>
       {open && (
-        <div id="site-menu" className="border-t border-ink/10 bg-paper xl:hidden" onClick={() => setOpen(false)}>
+        <div id="site-menu" className="border-t border-ink/10 bg-white xl:hidden" onClick={() => setOpen(false)}>
           <ul className="mx-auto max-w-6xl px-5 py-3">
             {NAV.map(([h, t]) => <li key={h}><Link href={h} aria-current={here(h) ? "page" : undefined} className={`block border-b border-ink/10 py-3.5 font-display font-medium ${here(h) ? "text-brand-red" : ""}`}>{t}</Link></li>)}
           </ul>

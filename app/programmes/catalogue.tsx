@@ -1,6 +1,6 @@
 "use client";
 // The programme catalogue: filter by discipline and level (both real programme data) and search by name or
-// description. Everything renders on the server first, so all eight programmes are in the page without JavaScript.
+// description. Everything renders on the server first, so every programme are in the page without JavaScript.
 import { useMemo, useState } from "react";
 import { PROGRAMMES } from "@/lib/config";
 import { programmeCopy } from "@/lib/programme-content";
@@ -20,7 +20,7 @@ export function Catalogue() {
   }, [d, level, q]);
   return (
     <section aria-label="Programme catalogue" className="mx-auto max-w-6xl px-5 py-12 sm:py-14">
-      <div className="flex flex-col gap-4 rounded-xl border border-ink/10 bg-paper p-4 sm:p-5 lg:flex-row lg:items-end">
+      <div className="flex flex-col gap-4 rounded-xl border border-ink/10 bg-white p-4 sm:p-5 lg:flex-row lg:items-end">
         <label className="block flex-1 text-sm font-semibold">Search programmes
           <span className="relative mt-1.5 block">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink/60"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5" /></svg>

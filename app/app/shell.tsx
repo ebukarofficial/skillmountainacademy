@@ -146,7 +146,7 @@ export function AppShell<T extends string>({ me, nav, tab, setTab, children, con
     </button>
   );
   return (
-    <div className="min-h-screen overflow-x-clip bg-ink/[0.03]">
+    <div className="min-h-screen overflow-x-clip bg-paper">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded focus:bg-white focus:px-3 focus:py-2">Skip to content</a>
       <header className="border-b border-ink/10 bg-white">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
@@ -178,7 +178,7 @@ export function AppShell<T extends string>({ me, nav, tab, setTab, children, con
           </div>
         </div>
       </header>
-      <nav aria-label="Sections" className="hidden bg-indigo lg:block">
+      <nav aria-label="Sections" className="hidden bg-indigo/90 lg:block">
         <div className="mx-auto flex max-w-7xl items-stretch px-3">
           {shown.map((n) => item(n))}
           {rest.length > 0 && (

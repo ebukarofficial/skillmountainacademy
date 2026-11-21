@@ -9,14 +9,16 @@ import { api, Avatar, Badge, Btn, Card, Empty, Field, inputCls, Msg, PageTitle, 
 import { AppShell, useNotifications, type NavItem } from "./shell";
 import { AcademicCalendar, type CalEvent } from "./calendar";
 import { InstructorProfileForm } from "./instructor-profile";
+import { AttendancePanel, ClassSessions, MeetSettings, StudentCards } from "./instructor-records";
+import { StaffWeekly } from "./weekly";
 
-type S = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetNotifiedAt: string | null; needsOutcome: boolean; student: { id: string; fullName: string; photo: string | null } };
+export type S = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetNotifiedAt: string | null; needsOutcome: boolean; student: { id: string; fullName: string; photo: string | null } };
 type Student = { enrolmentId: string; programme: string; programmeName: string; status: string; student: { id: string; fullName: string; email: string; studentNo: string | null; photo: string | null } };
 const lagosDay = (iso: string) => new Date(Date.parse(iso) + 3600_000).toISOString().slice(0, 10);
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
 type Work = { id: string; title: string; studentName: string; status: string; dueAt: string; dueText: string; maxScore: number; kind?: string };
 
-function SessionRow({ s, reload }: { s: S; reload: () => void }) {
+export function SessionRow({ s, reload }: { s: S; reload: () => void }) {
   const [url, setUrl] = useState(s.meetUrl ?? "");
   const { busy, msg, run } = useAction();
   const now = useNow();
@@ -40,36 +42,15 @@ function SessionRow({ s, reload }: { s: S; reload: () => void }) {
       {s.meetUrl && s.status === "scheduled" && <p className="mt-1 text-sm text-ink/70">{s.meetNotifiedAt ? `Student notified ${when(s.meetNotifiedAt)}` : "Notifying the student…"} · <a href={s.meetUrl} target="_blank" rel="noopener noreferrer" className="underline">Open Meet</a></p>}
       {s.status === "scheduled" && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {started && <Btn small kind="dark" disabled={busy} onClick={() => run(() => api(`/api/app/instructor/sessions/${s.id}/outcome`, { method: "POST", body: { status: "completed" } }), "Marked completed.", reload)}>Completed</Btn>}
+          {started && <Btn small kind="dark" disabled={busy} onClick={() => run(() => api(`/api/app/instructor/sessions/${s.id}/outcome`, { method: "POST", body: { status: "completed", detail: "on_time" } }), "Marked attended.", reload)}>Completed</Btn>}
+          {started && <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/instructor/sessions/${s.id}/outcome`, { method: "POST", body: { status: "completed", detail: "late" } }), "Marked attended, late.", reload)}>Attended late</Btn>}
           {started && <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/instructor/sessions/${s.id}/outcome`, { method: "POST", body: { status: "missed" } }), "Marked missed.", reload)}>Student missed</Btn>}
+          {started && <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/instructor/sessions/${s.id}/outcome`, { method: "POST", body: { status: "missed", detail: "excused" } }), "Marked as an excused absence.", reload)}>Excused absence</Btn>}
           <Btn small kind="ghost" disabled={busy} onClick={() => { if (confirm("Cancel this class? The student will be told.")) run(() => api(`/api/app/instructor/sessions/${s.id}/outcome`, { method: "POST", body: { status: "cancelled" } }), "Cancelled.", reload); }}>Cancel</Btn>
         </div>
       )}
       <Msg text={msg.text} kind={msg.kind} />
     </li>
-  );
-}
-
-function Schedule({ attendance = true }: { attendance?: boolean }) {
-  const [view, setView] = useState<"day" | "week">("day");
-  const today = lagosDay(new Date().toISOString());
-  const { data, error, reload } = useLoad<{ sessions: S[]; pendingOutcomes: S[] }>(`/api/app/instructor/sessions?from=${today}&to=${new Date(Date.parse(`${today}T12:00:00Z`) + 7 * 86400_000).toISOString().slice(0, 10)}`);
-  // Ended classes without an outcome are listed under "Attendance to record" instead.
-  const list = (data?.sessions ?? []).filter((s) => !s.needsOutcome && (view === "week" || lagosDay(s.startsAt) === today));
-  const byDay = useMemo(() => list.reduce<Record<string, S[]>>((m, s) => { (m[lagosDay(s.startsAt)] ??= []).push(s); return m; }, {}), [list]);
-  return (
-    <>
-      {attendance && !!data?.pendingOutcomes.length && <Card title={`Attendance to record (${data.pendingOutcomes.length})`}><ul className="space-y-2">{data.pendingOutcomes.map((s) => <SessionRow key={s.id} s={s} reload={reload} />)}</ul></Card>}
-      <Card title="My schedule" action={<div role="tablist" aria-label="Schedule range" className="inline-flex rounded-lg border border-ink/15 p-0.5">{(["day", "week"] as const).map((v) => <button key={v} role="tab" aria-selected={view === v} onClick={() => setView(v)} className={`rounded-md px-3 py-1.5 text-sm font-semibold ${view === v ? "bg-indigo text-white" : "text-ink/75"}`}>{v === "day" ? "Today" : "Next 7 days"}</button>)}</div>}>
-        {error && <Msg text={error} />}
-        {Object.entries(byDay).map(([d, ss]) => (
-          <div key={d} className="mb-4"><p className="mb-2 border-b border-ink/10 pb-1 text-sm font-semibold text-ink/75">{new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}</p>
-            <ul className="space-y-2">{ss.map((s) => <SessionRow key={s.id} s={s} reload={reload} />)}</ul></div>
-        ))}
-        {data && !list.length && <Empty>{view === "day" ? "No classes today." : "No classes in the next 7 days."}</Empty>}
-        <p className="mt-3 text-sm text-ink/70">Create each Meet link in Google Meet, then paste it here. Screen sharing and the whiteboard are inside Meet.</p>
-      </Card>
-    </>
   );
 }
 
@@ -293,7 +274,9 @@ function Workspace({ me }: { me: Me }) {
       </>}
 
       {tab === "students" && <>
-        <PageTitle title="My Students" sub="Only the students assigned to you." />
+        <PageTitle title="My Students" sub="Figures are calculated from class, attendance and coursework records, and update as records change." />
+        <StudentCards onOpen={(id) => setPick(id)} selected={pick} />
+        <h2 className="mb-3 mt-8 font-display text-lg font-semibold">Student record</h2>
         <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-[1fr_1.5fr]">
           <Card title={`Students (${students.length})`}>
             {Object.entries(groups).map(([slug, ss]) => (
@@ -307,6 +290,7 @@ function Workspace({ me }: { me: Me }) {
             {detail.data.student.bio && <p className="mt-2">{detail.data.student.bio}</p>}
             <div className="mt-4 space-y-5">{detail.data.progress.map((pr) => <ProgressView key={pr.enrolmentId} p={pr} />)}</div>
           </Card> : <Card><Empty>Select a student to see their progress.</Empty></Card>}
+          {pick && detail.data && <div className="space-y-6 lg:col-start-2">{detail.data.progress.map((pr) => <StaffWeekly key={pr.enrolmentId} enrolmentId={pr.enrolmentId} canAssign />)}</div>}
         </div>
       </>}
 
@@ -315,9 +299,9 @@ function Workspace({ me }: { me: Me }) {
         <div className="space-y-6">{programmes.map((pr) => <ProgrammeBlock key={pr.slug} slug={pr.slug} name={pr.name} students={groups[pr.slug] ?? []} />)}{st.data && !programmes.length && <Card><Empty>You will see your programmes once students are assigned to you.</Empty></Card>}</div>
       </>}
 
-      {tab === "calendar" && <><PageTitle title="Teaching Calendar" sub="Your classes and the deadlines you have set. Times are Lagos time (WAT)." /><AcademicCalendar events={events} now={now} title="Teaching calendar" /></>}
+      {tab === "calendar" && <><PageTitle title="Teaching Calendar" sub="Your teaching commitments at a glance: every scheduled class and the deadlines you have set. Open Class Sessions to teach. Times are Lagos time (WAT)." /><AcademicCalendar events={events} now={now} title="Teaching calendar" /></>}
 
-      {tab === "sessions" && <><PageTitle title="Class Sessions" sub="Add each class's Google Meet link; the student is told automatically. Times are Lagos time." /><div className="max-w-4xl space-y-6"><Schedule attendance={false} /></div></>}
+      {tab === "sessions" && <><PageTitle title="Class Sessions" sub="Choose a class on the left to open its teaching screen. Times are Lagos time (WAT)." /><ClassSessions students={students} /></>}
 
       {tab === "assignments" && <>
         <PageTitle title="Assignments" />
@@ -332,17 +316,9 @@ function Workspace({ me }: { me: Me }) {
       </>}
 
       {tab === "attendance" && <>
-        <PageTitle title="Attendance" sub="Record each finished class as completed or missed. Your records update the student's attendance." />
-        <div className="space-y-6">
-          <Card title={`To record (${range.data?.pendingOutcomes.length ?? 0})`}>{range.data?.pendingOutcomes.length ? <ul className="space-y-3">{range.data.pendingOutcomes.map((x) => <SessionRow key={x.id} s={x} reload={range.reload} />)}</ul> : <Empty>All attendance is recorded.</Empty>}</Card>
-          <Card title="Last four weeks">
-            {sessions.filter((x) => now && Date.parse(x.startsAt) < now && x.status !== "scheduled").length ? (
-              <div className="relative -mx-2 overflow-x-auto"><table className="w-full min-w-[32rem] text-left text-[0.95rem]">
-                <thead><tr className="border-b border-ink/10 text-sm text-ink/70"><th className="px-2 py-2 font-semibold">Date</th><th className="px-2 py-2 font-semibold">Student</th><th className="px-2 py-2 font-semibold">Programme</th><th className="px-2 py-2 font-semibold">Outcome</th></tr></thead>
-                <tbody>{sessions.filter((x) => now && Date.parse(x.startsAt) < now && x.status !== "scheduled").reverse().map((x) => <tr key={x.id} className="border-b border-ink/[0.06] last:border-0"><td className="px-2 py-2.5">{x.lagosTime}</td><td className="px-2 py-2.5 font-semibold">{x.student.fullName}</td><td className="px-2 py-2.5">{x.programmeName}</td><td className="px-2 py-2.5"><Badge s={x.status} /></td></tr>)}</tbody>
-              </table></div>) : <Empty>No recorded classes in the last four weeks.</Empty>}
-          </Card>
-        </div>
+        <PageTitle title="Attendance" sub="Record each finished class. Your records update the student's attendance immediately." />
+        <div className="mb-6"><Card title={`To record (${range.data?.pendingOutcomes.length ?? 0})`}>{range.data?.pendingOutcomes.length ? <ul className="space-y-3">{range.data.pendingOutcomes.map((x) => <SessionRow key={x.id} s={x} reload={range.reload} />)}</ul> : <Empty>All attendance is recorded.</Empty>}</Card></div>
+        <AttendancePanel />
       </>}
 
       {tab === "messages" && <><PageTitle title="Messages" sub="Private conversations with your students." /><div className="max-w-3xl"><Messages /></div></>}
@@ -361,6 +337,7 @@ function Workspace({ me }: { me: Me }) {
               <ul className="mt-4 space-y-2">{p.reviews.filter((r) => r.comment).slice(0, 3).map((r, i) => <li key={i} className="rounded-lg bg-ink/[0.03] p-3">“{r.comment}” <span className="text-ink/70">({r.rating}★)</span></li>)}</ul>
             </> : <Empty>Loading…</Empty>}
           </Card>
+          <MeetSettings />
           <InstructorProfileForm me={me} onboarding={false} />
         </div>
       </>}

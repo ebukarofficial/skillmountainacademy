@@ -5,14 +5,15 @@ import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import banner from "@/assets/photos/banner-students.webp";
 import logoMark from "@/assets/sma-logo.png";
-import { BUSINESS, CFG, faqList, PROGRAMMES, REVIEW_SHOTS, duration, type Programme } from "@/lib/config";
+import { BUSINESS, CFG, FAQ_GROUPS, faqList, PROGRAMMES, PROGRAMME_COUNT, REVIEW_SHOTS, duration, type Programme } from "@/lib/config";
 import { MENTORS, REVIEWS, SHOW_MENTORS, SHOW_REVIEWS } from "@/lib/content";
 import { BRAND } from "@/lib/institution";
-import { FOCUS, Intro, PHOTO, Reveal, SocialIcon, postSheet } from "./components";
+import { FOCUS, Intro, PHOTO, Reveal, SMA_PHOTO, SocialIcon, postSheet } from "./components";
 import { Arrow, Eyebrow, ProgrammeGrid, Rule, SERIF, SectionHead, btnOutline, btnPrimary } from "./brand";
 import { useAdmission } from "./admissions-status";
 import { SiteHeader } from "./header";
 import { SiteFooter } from "./site-parts";
+import { BookCallButton } from "./book-call";
 
 const FAQS = faqList();
 // FAQ structured data (https://schema.org/FAQPage), from the same list the page shows.
@@ -122,26 +123,27 @@ export default function Home() {
         </div>
 
         <div className="motion-safe:animate-[pop_.7s_cubic-bezier(.2,.7,.2,1)_.15s_both]">
-          <div className="flex h-[26rem] gap-3 sm:h-[30rem] lg:h-[33rem]" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+          <div className="flex h-[26rem] gap-2 sm:h-[30rem] lg:h-[33rem]" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
             onTouchStart={(e) => { touch.current = e.touches[0].clientX; setPaused(true); }}
             onTouchEnd={(e) => { const dx = e.changedTouches[0].clientX - touch.current; if (Math.abs(dx) > 40) slide(dx < 0 ? 1 : -1); setPaused(false); }}>
             {SLIDES.map((sl, i) => {
               const on = i === active;
               return (
                 <div key={sl.id} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} role="button" tabIndex={0} aria-label={sl.name} onKeyDown={(e) => e.key === "Enter" && setActive(i)}
-                  className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${sl.tone} transition-all duration-700 ease-out ${on ? "flex-[6]" : "hidden flex-[1] cursor-pointer md:block"}`}>
+                  className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${sl.tone} transition-all duration-700 ease-out ${on ? "min-w-0 flex-[9]" : "hidden min-w-0 flex-[1] cursor-pointer md:block"}`}>
                   <Image src={sl.photo} alt={`A learner studying ${sl.name} online with Skill Mountain Academy`} fill priority={i === 0} sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[sl.id] }} />
                   <div className={`absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
                   {on ? (
-                    <div className="pop absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
+                    <div className="pop absolute inset-x-0 bottom-0 p-4 text-white sm:p-5">
                       <SlideStatus slug={sl.id} />
-                      <h2 className="mt-3 font-display text-2xl font-extrabold sm:text-3xl">{sl.name}</h2>
-                      <p className="text-white/85">{duration(sl.prog)} · one-on-one</p>
-                      <Link href={progHref(sl.prog)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-block whitespace-nowrap rounded-full bg-white px-6 py-3 font-display font-semibold text-ink transition hover:bg-cream">Explore Programme</Link>
+                      {/* Long titles (Cloud & DevOps Engineering) wrap inside the slide; the size scales with the viewport. */}
+                      <h2 className="mt-3 max-w-full text-balance break-words font-display text-[clamp(1.25rem,2.1vw,1.75rem)] font-extrabold leading-tight">{sl.name}</h2>
+                      <p className="mt-1 text-sm text-white/85">{duration(sl.prog)}</p>
+                      <Link href={progHref(sl.prog)} onClick={(e) => e.stopPropagation()} className="mt-3 inline-flex max-w-full items-center justify-center rounded-full bg-white px-4 py-2.5 font-display text-sm font-semibold text-ink transition hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">Explore programme</Link>
                     </div>
                   ) : (
-                    <span className="absolute inset-x-2.5 bottom-4 flex justify-center rounded-full bg-indigo py-4 text-white">
-                      <span className="whitespace-nowrap font-display text-[13px] font-semibold leading-none [writing-mode:vertical-rl] [rotate:180deg]">{sl.name}</span>
+                    <span className="absolute inset-x-1 bottom-3 flex justify-center rounded-full bg-indigo/90 px-1 py-5 text-white">
+                      <span className="whitespace-nowrap font-display text-[11px] font-semibold leading-none tracking-wide [writing-mode:vertical-rl] [rotate:180deg]">{sl.name}</span>
                     </span>
                   )}
                 </div>
@@ -157,8 +159,8 @@ export default function Home() {
       {/* 3. A concise introduction to the Academy */}
       <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-12 border-t border-ink/10 px-5 py-16 sm:py-20 lg:grid-cols-2">
         <Reveal>
-          <SectionHead eyebrow="The Academy" title="An online academy for professional digital disciplines."
-            lede="Skill Mountain Academy teaches eight programmes in design, engineering, security, cloud and marketing. Each student is admitted to one programme and studies it with an assigned instructor, live and online." />
+          <SectionHead title="An online academy for professional digital disciplines."
+            lede={`Skill Mountain Academy offers ${PROGRAMME_COUNT} programmes in design, engineering, security, cloud, marketing and AI automation, studied live and online from wherever students live and work.`} />
           <div className="mt-7 flex flex-wrap gap-4">
             <Link href="/about/" className={btnOutline}>About the Academy</Link>
           </div>
@@ -171,11 +173,11 @@ export default function Home() {
       </section>
 
       {/* 4. Programme discovery */}
-      <section id="programmes" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
+      <section id="programmes" className="scroll-mt-20 border-t border-ink/10 bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-5">
           <div className="flex flex-wrap items-end justify-between gap-6">
-            <SectionHead eyebrow="Programmes" title="Choose a discipline." lede="Each programme page sets out what you will study, how long it takes, the internship and the investment." />
-            <Link href="/programmes/" className="font-display text-[0.95rem] font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">Search the catalogue</Link>
+            <SectionHead title="Choose a discipline." lede="Each programme page sets out what you will study, how long it takes, the internship and the investment." />
+            <Link href="/programmes/" className="font-display text-[0.95rem] font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">Programmes</Link>
           </div>
           <div className="mt-8 flex gap-1 overflow-x-auto border-b border-ink/15 no-scrollbar" role="tablist" aria-label="Disciplines">
             {cats.map((c) => (
@@ -189,8 +191,7 @@ export default function Home() {
       {/* 5. Institutional credibility: what the Academy actually issues and checks */}
       <section id="certificate" aria-labelledby="cert-h" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-12 px-5 py-16 sm:py-20 lg:grid-cols-[1fr_1.05fr]">
         <Reveal>
-          <Eyebrow>Records and certification</Eyebrow>
-          <h2 id="cert-h" className={`${SERIF} mt-2 text-3xl leading-tight sm:text-4xl`}>Your study is recorded, and your completion is certified.</h2>
+          <h2 id="cert-h" className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>Your study is recorded, and your completion is certified.</h2>
           <p className="mt-4 text-lg leading-relaxed text-ink/75">Students who complete their programme&apos;s requirements receive a Skill Mountain Academy certificate. It is the Academy&apos;s own certificate, not a university degree or a government or professional qualification.</p>
           <ul className="mt-7 divide-y divide-ink/10 border-y border-ink/10">
             {[["A registration number for every student", "Issued on admission, in the form SMA/26/000001, and used on your records."],
@@ -224,53 +225,47 @@ export default function Home() {
       </section>
 
       {/* 6. The learning model, once and briefly */}
-      <section id="model" aria-labelledby="model-h" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
+      <section id="model" aria-labelledby="model-h" className="scroll-mt-20 border-t border-ink/10 bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-5">
           <div className="flex flex-wrap items-end justify-between gap-6">
-            <div className="max-w-3xl"><Eyebrow>How you learn</Eyebrow><h2 id="model-h" className={`${SERIF} mt-2 text-3xl leading-tight sm:text-4xl`}>One programme, one instructor, one weekly class.</h2></div>
+            <div className="max-w-3xl"><h2 id="model-h" className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>A defined programme. An assigned instructor. A structured week of study.</h2></div>
             <Link href="/learning-experience/" className="font-display text-[0.95rem] font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">The Learning Experience</Link>
           </div>
-          <ol className="mt-10 grid gap-6 md:grid-cols-4">
-            {[["Live classes", "A fixed weekly class with your instructor on Google Meet."],
-              ["Coursework", "Assignments and assessments, marked with written feedback."],
-              ["Between classes", "Approved materials and a learning assistant grounded in them."],
-              ["Practical work", "Finished projects, followed by the programme's internship period."]].map(([t, d], i) => (
-              <li key={t} className="rounded-xl border border-ink/10 bg-paper p-5">
-                <span className="font-display text-sm font-semibold text-brand-red">Step {i + 1}</span>
-                <p className="mt-1 font-display text-lg font-semibold">{t}</p>
-                <p className="mt-1.5 text-ink/75">{d}</p>
-              </li>
+          <ul className="mt-8 grid gap-x-10 gap-y-4 border-t border-ink/10 pt-8 md:grid-cols-3">
+            {["Each programme has a set curriculum, a fixed duration and an internship period.",
+              "Each student is taught by one assigned instructor, who follows their progress throughout.",
+              "Each week combines a live session with independent study, marked work and feedback."].map((t) => (
+              <li key={t} className="text-lg leading-relaxed text-ink/80">{t}</li>
             ))}
-          </ol>
+          </ul>
         </div>
       </section>
 
       {/* 7. Faculty introduction */}
       <section id="faculty" aria-labelledby="fac-h" className="mx-auto grid max-w-6xl scroll-mt-20 gap-10 px-5 py-16 sm:py-20 lg:grid-cols-[1fr_1.2fr]">
         <Reveal>
-          <Eyebrow>Faculty</Eyebrow>
-          <h2 id="fac-h" className={`${SERIF} mt-2 text-3xl leading-tight sm:text-4xl`}>Instructors who practise what they teach.</h2>
-          <p className="mt-4 text-lg leading-relaxed text-ink/75">Every instructor completes a faculty profile, with certifications that can be checked, and is verified by the Academy before teaching. Verified instructors carry a badge beside their name.</p>
+          <h2 id="fac-h" className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>Instructors who practise what they teach.</h2>
+          <p className="mt-4 text-lg leading-relaxed text-ink/75">Our faculty are working practitioners in the disciplines they teach. Their profiles, credentials and areas of expertise are published on the Faculty page.</p>
           <Link href="/faculty/" className={`${btnOutline} mt-7`}>Our Faculty</Link>
         </Reveal>
         <Reveal delay={150}>
-          <ol className="grid gap-4 sm:grid-cols-2">
-            {[["Profile", "Biography, discipline, languages and professional links."], ["Credentials", "Certifications with public verification links."], ["Assessment", "A discipline-specific technical assessment."], ["Approval", "Identity and credentials confirmed by the Academy."]].map(([t, d]) => (
-              <li key={t} className="rounded-xl border border-ink/10 p-5"><p className="font-display font-semibold">{t}</p><p className="mt-1 text-ink/75">{d}</p></li>
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {[["Practitioners", "Instructors bring current professional practice into each lesson."], ["Checked credentials", "Qualifications and certifications are verified before anyone teaches."]].map(([t, d]) => (
+              <li key={t} className="rounded-xl border border-ink/10 bg-white p-5"><p className="font-display font-semibold">{t}</p><p className="mt-1 text-ink/75">{d}</p></li>
             ))}
-          </ol>
+          </ul>
         </Reveal>
       </section>
 
       {/* 8. Admissions pathway */}
-      <section id="book" aria-labelledby="adm-h" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
+      <section id="book" aria-labelledby="adm-h" className="scroll-mt-20 border-t border-ink/10 bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-5">
-          <SectionHead eyebrow="Admissions" title={<span id="adm-h">From programme to learning space in three steps.</span>} />
+          <SectionHead title={<span id="adm-h">From programme to learning space in three steps.</span>} />
           <ol className="mt-10 grid gap-6 md:grid-cols-3">
             {[["Choose your programme", "Read the programme page: curriculum, duration, internship and investment."],
-              ["Apply for admission", "Complete the short admission form on the programme page and pay in full or in three parts."],
+              ["Apply for admission", "Complete the admission form on the programme page and make your payment there."],
               ["Receive your access", "Your registration number and admission confirmation are emailed, followed by a link to your learning space."]].map(([t, d], i) => (
-              <li key={t} className="relative rounded-xl border border-ink/10 bg-paper p-6">
+              <li key={t} className="relative rounded-xl border border-ink/10 bg-white p-6">
                 <span className="grid h-10 w-10 place-items-center rounded-full bg-indigo font-display font-semibold text-white">{i + 1}</span>
                 <p className="mt-4 font-display text-lg font-semibold">{t}</p>
                 <p className="mt-1.5 text-ink/75">{d}</p>
@@ -279,7 +274,7 @@ export default function Home() {
           </ol>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <a href="#programmes" className={btnPrimary}>Apply for Admission <Arrow /></a>
-            <a href={CFG.calendlyConsult} target="_blank" rel="noopener noreferrer" className={btnOutline}>Speak with Admissions</a>
+            <BookCallButton className={btnOutline}>Book a call with Admissions</BookCallButton>
           </div>
         </div>
       </section>
@@ -336,24 +331,49 @@ export default function Home() {
         </section>
       )}
 
-      {/* Questions before applying (part of the admissions pathway) */}
-      <section id="faq" className="scroll-mt-20 border-t border-ink/10 py-16 sm:py-20">
-        <div className="mx-auto max-w-3xl px-5">
+      {/* Before you apply: four groups of four questions; each answer opens only when its question is chosen. */}
+      <section id="faq" aria-labelledby="faq-h" className="scroll-mt-20 border-t border-ink/10 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-5">
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD).replace(/</g, "\\u003c") }} />
-          <SectionHead eyebrow="Questions" title="Before you apply." />
-          <div className="mt-8">
-            {FAQS.map(([qq, a]) => (
-              <details key={qq} className="group border-t border-ink/10 py-5 last:border-b">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display font-semibold">{qq}<span className="text-xl text-indigo transition group-open:rotate-45" aria-hidden="true">+</span></summary>
-                <p className="mt-3 leading-relaxed text-ink/75">{a}</p>
-              </details>
+          <h2 id="faq-h" className={`${SERIF} text-3xl leading-tight sm:text-4xl`}>Before you apply</h2>
+          <div className="mt-10 grid gap-x-8 gap-y-10 sm:grid-cols-2 xl:grid-cols-4">
+            {FAQ_GROUPS.map((g) => (
+              <div key={g.title}>
+                <h3 className="font-display text-base font-semibold text-indigo">{g.title}</h3>
+                <div className="mt-3 border-b border-ink/10">
+                  {g.items.map(([qq, a]) => (
+                    <details key={qq} className="group border-t border-ink/10">
+                      <summary className="flex cursor-pointer list-none items-start justify-between gap-3 py-3.5 font-display text-[0.95rem] font-semibold leading-snug focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo">
+                        <span>{qq}</span>
+                        <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-indigo/40 text-sm leading-none text-indigo"><span className="group-open:hidden">+</span><span className="hidden group-open:inline">−</span></span>
+                      </summary>
+                      <p className="pb-4 text-[0.95rem] leading-relaxed text-ink/75">{a}</p>
+                    </details>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
+      {/* Pre-footer: the Academy's statement beside the learner photograph (the original approved asset). */}
+      <section aria-labelledby="statement" className="relative overflow-hidden bg-indigo/90 pt-16 text-white sm:pt-20">
+        <div className="mx-auto grid max-w-6xl items-end gap-10 px-5 lg:grid-cols-[1.25fr_.75fr]">
+          <figure className="pb-16 sm:pb-20">
+            <blockquote id="statement" className={`${SERIF} text-3xl leading-snug sm:text-4xl`}>
+              &ldquo;Knowledge becomes mastery through deliberate practice, honest feedback and the patience to begin again.&rdquo;
+            </blockquote>
+            <figcaption className="mt-6 flex items-center gap-3 text-white/75"><span aria-hidden="true" className="h-px w-8 bg-brand-orange" />Skill Mountain Academy</figcaption>
+          </figure>
+          <div className="hidden justify-center lg:flex">
+            <Image src={SMA_PHOTO} alt="A learner wearing a Skill Mountain Academy t-shirt" className="h-auto max-h-[24rem] w-auto" sizes="(min-width: 1024px) 24rem, 0px" />
+          </div>
+        </div>
+      </section>
+
       {/* Mailing list */}
-      <section className="bg-black text-white/75">
+      <section className="bg-ink text-white/75">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 pt-12 md:flex-row md:items-end md:justify-between">
           <div>
             <p className={`${SERIF} text-2xl text-white`}>Correspondence from the Academy</p>
@@ -380,7 +400,6 @@ export default function Home() {
       </main>
       <SiteFooter />
 
-      <a href={`https://wa.me/${CFG.whatsapp}`} aria-label="Chat with us on WhatsApp" className="fixed bottom-4 right-4 z-30 rounded-full bg-[#25d366] px-4 py-2.5 font-display text-sm font-semibold text-ink shadow-xl transition hover:scale-105">Chat</a>
     </>
   );
 }

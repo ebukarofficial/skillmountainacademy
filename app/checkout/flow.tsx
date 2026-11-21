@@ -137,7 +137,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
   // Admissions closed, not yet open or full: no form and no payment (the server refuses too).
   if (adm.ready && !adm.canEnrol && !serverDone && !done) {
     return (
-      <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-paper p-6 sm:p-8" data-enrol-closed>
+      <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-white p-6 sm:p-8" data-enrol-closed>
         <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Admissions</p>
         <h2 className="mt-3 font-(family-name:--font-serif) text-3xl font-medium">{adm.title}</h2>
         <p className="mt-3 text-ink/75">{adm.detail}</p>
@@ -148,10 +148,10 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
 
   if (serverDone) {
     return (
-      <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-paper p-6 sm:p-8">
+      <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-white p-6 sm:p-8">
         <span className="bg-indigo mx-auto grid h-16 w-16 place-items-center rounded-full text-3xl text-white">✓</span>
         <BankDone r={serverDone} p={p} name={fullName} />
-        <p className="mt-5 rounded-md bg-cream px-4 py-3 text-center text-sm">Your reference: <b>{serverDone.reference}</b></p>
+        <p className="mt-5 rounded-md bg-[#f8f8f9] px-4 py-3 text-center text-sm">Your reference: <b>{serverDone.reference}</b></p>
         <p className="mt-3 text-center text-sm text-ink/70">We emailed these details to <b>{d.email}</b>. Check your spam folder if you do not see it.</p>
         <div className="mt-5 text-center"><Link href="/" className="bg-indigo inline-block rounded-full px-8 py-3 font-display font-semibold text-white">Back to home</Link></div>
       </div>
@@ -161,7 +161,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
   if (done) {
     const msg = `Hello Skill Mountain Academy, I have paid ${naira(p.price)} for ${p.name}. Name: ${fullName}. Reference: ${done.ref}. I am sending my teller.`;
     return (
-      <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-paper p-6 sm:p-8">
+      <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-white p-6 sm:p-8">
         <span className="bg-indigo mx-auto grid h-16 w-16 place-items-center rounded-full text-3xl text-white">✓</span>
         {done.kind === "paid" ? (
           <>
@@ -180,7 +180,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
             <p className="mt-3 text-center text-sm text-ink/70">When we confirm your payment, we email your welcome message with your curriculum and your booking link.</p>
           </>
         )}
-        <p className="mt-5 rounded-md bg-cream px-4 py-3 text-center text-sm">Your reference: <b>{done.ref}</b></p>
+        <p className="mt-5 rounded-md bg-[#f8f8f9] px-4 py-3 text-center text-sm">Your reference: <b>{done.ref}</b></p>
         <p className="mt-3 text-center text-sm text-ink/70">Check your spam folder if you do not see our email.</p>
         <div className="mt-5 text-center"><Link href="/" className="bg-indigo inline-block rounded-full px-8 py-3 font-display font-semibold text-white">Back to home</Link></div>
       </div>
@@ -190,10 +190,10 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
   const labels = ["Your details", "About your goals", "Payment"];
   return (
     <div ref={box} className={embedded ? "scroll-mt-24" : "mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1.15fr_.85fr]"}>
-      <div className="rounded-lg border border-ink/10 bg-paper p-6 sm:p-8">
+      <div className="rounded-lg border border-ink/10 bg-white p-6 sm:p-8">
         <ol className="mb-6 flex gap-2" aria-label="Progress">
           {labels.map((l, i) => (
-            <li key={l} className={`flex-1 rounded-full px-3 py-2 text-center text-xs font-semibold sm:text-sm ${i === step ? "bg-indigo text-white" : i < step ? "bg-indigo/15 text-indigo" : "bg-cream text-ink/70"}`}>{i + 1}. {l}</li>
+            <li key={l} className={`flex-1 rounded-full px-3 py-2 text-center text-xs font-semibold sm:text-sm ${i === step ? "bg-indigo text-white" : i < step ? "bg-indigo/15 text-indigo" : "bg-[#f8f8f9] text-ink/70"}`}>{i + 1}. {l}</li>
           ))}
         </ol>
 
@@ -218,7 +218,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
               <Text label="Email address" name="email" type="email" d={d} auto="email" />
             </div>
             <Choice label="Educational level" name="education" options={EDUCATION} d={d} />
-            <div className="rounded-md bg-cream p-4">
+            <div className="rounded-md bg-[#f8f8f9] p-4">
               <p className="font-display font-bold">Parent or guardian</p>
               <p className="text-sm text-ink/70">Required only if the learner is under 18. Leave blank if the learner is 18 or older.</p>
               <div className="mt-3 space-y-4">
@@ -236,7 +236,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
             <h2 className="font-(family-name:--font-serif) text-3xl font-medium">A few questions</h2>
             <p className="text-sm text-ink/70">This helps your mentor plan your learning from day one.</p>
             <Choice label="Are you computer literate?" name="computerLiterate" options={["Yes", "No"]} d={d} />
-            <div className="rounded-md bg-cream px-4 py-3 text-sm">Skill of interest: <b>{p.name}</b></div>
+            <div className="rounded-md bg-[#f8f8f9] px-4 py-3 text-sm">Skill of interest: <b>{p.name}</b></div>
             <Choice label="Any background knowledge on this skill?" name="background" options={["Yes", "No"]} d={d} onPick={setBg} />
             {(bg || d.background) === "Yes" && (
               <Field label="Where did you get the knowledge, and for how long?"><textarea name="backgroundDetail" required rows={2} maxLength={500} defaultValue={d.backgroundDetail ?? ""} className={input} /></Field>
@@ -259,7 +259,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
           <div className="space-y-4">
             <PayCurrency />
             <h2 className="font-(family-name:--font-serif) text-3xl font-medium">Review and pay</h2>
-            <div className="rounded-md bg-cream p-4 text-sm">
+            <div className="rounded-md bg-[#f8f8f9] p-4 text-sm">
               <p><b>{fullName}</b> · {d.email} · {d.phone}</p>
               <p className="text-ink/70">{p.name} · {duration(p)} · {d.education}</p>
               <button type="button" onClick={() => { setStep(0); top(); }} className="mt-1 font-semibold text-brand-red underline">Edit my details</button>
@@ -269,7 +269,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
               <legend className="font-display font-bold">How would you like to pay?</legend>
               <div className="mt-2 grid gap-3">
                 {([["paystack", "Pay online with Paystack", "Card or bank transfer. Confirmed automatically."], ["bank", "Bank transfer", "Pay to our UBA account, then send us your teller."]] as const).map(([v, t, s]) => (
-                  <label key={v} className={`flex cursor-pointer items-start gap-3 rounded-md border-2 px-4 py-3 transition ${method === v ? "border-indigo bg-white" : "border-transparent bg-cream"}`}>
+                  <label key={v} className={`flex cursor-pointer items-start gap-3 rounded-md border-2 px-4 py-3 transition ${method === v ? "border-indigo bg-white" : "border-transparent bg-[#f8f8f9]"}`}>
                     <input type="radio" name="method" checked={method === v} onChange={() => setMethod(v)} className="mt-1 h-5 w-5 accent-indigo" />
                     <span><span className="block font-display font-bold">{t}</span><span className="text-sm text-ink/70">{s}</span></span>
                   </label>
@@ -278,9 +278,9 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
             </fieldset>
 
             {method === "bank" && <BankDetails />}
-            <p className="rounded-md bg-cream px-4 py-3 text-sm">Want to pay in 3 parts (50%, 30%, 20%)? <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(`Hello, I would like to pay for ${p.name} in 3 parts.`)}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-red underline">Message us on WhatsApp</a> and we will set it up for you.</p>
+            {!p.fullPaymentOnly && <p className="rounded-md bg-[#f8f8f9] px-4 py-3 text-sm">Want to pay in 3 parts (50%, 30%, 20%)? <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(`Hello, I would like to pay for ${p.name} in 3 parts.`)}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-red underline">Message us on WhatsApp</a> and we will set it up for you.</p>}
 
-            <label className="flex items-start gap-3 rounded-md bg-cream px-4 py-3 text-sm">
+            <label className="flex items-start gap-3 rounded-md bg-[#f8f8f9] px-4 py-3 text-sm">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-brand-red" />
               <span>I have read and understood the <Link href="/terms/" target="_blank" className="font-semibold text-brand-red underline">Terms and Conditions</Link>, <Link href="/refunds/" target="_blank" className="font-semibold text-brand-red underline">Refund Policy</Link> and <Link href="/privacy/" target="_blank" className="font-semibold text-brand-red underline">Privacy Policy</Link>. I confirm the details are correct and I agree to SMA using them to process this registration. If the learner is under 18, I am their parent or guardian and I give this consent for them.</span>
             </label>
@@ -313,7 +313,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
         <OrderTotal p={p} />
         <ul className="mt-6 space-y-2 text-sm text-white/75">
           <li>✓ Pay with Paystack or by bank transfer</li>
-          <li>✓ Pay in full or in 3 parts (50%, 30%, 20%)</li>
+          <li>✓ {p.fullPaymentOnly ? "Paid in full at admission" : "Pay in full or in 3 parts (50%, 30%, 20%)"}</li>
           <li>✓ Welcome email with your curriculum</li>
           <li>✓ A link to book your class days and times</li>
         </ul>

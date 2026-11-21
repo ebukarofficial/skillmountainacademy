@@ -53,7 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head><meta httpEquiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'" /></head>
-      <body className={`${montserrat.variable} ${carlito.variable} ${serif.variable} font-sans antialiased`}>
+      <body className={`${montserrat.variable} ${carlito.variable} ${serif.variable} bg-paper font-sans antialiased`}>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_LD).replace(/</g, "\\u003c") }} />
         <a href="#main" className="skip-link">Skip to main content</a>
         {children}

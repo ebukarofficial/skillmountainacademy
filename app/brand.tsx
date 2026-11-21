@@ -62,7 +62,7 @@ export function ProgrammeCard({ p, priority = false }: { p: Programme; priority?
   const href = `/programmes/${p.slug}/`;
   return (
     <ListedOnly slug={p.slug}>
-      <article className="group relative flex h-full flex-col overflow-hidden rounded-lg border border-ink/10 bg-paper transition duration-300 hover:border-ink/25 hover:shadow-xl hover:shadow-ink/10">
+      <article className="group relative flex h-full flex-col overflow-hidden rounded-lg border border-ink/10 bg-white transition duration-300 hover:border-ink/25 hover:shadow-xl hover:shadow-ink/10">
         <div className={`relative aspect-[16/10] overflow-hidden bg-gradient-to-br ${p.tone}`}>
           <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name}`} fill priority={priority} sizes="(max-width: 640px) 92vw, (max-width: 1024px) 46vw, 30vw" className="object-cover transition duration-700 group-hover:scale-[1.02] motion-reduce:transition-none" style={{ objectPosition: FOCUS[p.slug] }} />
         </div>
@@ -82,15 +82,25 @@ export function ProgrammeGrid({ list = PROGRAMMES }: { list?: Programme[] }) {
   return <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{list.map((p, i) => <ProgrammeCard key={p.slug} p={p} priority={i < 3} />)}</div>;
 }
 
-export function PageHero({ eyebrow, title, lede, children }: { eyebrow: string; title: ReactNode; lede: ReactNode; children?: ReactNode }) {
+export function PageHero({ eyebrow, title, lede, children }: { eyebrow?: string; title: ReactNode; lede: ReactNode; children?: ReactNode }) {
   return (
     <section className="border-b border-ink/10">
       <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 sm:pb-20 sm:pt-20">
-        <Eyebrow>{eyebrow}</Eyebrow>
-        <h1 className={`${SERIF} mt-4 max-w-4xl text-5xl leading-[1.04] sm:text-[3.4rem]`}>{title}</h1>
+        {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
+        <h1 className={`${SERIF} ${eyebrow ? "mt-4" : ""} max-w-4xl text-5xl leading-[1.04] sm:text-[3.4rem]`}>{title}</h1>
         <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink/75 sm:text-xl">{lede}</p>
         {children}
       </div>
     </section>
+  );
+}
+
+// Verified badge: a clean circle with a tick, sized by the surrounding text so it stays round at every size.
+export function VerifiedMark({ className = "", light = false }: { className?: string; light?: boolean }) {
+  return (
+    <span title="Verified by Skill Mountain Academy" className={`inline-grid aspect-square h-[1.1em] w-[1.1em] shrink-0 place-items-center rounded-full align-middle ${light ? "bg-white text-indigo" : "bg-indigo text-white"} ${className}`}>
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="h-[62%] w-[62%]"><path d="M3.5 8.4 6.6 11.4 12.6 4.9" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span className="sr-only">Verified</span>
+    </span>
   );
 }

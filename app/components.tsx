@@ -2,7 +2,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { BANK, CFG, CURRICULUM_LINKS, GFORM, duration, type Programme } from "@/lib/config";
 import { hasPdf, learnList } from "@/lib/curricula";
-import { Money } from "./currency";
+import { Money, QuotePrice } from "./currency";
+
+// The investment and payment panel colour set by the final brief (#F8F8F9).
+export const PANEL_BG = "bg-[#f8f8f9]";
 export { FOCUS, PHOTO, SMA_PHOTO } from "@/lib/photos";
 export { naira } from "@/lib/format";
 
@@ -75,7 +78,7 @@ export function Price({ p, size = "md" }: { p: Programme; size?: "md" | "lg" }) 
     <div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         {p.was && <s className="text-ink/70 decoration-brand-red decoration-2"><Money naira={p.was} /></s>}
-        <span className={`font-display font-extrabold ${size === "lg" ? "text-3xl" : "text-2xl"}`}><Money naira={p.price} /></span>
+        <QuotePrice slug={p.slug} fallbackNaira={p.price} size={size} />
         {save > 0 && <span className="rounded-full bg-brand-red/10 px-2.5 py-0.5 text-xs font-bold text-brand-red">Save <Money naira={save} /></span>}
       </div>
     </div>
@@ -97,9 +100,9 @@ export function Intro() {
   if (!show) return null;
   const skip = () => { setOut(true); setTimeout(() => setShow(false), 500); };
   return (
-    <div className={`fixed inset-0 z-[70] grid place-items-center bg-cream transition-opacity duration-700 ${out ? "opacity-0" : "opacity-100"}`}>
+    <div className={`fixed inset-0 z-[70] grid place-items-center bg-paper transition-opacity duration-700 ${out ? "opacity-0" : "opacity-100"}`}>
       <video src="/sma-intro.mp4" poster="/sma-intro-poster.webp" autoPlay muted playsInline preload="auto" className="w-full max-w-2xl" aria-label="Skill Mountain Academy" />
-      <button onClick={skip} className="absolute bottom-8 right-6 rounded-full bg-paper px-5 py-2 text-sm font-medium shadow">Skip</button>
+      <button onClick={skip} className="absolute bottom-8 right-6 rounded-full bg-white px-5 py-2 text-sm font-medium shadow">Skip</button>
     </div>
   );
 }
@@ -132,7 +135,7 @@ export function CurriculumModal({ p, onClose, action }: { p: Programme; onClose:
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-ink/60 sm:place-items-center sm:p-5" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={`${p.name} curriculum`} onClick={(e) => e.stopPropagation()}
-        className="pop max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-paper p-6 sm:rounded-xl sm:p-8">
+        className="pop max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-2xl bg-white p-6 sm:rounded-xl sm:p-8">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Curriculum</p>
@@ -195,7 +198,7 @@ export function CalendlyEmbed({ url }: { url: string }) {
   }
   if (!loaded) {
     return (
-      <div className="mx-auto max-w-xl rounded-3xl bg-paper p-6 text-center shadow-sm">
+      <div className="mx-auto max-w-xl rounded-3xl bg-white p-6 text-center shadow-sm">
         <p className="text-sm text-ink/70">Our booking calendar is provided by Calendly. Loading it shares some data with Calendly. See our <a href="/cookies/" className="font-semibold text-brand-red underline">Cookie Policy</a> and <a href="/privacy/" className="font-semibold text-brand-red underline">Privacy Policy</a>.</p>
         <button type="button" onClick={() => setLoaded(true)} className="brand-bg mt-4 rounded-full px-8 py-3.5 font-display font-semibold text-white">Load booking calendar</button>
       </div>
@@ -212,7 +215,7 @@ export function BankDetails() {
   };
   const rows: [string, string][] = [["Account name", BANK.name], ["Account number", BANK.number], ["Bank", BANK.bank]];
   return (
-    <div className="rounded-2xl bg-cream p-4">
+    <div className={`rounded-2xl ${PANEL_BG} p-4`}>
       <p className="text-sm text-ink/75">Kindly pay for the programme using the account below.</p>
       <dl className="mt-3 space-y-2">
         {rows.map(([k, v]) => (
