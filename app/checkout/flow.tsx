@@ -1,7 +1,7 @@
 "use client";
 // The enrolment flow: application, goals, then payment. Used inline on every programme page (embedded) and on
 // /checkout/ (old links, and the page Paystack returns to). Prices are always computed again on the server.
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CFG, EDUCATION, ENGLISH, GFORM, duration, type Programme } from "@/lib/config";
@@ -71,8 +71,13 @@ function OrderTotal({ p }: { p: Programme }) {
 export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?: boolean }) {
   const backend = useBackend();
   const adm = useAdmission(p.slug);
-  const [step, setStep] = useState(0);
-  const [d, setD] = useState<Data>({});
+  // Progress is kept for this browser tab, so leaving the payment step (or reloading) does not lose the form.
+  const draftKey = `sma-enrol-${p.slug}`;
+  const draft = (): { step: number; d: Data } | null => {
+    try { const v = typeof window !== "undefined" ? sessionStorage.getItem(draftKey) : null; return v ? JSON.parse(v) : null; } catch { return null; }
+  };
+  const [step, setStep] = useState(() => Math.min(draft()?.step ?? 0, 2));
+  const [d, setD] = useState<Data>(() => draft()?.d ?? {});
   const [bg, setBg] = useState("");
   const [method, setMethod] = useState<"paystack" | "bank">("paystack");
   const [agreed, setAgreed] = useState(false);
@@ -82,6 +87,12 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
   const [view, setView] = useState(false);
   const [serverDone, setServerDone] = useState<Parameters<typeof BankDone>[0]["r"] | null>(null);
 
+  useEffect(() => {
+    try {
+      if (done || serverDone) sessionStorage.removeItem(draftKey);
+      else if (Object.keys(d).length) sessionStorage.setItem(draftKey, JSON.stringify({ step, d: { ...d, website: undefined } }));
+    } catch { /* storage unavailable */ }
+  }, [d, step, done, serverDone, draftKey]);
   const box = useRef<HTMLDivElement>(null);
   // On a programme page the form sits mid-page, so "back to the top" means the top of the form.
   const top = () => (embedded ? box.current?.scrollIntoView({ behavior: "smooth", block: "start" }) : window.scrollTo({ top: 0, behavior: "smooth" }));

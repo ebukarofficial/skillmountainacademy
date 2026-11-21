@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BRAND, MODEL, STANDARDS } from "@/lib/institution";
+import { BRAND, STANDARDS } from "@/lib/institution";
 import { Arrow, Eyebrow, NumberedList, PageHero, SERIF, SectionHead, btnLight, btnOutlineLight } from "../brand";
 import { SiteFooter, SiteHeader } from "../site-parts";
 
@@ -33,7 +33,7 @@ export default function AboutPage() {
         <div className="mx-auto max-w-6xl px-5">
           <Block id="story" eyebrow="Our story" title="Why the Academy exists.">
             <p>Online education made information abundant. It did not make competence common. Many learners finish courses with certificates and little they can actually do, because no one ever watched them work, corrected them or held them to a standard.</p>
-            <p>Skill Mountain Academy was founded in Abuja in 2021 to close that gap. We teach one student at a time, through an instructor assigned to them, and we measure progress by the work students can produce and explain.</p>
+            <p>Skill Mountain Academy was founded in Abuja to close that gap. We teach one student at a time, through an instructor assigned to them, and we measure progress by the work students can produce and explain.</p>
           </Block>
 
           <Block id="philosophy" eyebrow="Our philosophy" title="Competence, not certificates.">
@@ -49,11 +49,10 @@ export default function AboutPage() {
             <p>To make exceptional professional knowledge accessible through rigorous instruction, personalised mentorship, intelligent learning support and practical application.</p>
           </Block>
 
-          <section aria-labelledby="education" className="border-t border-ink/10 py-14 lg:py-20">
-            <SectionHead eyebrow="Our educational philosophy" title="Human expertise, supported by intelligent tools."
-              lede="Each element has a purpose. The instructor teaches and judges; technology supports practice and revision; assessment and the practical phase confirm what has been learned." />
-            <div className="mt-10"><NumberedList items={MODEL} /></div>
-          </section>
+          <Block id="education" eyebrow="Our educational philosophy" title="Human expertise, supported by intelligent tools.">
+            <p>The instructor teaches and judges. Technology supports practice and revision between sessions. Assessment and a period of practical application confirm what has been learned.</p>
+            <p>How this works week by week is set out on <Link href="/learning-experience/" className="font-semibold text-indigo underline">The Learning Experience</Link>.</p>
+          </Block>
 
           <Block id="different" eyebrow="Why we are different" title="Instruction, not consumption.">
             <p>Most online learning asks the student to consume: watch, read, click through. Students are left to discover their own mistakes, if they discover them at all.</p>

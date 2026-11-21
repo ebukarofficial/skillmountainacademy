@@ -16,8 +16,8 @@ export function FacultyList({ programme }: { programme?: string }) {
     fetch("/api/faculty", { headers: { accept: "application/json" } }).then((r) => (r.ok ? r.json() : null)).then((j) => { if (live) setList(j?.ok ? (j.faculty as Member[]).filter((m) => !programme || m.programmes.includes(programme)) : []); }).catch(() => live && setList([]));
     return () => { live = false; };
   }, [programme]);
-  if (list === null) return <p className="py-6 text-ink/60" role="status">Loading faculty profiles…</p>;
-  if (!list.length) return (
+  // Until profiles arrive (and when there are none) the page says plainly how profiles are published: no spinner.
+  if (!list || !list.length) return (
     <p className="max-w-2xl border-t border-ink/10 pt-6 text-lg leading-relaxed text-ink/70">{programme
       ? "Your instructor is assigned after enrolment, from the verified faculty for this discipline. Faculty profiles appear here once instructors have completed verification and agreed to be listed."
       : "Individual faculty profiles are published here once an instructor has completed verification and agreed to be listed. We publish only qualifications and experience we have verified."}</p>

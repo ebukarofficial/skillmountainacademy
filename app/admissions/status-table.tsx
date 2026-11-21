@@ -16,7 +16,7 @@ export function StatusTable() {
           <tr key={p.slug} className="border-b border-ink/10 align-top">
             <th scope="row" className="py-4 pr-4 font-normal"><Link href={`/programmes/${p.slug}/`} className="font-display font-semibold hover:text-brand-red">{p.name}</Link></th>
             <td className="hidden py-4 pr-4 text-ink/65 sm:table-cell">{duration(p)}</td>
-            <td className="py-4"><AdmissionBadge slug={p.slug} />{ready && <span className="mt-1 block text-sm text-ink/55">{statusLabel(programmes[p.slug]).detail}</span>}</td>
+            <td className="py-4"><AdmissionBadge slug={p.slug} /><span className="mt-1 block text-sm text-ink/55">{statusLabel(ready ? programmes[p.slug] : undefined).detail}</span></td>
           </tr>
         ))}
       </tbody>

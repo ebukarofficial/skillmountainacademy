@@ -4,7 +4,8 @@
 import { useMemo, useState } from "react";
 import type { Me } from "./page";
 import { MaterialsManager, Messages, ProfileEditor, ProgressView, type Progress } from "./shared";
-import { api, Avatar, Badge, Btn, Card, Empty, Field, inputCls, Msg, useAction, useLoad, useNow, when } from "./ui";
+import { api, Avatar, Badge, Btn, Card, Empty, Field, inputCls, Msg, PageTitle, Stat, useAction, useLoad, useNow, useTab, when } from "./ui";
+import { AppShell, type NavItem } from "./shell";
 
 type S = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetNotifiedAt: string | null; needsOutcome: boolean; student: { id: string; fullName: string; photo: string | null } };
 type Student = { enrolmentId: string; programme: string; programmeName: string; status: string; student: { id: string; fullName: string; email: string; studentNo: string | null; photo: string | null } };
@@ -16,7 +17,7 @@ function SessionRow({ s, reload }: { s: S; reload: () => void }) {
   const now = useNow();
   const started = now > 0 && Date.parse(s.startsAt) <= now;
   return (
-    <li className="rounded-xl bg-cream p-3">
+    <li className="rounded-xl bg-ink/[0.03] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Avatar src={s.student.photo} name={s.student.fullName} size={36} />
@@ -54,7 +55,7 @@ function Schedule() {
   return (
     <>
       {!!data?.pendingOutcomes.length && <Card title={`Attendance to record (${data.pendingOutcomes.length})`}><ul className="space-y-2">{data.pendingOutcomes.map((s) => <SessionRow key={s.id} s={s} reload={reload} />)}</ul></Card>}
-      <Card title="My schedule" action={<div className="flex gap-1">{(["day", "week"] as const).map((v) => <button key={v} onClick={() => setView(v)} className={`rounded-full px-3 py-1 text-xs font-semibold ${view === v ? "bg-indigo text-white" : "bg-cream"}`}>{v === "day" ? "Today" : "Next 7 days"}</button>)}</div>}>
+      <Card title="My schedule" action={<div className="flex gap-1">{(["day", "week"] as const).map((v) => <button key={v} onClick={() => setView(v)} className={`rounded-full px-3 py-1 text-xs font-semibold ${view === v ? "bg-indigo text-white" : "bg-ink/[0.03]"}`}>{v === "day" ? "Today" : "Next 7 days"}</button>)}</div>}>
         {error && <Msg text={error} />}
         {Object.entries(byDay).map(([d, ss]) => (
           <div key={d} className="mb-3"><p className="mb-1 text-xs font-bold uppercase text-ink/60">{new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}</p>
@@ -73,7 +74,7 @@ function SetWork({ students }: { students: Student[] }) {
   const { busy, msg, run } = useAction();
   return (
     <Card title="Set work">
-      <div className="mb-3 flex gap-1">{(["assignment", "quiz", "assessment"] as const).map((k) => <button key={k} onClick={() => setKind(k)} className={`rounded-full px-3 py-1 text-xs font-semibold ${kind === k ? "bg-indigo text-white" : "bg-cream"}`}>{k}</button>)}</div>
+      <div className="mb-3 flex gap-1">{(["assignment", "quiz", "assessment"] as const).map((k) => <button key={k} onClick={() => setKind(k)} className={`rounded-full px-3 py-1 text-xs font-semibold ${kind === k ? "bg-indigo text-white" : "bg-ink/[0.03]"}`}>{k}</button>)}</div>
       <form className="space-y-3" onSubmit={(e) => {
         e.preventDefault();
         const f = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
@@ -94,7 +95,7 @@ function SetWork({ students }: { students: Student[] }) {
           : <Field label="Time limit in minutes (optional)"><input name="duration" type="number" min={1} max={300} className={inputCls} /></Field>}
         {kind !== "assignment" && <div className="space-y-2">
           {qs.map((q, i) => (
-            <fieldset key={i} className="rounded-xl bg-cream p-2">
+            <fieldset key={i} className="rounded-xl bg-ink/[0.03] p-2">
               <legend className="text-xs font-bold">Question {i + 1}</legend>
               {kind === "assessment" && <select aria-label="Question type" value={q.type} onChange={(e) => setQs(qs.map((x, k) => k === i ? { ...x, type: e.target.value as "mcq" | "text" } : x))} className={inputCls}><option value="mcq">Multiple choice</option><option value="text">Written answer</option></select>}
               <input aria-label="Question" required value={q.prompt} onChange={(e) => setQs(qs.map((x, k) => k === i ? { ...x, prompt: e.target.value } : x))} placeholder="Question" className={inputCls} />
@@ -128,7 +129,7 @@ function Marking() {
     <Card title={`To mark (${toMark.length + qToMark.length})`}>
       <ul className="space-y-3">
         {toMark.map((x) => (
-          <li key={x.id} className="rounded-xl bg-cream p-3 text-sm">
+          <li key={x.id} className="rounded-xl bg-ink/[0.03] p-3 text-sm">
             <b>{x.title}</b> · {x.studentName} <Badge s={x.status} />
             {x.submission?.text && <p className="mt-1 whitespace-pre-wrap rounded-lg bg-white p-2">{x.submission.text}</p>}
             {x.submission?.file && <a href={x.submission.file} className="mt-1 inline-block font-semibold text-brand-red underline">Download {x.submission.fileName}</a>}
@@ -140,7 +141,7 @@ function Marking() {
           </li>
         ))}
         {qToMark.map((x) => (
-          <li key={x.id} className="rounded-xl bg-cream p-3 text-sm">
+          <li key={x.id} className="rounded-xl bg-ink/[0.03] p-3 text-sm">
             <b>{x.title}</b> ({x.kind}) · {x.studentName}
             {x.questions.map((qq, i) => <p key={i} className="mt-1"><span className="text-ink/60">{i + 1}. {qq.prompt}</span><br />{String(x.answers?.[i] ?? "(no answer)")}</p>)}
             <form className="mt-2 flex flex-wrap gap-2" onSubmit={grade(`/api/app/instructor/quizzes/${x.id}/grade`, x.maxScore, q.reload)}>
@@ -157,52 +158,82 @@ function Marking() {
   );
 }
 
+const TABS = ["today", "schedule", "students", "coursework", "materials", "messages", "account"] as const;
+type Tab = (typeof TABS)[number];
+type Perf = { studentsTaught: number; activeStudents: number; sessions: { completed: number; missed: number; cancelled: number; awaitingAttendance: number }; attendancePct: number | null; rating: { average: number | null; count: number }; grading: { waiting: number }; reviews: { rating: number; comment: string | null }[] };
+
 export function InstructorDashboard({ me }: { me: Me }) {
+  const [tab, setTab] = useTab(TABS, "today");
   const st = useLoad<{ students: Student[] }>("/api/app/instructor/students");
-  const perf = useLoad<{ performance: { studentsTaught: number; activeStudents: number; sessions: { completed: number; missed: number; cancelled: number; awaitingAttendance: number }; attendancePct: number | null; rating: { average: number | null; count: number }; grading: { waiting: number }; reviews: { rating: number; comment: string | null }[] } }>("/api/app/instructor/performance");
+  const perf = useLoad<{ performance: Perf }>("/api/app/instructor/performance");
+  const msgs = useLoad<{ unread: number }>("/api/app/messages");
   const [pick, setPick] = useState<string | null>(null);
   const detail = useLoad<{ student: { fullName: string; email: string; phone: string | null; studentNo: string | null; bio: string | null }; progress: Progress[] }>(pick ? `/api/app/instructor/students/${pick}` : null);
   const groups = (st.data?.students ?? []).reduce<Record<string, Student[]>>((m, s) => { (m[s.programmeName] ??= []).push(s); return m; }, {});
   const p = perf.data?.performance;
+  const programmes = [...new Map((st.data?.students ?? []).map((s) => [s.programme, { slug: s.programme, name: s.programmeName }])).values()];
+  const nav: NavItem<Tab>[] = [
+    { id: "today", label: "Today", icon: "home" },
+    { id: "schedule", label: "Schedule", icon: "calendar", badge: p?.sessions.awaitingAttendance },
+    { id: "students", label: "Students", icon: "users" },
+    { id: "coursework", label: "Coursework & marking", icon: "clipboard", badge: p?.grading.waiting },
+    { id: "materials", label: "Materials", icon: "folder" },
+    { id: "messages", label: "Messages", icon: "chat", badge: msgs.data?.unread },
+    { id: "account", label: "Profile & performance", icon: "user" },
+  ];
   return (
-    <>
-      <div className="py-5"><p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Faculty</p><h1 className="mt-1 font-(family-name:--font-serif) text-4xl font-medium">Welcome, {me.fullName.split(" ")[0]}</h1></div>
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.6fr_1fr]">
-        <div className="order-2 space-y-5 lg:order-1">
-          <Card title="My programmes and students">
+    <AppShell me={me} nav={nav} tab={tab} setTab={setTab}>
+      {tab === "today" && <>
+        <PageTitle title={`Welcome, ${me.fullName.split(" ")[0]}`} sub={<>Faculty{me.staffNo ? <> · Staff No <b className="font-semibold text-ink/80">{me.staffNo}</b></> : null}</>} />
+        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Stat label="Active students" value={p?.activeStudents ?? "–"} note={p ? `${p.studentsTaught} taught in total` : undefined} />
+          <Stat label="Attendance to record" value={p?.sessions.awaitingAttendance ?? "–"} tone={p?.sessions.awaitingAttendance ? "alert" : "plain"} />
+          <Stat label="Waiting to be marked" value={p?.grading.waiting ?? "–"} tone={p?.grading.waiting ? "alert" : "plain"} />
+          <Stat label="Unread messages" value={msgs.data?.unread ?? "–"} />
+        </div>
+        <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
+          <Schedule />
+          <Marking />
+        </div>
+      </>}
+      {tab === "schedule" && <><PageTitle title="Schedule" sub="Add each class's Google Meet link and record attendance afterwards. Times are Lagos time." /><div className="max-w-4xl"><Schedule /></div></>}
+      {tab === "students" && <>
+        <PageTitle title="Students" sub="Your students, grouped by programme." />
+        <div className="grid gap-5 lg:grid-cols-[1fr_1.5fr]">
+          <Card title="By programme">
             {Object.entries(groups).map(([prog, ss]) => (
-              <div key={prog} className="mb-3"><p className="font-display font-bold">{prog} <span className="text-xs font-normal text-ink/60">({ss.length})</span></p>
-                <ul>{ss.map((s) => <li key={s.enrolmentId}><button onClick={() => setPick(s.student.id)} className={`mt-1 w-full rounded-xl px-3 py-2 text-left text-sm ${pick === s.student.id ? "bg-indigo text-white" : "bg-cream"}`}>{s.student.fullName} <Badge s={s.status} /></button></li>)}</ul></div>
+              <div key={prog} className="mb-4 last:mb-0"><p className="text-xs font-semibold uppercase tracking-wide text-ink/50">{prog} · {ss.length}</p>
+                <ul className="mt-2 space-y-1">{ss.map((s) => <li key={s.enrolmentId}><button onClick={() => setPick(s.student.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${pick === s.student.id ? "bg-indigo text-white" : "hover:bg-ink/[0.04]"}`}><Avatar src={s.student.photo} name={s.student.fullName} size={30} /><span className="flex-1 font-medium">{s.student.fullName}</span><Badge s={s.status} /></button></li>)}</ul></div>
             ))}
             {st.data && !st.data.students.length && <Empty>No students assigned yet.</Empty>}
           </Card>
-          {pick && detail.data && <Card title={detail.data.student.fullName}>
-            <p className="text-sm text-ink/70">{detail.data.student.email}{detail.data.student.phone ? ` · ${detail.data.student.phone}` : ""}{detail.data.student.studentNo ? ` · ${detail.data.student.studentNo}` : ""}</p>
-            {detail.data.student.bio && <p className="mt-1 text-sm">{detail.data.student.bio}</p>}
-            <div className="mt-3 space-y-4">{detail.data.progress.map((pr) => <ProgressView key={pr.enrolmentId} p={pr} />)}</div>
-          </Card>}
+          {pick && detail.data ? <Card title={detail.data.student.fullName}>
+            <p className="text-sm text-ink/65">{detail.data.student.email}{detail.data.student.phone ? ` · ${detail.data.student.phone}` : ""}{detail.data.student.studentNo ? ` · ${detail.data.student.studentNo}` : ""}</p>
+            {detail.data.student.bio && <p className="mt-2 text-sm">{detail.data.student.bio}</p>}
+            <div className="mt-4 space-y-5">{detail.data.progress.map((pr) => <ProgressView key={pr.enrolmentId} p={pr} />)}</div>
+          </Card> : <Card><Empty>Select a student to see their progress.</Empty></Card>}
         </div>
-        <div className="order-1 space-y-5 lg:order-2">
-          <Schedule />
-          <Marking />
-          <SetWork students={st.data?.students ?? []} />
-          <MaterialsManager admin={false} programmes={[...new Map((st.data?.students ?? []).map((s) => [s.programme, { slug: s.programme, name: s.programmeName }])).values()]} />
-          <Messages />
-        </div>
-        <div className="order-3 space-y-5">
+      </>}
+      {tab === "coursework" && <><PageTitle title="Coursework and marking" /><div className="grid gap-5 lg:grid-cols-2"><Marking /><SetWork students={st.data?.students ?? []} /></div></>}
+      {tab === "materials" && <><PageTitle title="Materials" sub="Upload or link materials for your programmes. An administrator approves them before students see them." /><div className="max-w-4xl"><MaterialsManager admin={false} programmes={programmes} /></div></>}
+      {tab === "messages" && <><PageTitle title="Messages" /><div className="max-w-3xl"><Messages /></div></>}
+      {tab === "account" && <>
+        <PageTitle title="Profile and performance" />
+        <div className="grid gap-5 lg:grid-cols-2">
           <ProfileEditor me={me} onSaved={() => window.location.reload()} />
           <Card title="My performance">
-            {p ? <ul className="space-y-1 text-sm">
-              <li>Students: <b>{p.activeStudents}</b> active, {p.studentsTaught} in total</li>
-              <li>Classes: <b>{p.sessions.completed}</b> completed, {p.sessions.missed} missed, {p.sessions.cancelled} cancelled</li>
-              <li>Attendance: <b>{p.attendancePct ?? "n/a"}%</b>{p.sessions.awaitingAttendance ? ` · ${p.sessions.awaitingAttendance} to record` : ""}</li>
-              <li>Waiting to be marked: <b>{p.grading.waiting}</b></li>
-              <li>Rating: <b>{p.rating.average ?? "n/a"}</b> from {p.rating.count} student(s)</li>
-              {p.reviews.filter((r) => r.comment).slice(0, 3).map((r, i) => <li key={i} className="rounded-lg bg-cream p-2 text-xs">“{r.comment}” ({r.rating}★)</li>)}
-            </ul> : <Empty>Loading…</Empty>}
+            {p ? <>
+              <div className="grid grid-cols-2 gap-3">
+                <Stat label="Classes completed" value={p.sessions.completed} note={`${p.sessions.missed} missed · ${p.sessions.cancelled} cancelled`} />
+                <Stat label="Attendance" value={p.attendancePct != null ? `${p.attendancePct}%` : "–"} />
+                <Stat label="Rating" value={p.rating.average ?? "–"} note={`${p.rating.count} student rating${p.rating.count === 1 ? "" : "s"}`} />
+                <Stat label="To mark" value={p.grading.waiting} />
+              </div>
+              <ul className="mt-4 space-y-2">{p.reviews.filter((r) => r.comment).slice(0, 3).map((r, i) => <li key={i} className="rounded-lg bg-ink/[0.03] p-3 text-sm">“{r.comment}” <span className="text-ink/55">({r.rating}★)</span></li>)}</ul>
+            </> : <Empty>Loading…</Empty>}
           </Card>
         </div>
-      </div>
-    </>
+      </>}
+    </AppShell>
   );
 }

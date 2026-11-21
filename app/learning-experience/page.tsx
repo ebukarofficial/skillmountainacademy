@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { METHOD, MODEL } from "@/lib/institution";
+import { MODEL } from "@/lib/institution";
 import { Arrow, Eyebrow, NumberedList, PageHero, SERIF, SectionHead, btnLight, btnOutline } from "../brand";
 import { SiteFooter, SiteHeader } from "../site-parts";
 
@@ -26,7 +26,7 @@ export default function LearningExperiencePage() {
           lede="Students at Skill Mountain Academy learn through a structured relationship with one instructor. Technology supports that relationship. It does not replace it." />
 
         <section className="mx-auto max-w-6xl px-5 py-20">
-          <SectionHead eyebrow="The model" title="Eight elements of every programme." />
+          <SectionHead eyebrow="The model" title="Eight elements of every programme." lede="The same structure runs through every discipline, adapted to its tools and standards." />
           <div className="mt-10"><NumberedList items={MODEL} /></div>
         </section>
 
@@ -41,13 +41,6 @@ export default function LearningExperiencePage() {
                 </div>
               ))}
             </div>
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-6xl px-5 py-20">
-          <div className="grid gap-10 lg:grid-cols-[.8fr_1.2fr]">
-            <SectionHead eyebrow="Methodology" title="From instruction to demonstrated competence." lede="The same sequence runs through every discipline, adapted to its tools and its standards." />
-            <NumberedList items={METHOD} cols={1} />
           </div>
         </section>
 

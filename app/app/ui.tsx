@@ -9,7 +9,12 @@ export class ApiFail extends Error { status: number; constructor(status: number,
 export async function api<T = Record<string, unknown>>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const r = await fetch(path, { method: init.method ?? "GET", credentials: "same-origin", headers: init.body !== undefined ? { "content-type": "application/json" } : undefined, body: init.body === undefined ? undefined : JSON.stringify(init.body) });
   const j = await r.json().catch(() => ({ ok: false, message: "Something went wrong. Please try again." }));
-  if (r.status === 401 && !path.startsWith("/api/auth/")) { goTo("/app/login/"); throw new ApiFail(401, "Please sign in."); }
+  if (r.status === 401 && !path.startsWith("/api/auth/")) {
+    // Back to the entry page, remembering where the person was going (bookmarked pages work after signing in).
+    const here = window.location.pathname + window.location.search;
+    goTo(`/app/login/${here.startsWith("/app/") && here !== "/app/" ? `?next=${encodeURIComponent(here)}` : ""}`);
+    throw new ApiFail(401, "Please sign in.");
+  }
   if (!r.ok || j.ok === false) throw new ApiFail(r.status, j.message || "Something went wrong. Please try again.");
   return j as T;
 }
@@ -28,7 +33,7 @@ export function useNow(every = 30_000) {
 export function Avatar({ src, name, size = 40 }: { src: string | null; name: string; size?: number }) {
   return src
     ? <Image src={src} alt="" width={size} height={size} unoptimized className="rounded-full object-cover" style={{ width: size, height: size }} />
-    : <span className="grid shrink-0 place-items-center rounded-full bg-indigo font-(family-name:--font-serif) text-cream" style={{ width: size, height: size }}>{name[0]}</span>;
+    : <span className="grid shrink-0 place-items-center rounded-full bg-indigo font-display font-semibold text-cream" style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}>{name.split(" ").map((x) => x[0]).slice(0, 2).join("")}</span>;
 }
 
 // Uploads a file as the raw request body (the server streams it to storage).
@@ -56,16 +61,16 @@ export function useLoad<T>(path: string | null) {
 
 export function Card({ title, children, action, className = "" }: { title?: ReactNode; children: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-lg border border-ink/10 bg-paper p-5 ${className}`}>
-      {(title || action) && <div className="mb-4 flex items-center justify-between gap-3 border-b border-ink/10 pb-3"><h2 className="font-(family-name:--font-serif) text-2xl font-medium leading-tight">{title}</h2>{action}</div>}
+    <section className={`rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-sm shadow-ink/5 sm:p-6 ${className}`}>
+      {(title || action) && <div className="mb-4 flex items-center justify-between gap-3"><h2 className="font-display text-[0.95rem] font-semibold tracking-tight text-ink">{title}</h2>{action}</div>}
       {children}
     </section>
   );
 }
 
 export function Btn({ children, onClick, kind = "primary", type = "button", disabled, small }: { children: ReactNode; onClick?: () => void; kind?: "primary" | "ghost" | "dark"; type?: "button" | "submit"; disabled?: boolean; small?: boolean }) {
-  const k = kind === "primary" ? "bg-indigo text-cream hover:bg-navy" : kind === "dark" ? "bg-ink text-white hover:bg-navy" : "border border-indigo/30 text-indigo hover:bg-indigo hover:text-white";
-  return <button type={type} onClick={onClick} disabled={disabled} className={`rounded-full font-display font-semibold transition disabled:opacity-50 ${small ? "px-3 py-1.5 text-xs" : "px-5 py-2.5 text-sm"} ${k}`}>{children}</button>;
+  const k = kind === "primary" ? "bg-indigo text-white shadow-sm shadow-indigo/20 hover:bg-navy" : kind === "dark" ? "bg-ink text-white hover:bg-navy" : "border border-ink/15 bg-white text-ink hover:border-indigo/40 hover:text-indigo";
+  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-display font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo disabled:opacity-50 ${small ? "px-3 py-1.5 text-xs" : "px-4 py-2.5 text-sm"} ${k}`}>{children}</button>;
 }
 
 const TONES: Record<string, string> = {
@@ -76,19 +81,19 @@ const TONES: Record<string, string> = {
   approved: "bg-indigo text-white", rejected: "bg-brand-red/15 text-brand-red", application_received: "bg-ink/10 text-ink", under_review: "bg-indigo/10 text-indigo",
   assessment_pending: "bg-brand-orange/20 text-ink", interview_pending: "bg-brand-orange/20 text-ink", upcoming: "bg-indigo/10 text-indigo", closed: "bg-ink/10 text-ink/70", full: "bg-brand-red/15 text-brand-red",
 };
-export const Badge = ({ s }: { s: string }) => <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${TONES[s] ?? "bg-ink/10 text-ink"}`}>{s.replace(/_/g, " ")}</span>;
+export const Badge = ({ s }: { s: string }) => <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[0.7rem] font-semibold capitalize ${TONES[s] ?? "bg-ink/[0.06] text-ink/80"}`}>{s.replace(/_/g, " ")}</span>;
 
-export const inputCls = "mt-1 w-full rounded-md border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/40";
+export const inputCls = "mt-1.5 w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/40 focus:border-indigo focus:ring-4 focus:ring-indigo/10";
 export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="block text-sm font-medium">{label}{children}</label>;
+  return <label className="block text-[0.8rem] font-semibold text-ink/80">{label}{children}</label>;
 }
 
 export function Bar({ pct, label }: { pct: number | null; label: string }) {
   const v = pct ?? 0;
   return (
     <div>
-      <div className="flex justify-between text-xs"><span>{label}</span><span className="font-bold">{pct === null ? "n/a" : `${v}%`}</span></div>
-      <div className="mt-1 h-2 rounded-full bg-ink/10" role="progressbar" aria-label={label} aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}><div className="h-2 rounded-full bg-indigo" style={{ width: `${Math.min(100, v)}%` }} /></div>
+      <div className="flex justify-between text-xs text-ink/70"><span>{label}</span><span className="font-semibold text-ink">{pct === null ? "n/a" : `${v}%`}</span></div>
+      <div className="mt-1.5 h-1.5 rounded-full bg-ink/[0.07]" role="progressbar" aria-label={label} aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}><div className="h-1.5 rounded-full bg-indigo" style={{ width: `${Math.min(100, v)}%` }} /></div>
     </div>
   );
 }
@@ -111,4 +116,44 @@ export function useAction() {
     try { await fn(); setMsg({ text: okText, kind: "ok" }); after?.(); } catch (e) { setMsg({ text: (e as Error).message, kind: "error" }); } finally { setBusy(false); }
   }, []);
   return { busy, msg, run };
+}
+
+// A headline figure: label, value and an optional note.
+export function Stat({ label, value, note, tone = "plain" }: { label: string; value: ReactNode; note?: ReactNode; tone?: "plain" | "alert" }) {
+  return (
+    <div className="rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-sm shadow-ink/5">
+      <p className="text-xs font-semibold text-ink/55">{label}</p>
+      <p className={`mt-2 font-display text-3xl font-semibold tracking-tight ${tone === "alert" ? "text-brand-red" : "text-ink"}`}>{value}</p>
+      {note && <p className="mt-1 text-xs text-ink/55">{note}</p>}
+    </div>
+  );
+}
+
+// Page heading inside the app.
+export function PageTitle({ title, sub, action }: { title: ReactNode; sub?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div><h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-[1.7rem]">{title}</h1>{sub && <div className="mt-1 text-sm text-ink/60">{sub}</div>}</div>
+      {action}
+    </div>
+  );
+}
+
+// Reads ?tab= once (so links from emails and notifications open the right section) and keeps the address in step.
+export function useTab<T extends string>(tabs: readonly T[], first: T): [T, (t: T) => void] {
+  const [tab, setTabState] = useState<T>(first);
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab") as T | null;
+    if (!t || !tabs.includes(t)) return;
+    const id = setTimeout(() => setTabState(t), 0);
+    return () => clearTimeout(id);
+  }, [tabs]);
+  const setTab = useCallback((t: T) => {
+    setTabState(t);
+    const u = new URL(window.location.href);
+    u.searchParams.set("tab", t);
+    window.history.replaceState(null, "", u.pathname + u.search);
+    window.scrollTo({ top: 0 });
+  }, []);
+  return [tab, setTab];
 }

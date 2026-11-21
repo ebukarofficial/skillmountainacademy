@@ -86,11 +86,10 @@ export function SiteFooter() {
             <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-white">Contact</p>
             <p className="mt-4 text-sm leading-relaxed">Email: <a href={`mailto:${BUSINESS.email}`} className="font-semibold text-white underline">{BUSINESS.email}</a><br />Phone: <a href={`tel:${BUSINESS.phone.replace(/\s/g, "")}`} className="underline">{BUSINESS.phone}</a></p>
             <p className="mt-4 text-sm text-white/55">{BUSINESS.name}{BUSINESS.rc ? ` (RC ${BUSINESS.rc})` : ""}<br />{BUSINESS.address}</p>
-            <Link href="/app/login/" className="mt-5 inline-block rounded-full border border-white/25 px-5 py-2 font-display text-xs font-semibold text-white transition hover:bg-white hover:text-ink">Student &amp; staff sign-in</Link>
           </div>
         </div>
         <div className="flex flex-col gap-3 border-t border-white/10 py-6 text-xs text-white/50 sm:flex-row sm:items-center sm:justify-between">
-          <p>© Skill Mountain Academy 2021–{new Date().getFullYear()}{IMAGE_CREDIT ? ` · ${IMAGE_CREDIT}` : ""}</p>
+          <p>© Skill Mountain Academy {new Date().getFullYear()}{IMAGE_CREDIT ? ` · ${IMAGE_CREDIT}` : ""}</p>
           <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-1">
             <Link href="/terms/" className="hover:text-white">Terms</Link>
             <Link href="/privacy/" className="hover:text-white">Privacy</Link>

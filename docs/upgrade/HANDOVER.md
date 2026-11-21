@@ -3,7 +3,7 @@
 This ZIP is the live skillmountainacademy.com project, upgraded by Claude following `docs/upgrade/SPEC.md`.
 ## Status
 
-**20 Nov 2026 (latest):** institutional transformation done (see the section below). Owner steps: OWNER-CHECKLIST section F.
+**21 Nov 2026 (latest):** premium institutional experience done (section at the end). Owner steps: OWNER-CHECKLIST section G.
 
 | Phase | State |
 |---|---|
@@ -420,3 +420,22 @@ run `npm run db:migrate`, set the Worker secrets, redeploy the updated Apps Scri
 
 ## Files not in the original upload (not needed)
 `assets/photos/photo-megaphone.webp` (unused) and `public/reviews/README.txt`.
+
+## Premium institutional experience (owner brief, 21 Nov 2026)
+Brief: "MASTER IMPLEMENTATION PROMPT: PREMIUM INSTITUTIONAL EXPERIENCE, ADMISSIONS, AUTHENTICATION & LEARNING ENVIRONMENT",
+plus owner asks: modern dashboard design (no serif "old" look), fix adding tutors and students, admit offline-paid students.
+
+- Numbers: students `SMA/yy/000001` (sequence per year, Lagos time), admins `SMA/ADM/`, faculty `SMA/FAC/` on approval
+  (`src/server/lms/ids.ts`, migration 0005). Old `SMA26-XXXXX` numbers are kept. A unique index stops duplicates.
+- Admin admission: `POST /api/app/admin/admit` (`routes/admit.ts`) and the **Admit a student** screen.
+- Sign-in: no public links; `/app/login/` (students) and `/app/staff/` (staff) share `app/app/entry.tsx`. Links are single use,
+  a new link cancels older ones, the return address (`next`) is restricted to `/app/...`, the email is remembered on the device.
+- Dashboards: one shell (`app/app/shell.tsx`): sidebar, notifications (urgent first, mark read, jump to the item), account menu.
+  Student, instructor and admin sections are tabs addressable as `/app/?tab=...`. Sans type (Montserrat/Carlito) only.
+- Notifications: priority and categories (`lib/notify-rules.ts`); students can switch off optional reminder/update emails.
+- Emails: one official layout (`src/server/email.ts`); "Admission confirmed" then a separate access email.
+- Database errors from a missing migration now return 503 "Run npm run db:migrate" (`src/server/lms/api.ts`).
+- Student coursework list now covers this week plus the next 14 days (work due Monday showed nothing on a Saturday).
+- Public site: repeated sections removed, each page has one purpose; programme pages end in "Apply for Admission"; the
+  founding year is not stated anywhere; checkout keeps a draft if the visitor leaves.
+- Tests: 142 passing (`tests/identity.test.ts` new; lms1, lms3, lms6, phase2, phase6, transform updated to the new brief).

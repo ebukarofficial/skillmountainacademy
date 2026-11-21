@@ -15,11 +15,11 @@ export function Messages() {
     <Card title={`Messages${data?.unread ? ` (${data.unread} new)` : ""}`}>
       {!data?.contacts.length && <Empty>No one to message yet. Your instructor appears here once assigned.</Empty>}
       <div className="flex flex-wrap gap-2">
-        {data?.contacts.map((c) => <button key={c.id} onClick={() => { setWith(c.id); setTimeout(reload, 500); }} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${withId === c.id ? "bg-indigo text-white" : "bg-cream"}`}>{c.fullName}{c.unread ? ` • ${c.unread}` : ""}</button>)}
+        {data?.contacts.map((c) => <button key={c.id} onClick={() => { setWith(c.id); setTimeout(reload, 500); }} className={`rounded-full px-3 py-1.5 text-sm font-semibold ${withId === c.id ? "bg-indigo text-white" : "bg-ink/[0.03]"}`}>{c.fullName}{c.unread ? ` • ${c.unread}` : ""}</button>)}
       </div>
       {withId && (
         <div className="mt-3">
-          <ul className="max-h-72 space-y-2 overflow-auto rounded-xl bg-cream p-3" aria-live="polite">
+          <ul className="max-h-72 space-y-2 overflow-auto rounded-xl bg-ink/[0.03] p-3" aria-live="polite">
             {conv.data?.messages.map((m) => <li key={m.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${m.mine ? "ml-auto bg-indigo text-white" : "bg-white"}`}>{m.body}<span className={`block text-[10px] ${m.mine ? "text-white/70" : "text-ink/50"}`}>{when(m.createdAt)}</span></li>)}
             {!conv.data?.messages.length && <li className="text-sm text-ink/60">No messages yet. Say hello.</li>}
           </ul>
@@ -99,7 +99,7 @@ export function MaterialsManager({ admin, programmes }: { admin: boolean; progra
   return (
     <Card title="Learning materials">
       <ul className="space-y-2 text-sm">{data?.resources.map((r) => (
-        <li key={r.id} className="rounded-xl bg-cream p-2">
+        <li key={r.id} className="rounded-xl bg-ink/[0.03] p-2">
           <div className="flex flex-wrap items-center justify-between gap-2"><span><b>{r.title}</b> · {r.programmeName} · {r.kind}{r.hasText ? " · used by the assistant" : ""}{r.file ? <> · <a href={r.file} className="underline">{r.fileName}</a></> : null}</span>
             <span className="flex flex-wrap gap-1">{r.approved ? <span className="rounded-full bg-indigo px-2 py-0.5 text-xs font-bold text-white">approved</span> : admin ? <Btn small disabled={busy} onClick={() => run(() => api(`/api/app/resources/${r.id}`, { method: "PATCH", body: { approved: true } }), "Approved.", reload)}>Approve</Btn> : <span className="rounded-full bg-brand-orange/20 px-2 py-0.5 text-xs font-bold">awaiting approval</span>}
               <label className="cursor-pointer rounded-full border-2 border-indigo/30 px-3 py-1 text-xs font-semibold text-indigo">{r.file ? "Replace file" : "Attach file"}<input type="file" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => upload(`/api/app/resources/${r.id}/file`, f), "File attached.", reload); }} /></label>

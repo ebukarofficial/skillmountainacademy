@@ -6,9 +6,9 @@ import Link from "next/link";
 import banner from "@/assets/photos/banner-students.webp";
 import { AUDIENCE, BUSINESS, CFG, faqList, GOALS, PROGRAMMES, REVIEW_SHOTS, duration, findProgramme, type Programme } from "@/lib/config";
 import { MENTORS, REVIEWS, SHOW_MENTORS, SHOW_REVIEWS } from "@/lib/content";
-import { BRAND, JOURNEY, MODEL, STANDARDS } from "@/lib/institution";
-import { CalendlyEmbed, CloudBadges, FOCUS, Intro, PHOTO, Reveal, SMA_PHOTO, SocialIcon, postSheet } from "./components";
-import { Arrow, Eyebrow, NumberedList, ProgrammeGrid, Rule, SERIF, SectionHead, btnLight, btnOutline, btnOutlineLight, btnPrimary } from "./brand";
+import { BRAND } from "@/lib/institution";
+import { CalendlyEmbed, FOCUS, Intro, PHOTO, Reveal, SMA_PHOTO, SocialIcon, postSheet } from "./components";
+import { Arrow, Eyebrow, ProgrammeGrid, Rule, SERIF, SectionHead, btnLight, btnOutline, btnOutlineLight, btnPrimary } from "./brand";
 import { useAdmission } from "./admissions-status";
 import { SiteHeader } from "./header";
 import { SiteFooter } from "./site-parts";
@@ -25,7 +25,6 @@ const SLIDES: Slide[] = [
   })),
 ];
 
-const CLOUD_TRACK = PROGRAMMES.filter((p) => p.track === "cloud");
 const progHref = (p: Programme) => `/programmes/${p.slug}/`;
 
 // The status line on the active slide (in place of the old price line).
@@ -110,14 +109,13 @@ export default function Home() {
       <section id="top" className="relative mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-10 lg:grid-cols-[.95fr_1.05fr] lg:pb-24 lg:pt-16">
         {/* The hero fades up with CSS alone (no wait for JavaScript), so the headline paints at once. */}
         <div className="relative motion-safe:animate-[pop_.7s_cubic-bezier(.2,.7,.2,1)_both]">
-          <Eyebrow>Skill Mountain Academy · Established 2021</Eyebrow>
+          <Eyebrow>Skill Mountain Academy</Eyebrow>
           {/* The brand message: the largest type on the site. */}
           <h1 data-hero-headline className="mt-5 font-(family-name:--font-serif) text-[clamp(3.6rem,11vw,6rem)] font-medium leading-[0.98] lg:text-[clamp(3.6rem,5.4vw,5.1rem)] tracking-[-0.02em]">
             For those{" "}
             <em className="font-medium text-brand-red">made for more.</em>
           </h1>
-          <p className="mt-7 max-w-lg font-display text-lg font-medium leading-snug text-ink">{BRAND.positioning}</p>
-          <p className="mt-4 max-w-lg text-lg leading-relaxed text-ink/70">Learn directly from experienced professionals through personalised one-on-one mentorship, intelligent learning assistance and intensive practical training, designed to turn knowledge into professional capability.</p>
+          <p className="mt-7 max-w-lg text-xl leading-relaxed text-ink/75">{BRAND.positioning}</p>
           <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
             <a href="#programmes" className={btnPrimary}>Explore programmes <Arrow /></a>
             <Link href="/learning-experience/" className="font-display text-sm font-semibold text-ink underline decoration-ink/30 underline-offset-[6px] transition hover:decoration-brand-red">The learning experience</Link>
@@ -160,7 +158,7 @@ export default function Home() {
       {/* Three principles */}
       <section aria-label="Our principles" className="border-y border-ink/10 bg-paper">
         <div className="mx-auto grid max-w-6xl md:grid-cols-3">
-          {[["Human mentorship", "An assigned instructor teaches you one-on-one, live, every week."], ["Intelligent learning", "An AI assistant limited to your programme supports revision between sessions."], ["Practical mastery", "Assignments, assessed projects and an internship phase build demonstrable competence."]].map(([t, d], i) => (
+          {[["Human mentorship", "One instructor, one student, every week."], ["Intelligent learning", "Support between sessions, grounded in your programme."], ["Practical mastery", "Competence shown in finished work."]].map(([t, d], i) => (
             <div key={t} className={`px-5 py-9 md:px-8 ${i ? "border-t border-ink/10 md:border-l md:border-t-0" : ""}`}>
               <p className={`${SERIF} text-2xl`}>{t}<span className="text-brand-red">.</span></p>
               <p className="mt-2 text-ink/70">{d}</p>
@@ -172,12 +170,11 @@ export default function Home() {
       {/* The institution */}
       <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-14 px-5 py-20 sm:py-28 lg:grid-cols-2">
         <Reveal>
-          <SectionHead eyebrow="An institution with standards" title={<>Taught by people who practise what they teach.</>}
-            lede="Skill Mountain Academy is not a marketplace where anyone uploads a course. Every student is taught by an instructor we have verified, in a live one-on-one session, every week." />
-          <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink/70">You are not left alone with prerecorded videos. Your instructor demonstrates, watches you work, corrects you and marks what you produce. Technology supports that relationship; it does not replace it.</p>
+          <SectionHead eyebrow="The Academy" title={<>Taught by people who practise what they teach.</>}
+            lede="Each student studies with one instructor, chosen for their command of the discipline and their ability to teach it." />
           <div className="mt-8 flex flex-wrap gap-4">
             <Link href="/about/" className={btnOutline}>About the Academy</Link>
-            <Link href="/faculty/" className="self-center font-display text-sm font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">How we select our faculty</Link>
+            <Link href="/faculty/" className="self-center font-display text-sm font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">Our Faculty</Link>
           </div>
         </Reveal>
         <Reveal delay={150} className="relative">
@@ -195,7 +192,7 @@ export default function Home() {
       <section id="programmes" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-28">
         <div className="mx-auto max-w-6xl px-5">
           <Reveal className="flex flex-wrap items-end justify-between gap-6">
-            <SectionHead eyebrow="Programmes" title="Disciplines of professional consequence." lede="Each programme combines one-on-one instruction, structured assessment and an intensive practical phase. Explore a programme to understand the experience before you enrol." />
+            <SectionHead eyebrow="Programmes" title="Disciplines of professional consequence." lede="Eight programmes in design, engineering, security and marketing. Choose one to see what you will study, how long it takes and what it costs." />
             <Link href="/programmes/" className="font-display text-sm font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">All programmes</Link>
           </Reveal>
           <div className="mt-10 flex gap-1 overflow-x-auto border-b border-ink/10 no-scrollbar" role="tablist" aria-label="Disciplines">
@@ -204,33 +201,6 @@ export default function Home() {
             ))}
           </div>
           <div className="mt-10"><ProgrammeGrid list={list} /></div>
-
-          {/* Cloud track comparison */}
-          <Reveal className="mt-20">
-            <div id="cloud-track" className="scroll-mt-24 rounded-lg border border-ink/10 bg-paper p-6 sm:p-10">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <Eyebrow>The Cloud track</Eyebrow>
-                  <h3 className={`${SERIF} mt-3 text-3xl sm:text-4xl`}>Which cloud programme is right for you?</h3>
-                  <p className="mt-3 max-w-2xl text-ink/70">All three teach both AWS and Azure. Choose by where you are today.</p>
-                </div>
-                <CloudBadges />
-              </div>
-              <div className="mt-8 grid md:grid-cols-3">
-                {CLOUD_TRACK.map((p, i) => (
-                  <div key={p.slug} className={`flex flex-col py-6 md:px-6 ${i ? "border-t border-ink/10 md:border-l md:border-t-0" : "md:pl-0"}`}>
-                    <h4 className="font-display text-lg font-semibold">{p.name}</h4>
-                    <dl className="mt-4 flex-1 space-y-3 text-sm">
-                      <div><dt className="font-semibold">Level</dt><dd className="text-ink/70">{p.level}</dd></div>
-                      <div><dt className="font-semibold">Who it&apos;s for</dt><dd className="text-ink/70">{p.audience}</dd></div>
-                      <div><dt className="font-semibold">Duration</dt><dd className="text-ink/70">{duration(p)}</dd></div>
-                    </dl>
-                    <Link href={progHref(p)} className="mt-5 inline-flex items-center gap-2 font-display text-sm font-semibold text-indigo">Explore Programme <Arrow /></Link>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Reveal>
 
           {/* Goal finder */}
           <Reveal className="mt-8">
@@ -255,45 +225,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* The learning experience */}
-      <section id="experience" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-28">
-        <Reveal className="grid gap-10 lg:grid-cols-[.8fr_1.2fr]">
-          <div>
-            <SectionHead eyebrow="The learning experience" title="Not a collection of videos." lede="Students learn through a structured relationship with an instructor, supported by technology and tested by practical work." />
-            <Link href="/learning-experience/" className={`${btnOutline} mt-8`}>How a programme works</Link>
-          </div>
-          <NumberedList items={MODEL} />
-        </Reveal>
-      </section>
-
-      {/* Practical mastery */}
-      <section className="relative overflow-hidden bg-indigo py-20 text-white sm:py-28">
-        <div className="relative mx-auto grid max-w-6xl gap-12 px-5 lg:grid-cols-2">
-          <Reveal>
-            <SectionHead light eyebrow="Practical mastery" title="Knowledge is demonstrated through application." lede="After the instructional phase, every programme continues into an intensive practical phase. Students work on structured projects, receive corrections and build a portfolio of completed work." />
-            <p className="mt-5 max-w-xl text-white/60">Where approved internship partners exist we may connect students with practical opportunities. We do not promise external placements, employment or income.</p>
-          </Reveal>
-          <Reveal delay={120}>
-            <ul className="grid gap-x-8 sm:grid-cols-2">
-              {["Practical assignments set and marked by your instructor", "Real or carefully structured simulated projects", "Corrections and written feedback", "A portfolio of completed, explainable work", "Assessment of demonstrated competence", "An SMA certificate on meeting the requirements"].map((t) => (
-                <li key={t} className="border-t border-white/15 py-4 text-white/85">{t}</li>
-              ))}
-            </ul>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* Standards and faculty */}
-      <section className="mx-auto max-w-6xl px-5 py-20 sm:py-28">
-        <Reveal className="grid gap-10 lg:grid-cols-[.8fr_1.2fr]">
-          <div>
-            <SectionHead eyebrow="Our standards" title="Selected with care. Held to account." lede="Instructors are verified and assessed before they teach. Every session is scheduled on a fixed timetable, every outcome is logged, and students rate their instructors." />
-            <Link href="/faculty/" className={`${btnOutline} mt-8`}>Our Faculty</Link>
-          </div>
-          <NumberedList items={STANDARDS} cols={1} />
-        </Reveal>
-      </section>
-
       {/* Who we teach */}
       <section id="who" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-24">
         <div className="mx-auto max-w-6xl px-5">
@@ -308,19 +239,6 @@ export default function Home() {
             ))}
           </div>
         </div>
-      </section>
-
-      {/* Admissions */}
-      <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-5 py-20 sm:py-28">
-        <Reveal className="grid gap-10 lg:grid-cols-[.8fr_1.2fr]">
-          <div>
-            <SectionHead eyebrow="Admissions" title="An intentional path to enrolment." lede="Admissions are managed in periods, and enrolment on each programme is matched to the instructors available to teach it." />
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link href="/admissions/" className={btnPrimary}>Admissions</Link>
-            </div>
-          </div>
-          <NumberedList items={JOURNEY} />
-        </Reveal>
       </section>
 
       {/* Free consultation */}

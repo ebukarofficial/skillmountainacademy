@@ -75,3 +75,8 @@ a paid Resend plan is likely needed above about 15 classes a day.
 - **Currency.** Guide amounts in USD, GBP and EUR use the live exchange rate (owner's choice), not fixed price lists.
   Payment is always charged in naira.
 - **Faculty photos** need R2 file storage; without it profiles show initials.
+
+## Admissions and identity (added 21 Nov 2026)
+`POST /api/app/admin/admit` runs at most a few times a day: about 15 D1 queries (one batch for the order and instalments,
+one sequence update), and up to 3 Resend calls after the response. Registration numbers use one `INSERT ... ON CONFLICT ...
+RETURNING` query each. Notifications poll `GET /api/app/notifications` once a minute per open dashboard (1 D1 read).

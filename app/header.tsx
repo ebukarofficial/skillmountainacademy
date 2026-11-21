@@ -1,5 +1,7 @@
 "use client";
-// The institutional header, shared by every public page. Concise: six sections and a sign-in entry.
+// The institutional header, shared by every public page: six sections and one admission action.
+// There is deliberately no sign-in link on the public site: students and staff use the private entry pages
+// (/app/login/ and /app/staff/) from their emails.
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -28,7 +30,7 @@ export function SiteHeader() {
           ))}
         </ul>
         <div className="flex items-center gap-2">
-          <Link href="/app/login/" className="hidden rounded-full border border-ink/20 px-5 py-2 font-display text-[0.8125rem] font-semibold text-ink transition hover:border-indigo hover:bg-indigo hover:text-cream sm:inline-block">Sign in</Link>
+          <Link href="/admissions/" className="hidden rounded-full bg-indigo px-5 py-2 font-display text-[0.8125rem] font-semibold text-cream transition hover:bg-navy sm:inline-block">Apply</Link>
           <button type="button" aria-label="Menu" aria-expanded={open} aria-controls="site-menu" onClick={() => setOpen(!open)} className="grid h-11 w-11 place-items-center rounded-full border border-ink/15 xl:hidden">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">{open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
           </button>
@@ -38,7 +40,6 @@ export function SiteHeader() {
         <div id="site-menu" className="border-t border-ink/10 bg-paper xl:hidden" onClick={() => setOpen(false)}>
           <ul className="mx-auto max-w-6xl px-5 py-3">
             {NAV.map(([h, t]) => <li key={h}><Link href={h} aria-current={here(h) ? "page" : undefined} className={`block border-b border-ink/10 py-3.5 font-display font-medium ${here(h) ? "text-brand-red" : ""}`}>{t}</Link></li>)}
-            <li><Link href="/app/login/" className="block py-3.5 font-display font-semibold text-indigo">Student &amp; staff sign-in</Link></li>
           </ul>
         </div>
       )}

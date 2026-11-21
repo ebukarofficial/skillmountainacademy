@@ -178,3 +178,25 @@ It uses the same database, secrets and Turnstile/Resend setup as above. Sign-in 
     in `lib/pricing.ts`.
 45. **Lawyer review.** The Privacy Policy now covers instructor verification records and public faculty profiles, and the
     Cookie Policy covers the remembered country.
+
+## G. Premium experience, admissions and sign-in (21 Nov 2026)
+
+1. **Update the database (required).** From the `sma-site` folder in Command Prompt, after `git pull`:
+   ```
+   npm run db:migrate
+   ```
+   Answer **y**. This applies `0004` (instructor verification, the cause of the "no such column: verification" errors and of
+   "could not add a tutor") and `0005` (registration numbers, staff numbers, notification priority, email preferences).
+   Both only add columns and tables; no existing record is changed or removed. Until you run it, the dashboard shows
+   "The database needs its latest update. Run npm run db:migrate" instead of a raw error.
+2. **Bookmark the two private entrances.** The public website no longer shows any Sign in link.
+   - Students: `https://skillmountainacademy.com/app/login/`
+   - Faculty and staff (you): `https://skillmountainacademy.com/app/staff/`
+   Your role still comes from your account, whichever page you use.
+3. **Admit a student who paid by transfer or cash:** Admin > **Admit a student**. Fill in the form after the money is in the
+   bank. It issues the registration number, records the payment and sends the admission and sign-in emails.
+4. **Add `PAYSTACK_SECRET_KEY`** as a Secret (Workers > skillmountainacademy > Settings > Variables and Secrets) when you are
+   ready to take card payments. Until then, online payment shows a "pay by transfer" message.
+5. **Founding year.** The site no longer states a year (the old pages said both 2021 and other dates). If you want one shown,
+   tell me the correct year and I will add it in one place.
+6. Read the new home, programme and About pages and tell me any wording you want changed.

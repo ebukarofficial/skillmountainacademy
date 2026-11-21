@@ -34,11 +34,13 @@ export function useAdmission(slug: string) {
 
 export function AdmissionBadge({ slug, compact = false, light = false }: { slug: string; compact?: boolean; light?: boolean }) {
   const a = useAdmission(slug);
-  if (!a.ready) return compact ? null : <span className="inline-block h-6" aria-hidden="true" />;
+  // Before the live status arrives the badge shows the default (admissions open), so the page never shows an empty gap.
+  if (!a.ready && compact) return null;
   const open = a.canEnrol;
+  const state = a.ready ? a.status?.state ?? "open" : "open";
   const dot = open ? "bg-brand-orange" : light ? "bg-white/40" : "bg-ink/30";
   return (
-    <span className={`inline-flex items-center gap-2 font-display text-xs font-semibold ${light ? "text-white/85" : "text-ink/70"}`} data-admission={a.status?.state ?? "open"}>
+    <span className={`inline-flex items-center gap-2 font-display text-xs font-semibold ${light ? "text-white/85" : "text-ink/70"}`} data-admission={state}>
       <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden="true" />{compact && a.status?.state === "upcoming" ? "Opening soon" : a.title}
     </span>
   );

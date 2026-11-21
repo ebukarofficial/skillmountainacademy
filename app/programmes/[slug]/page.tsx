@@ -4,7 +4,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BUSINESS, MESSAGE, PROGRAMMES, SITE_URL, duration, type Programme } from "@/lib/config";
 import { learnList } from "@/lib/curricula";
-import { METHOD, MODEL } from "@/lib/institution";
 import { programmeCopy } from "@/lib/programme-content";
 import { FOCUS, PHOTO } from "@/lib/photos";
 import { CloudBadges } from "../../components";
@@ -96,7 +95,7 @@ export default async function ProgrammePage({ params }: Params) {
               <p className="mt-3 max-w-xl text-lg leading-relaxed text-ink/70">{p.blurb}</p>
               <div className="mt-5"><AdmissionBadge slug={p.slug} /></div>
               <div className="mt-8 flex flex-wrap items-center gap-4">
-                <a href="#enrol" className={btnPrimary}>Proceed to enrolment <Arrow /></a>
+                <a href="#enrol" className={btnPrimary}>Apply for Admission <Arrow /></a>
                 <CurriculumActions p={p} />
               </div>
             </div>
@@ -116,63 +115,51 @@ export default async function ProgrammePage({ params }: Params) {
 
         <div className="mx-auto grid max-w-6xl gap-12 px-5 lg:grid-cols-[1fr_22rem]">
           <div>
-            <Section id="introduction" n={1} title="The discipline">
+            <Section id="overview" n={1} title="The discipline">
               <div className="max-w-2xl space-y-4 text-lg leading-relaxed text-ink/75">{copy.intro.map((t) => <p key={t}>{t}</p>)}</div>
-              <h3 className="mt-8 font-display text-sm font-semibold">Where the discipline is practised</h3>
+              <h3 className="mt-8 font-display text-sm font-semibold">Where it is practised</h3>
               <div className="mt-2"><Lines items={copy.opportunities} /></div>
             </Section>
 
-            <Section id="experience" n={2} title="The learning experience">
-              <p className="max-w-2xl text-lg leading-relaxed text-ink/75">You are taught by an assigned instructor in a live one-on-one session every week. This is not a collection of videos.</p>
-              <ol className="mt-6 grid gap-x-8 sm:grid-cols-2">
-                {MODEL.map(([t, d]) => <li key={t} className="border-t border-ink/10 py-4"><span className="block font-display text-sm font-semibold">{t}</span><span className="mt-1 block text-sm leading-relaxed text-ink/65">{d}</span></li>)}
-              </ol>
+            <Section id="suited" n={2} title="Who it suits">
+              <p className="max-w-2xl text-lg leading-relaxed text-ink/75">{p.audience ?? copy.suitedTo}</p>
+              <dl className="mt-6 grid gap-x-8 sm:grid-cols-2">
+                <div className="border-t border-ink/10 py-4"><dt className="font-display text-sm font-semibold">Level</dt><dd className="mt-1 text-ink/70">{p.level}</dd></div>
+                <div className="border-t border-ink/10 py-4"><dt className="font-display text-sm font-semibold">What you need</dt><dd className="mt-1 text-ink/70">A laptop or desktop computer and a reliable internet connection for live sessions. Your instructor confirms any software or accounts before your first session.</dd></div>
+              </dl>
             </Section>
 
-            <Section id="mastery" n={3} title="What you will master">
+            <Section id="outcomes" n={3} title="What you will be able to do">
               <ol>
                 {copy.mastery.map((t, i) => <li key={t} className="flex gap-5 border-t border-ink/10 py-4"><span className={`${SERIF} w-7 shrink-0 text-xl text-brand-red`}>{String(i + 1).padStart(2, "0")}</span><span className="text-lg text-ink/85">{t}</span></li>)}
               </ol>
+              <h3 className="mt-8 font-display text-sm font-semibold">By the end you should be able to show</h3>
+              <div className="mt-2"><Lines items={copy.outcomes} /></div>
             </Section>
 
-            <Section id="methodology" n={4} title="Learning methodology">
-              <ol className="grid gap-x-8 sm:grid-cols-2">
-                {METHOD.map(([t, d], i) => <li key={t} className="flex gap-4 border-t border-ink/10 py-4"><span className="w-5 shrink-0 font-display text-sm font-semibold text-ink/45">{i + 1}</span><span><span className="block font-display text-sm font-semibold">{t}</span><span className="mt-1 block text-sm text-ink/65">{d}</span></span></li>)}
-              </ol>
-            </Section>
-
-            <Section id="faculty" n={5} title="Faculty and instruction">
-              <p className="max-w-2xl text-lg leading-relaxed text-ink/75">Every instructor passes identity and credential verification, a discipline-specific practical assessment and a teaching demonstration before they may teach. <Link href="/faculty/" className="font-semibold text-indigo underline">How we select our faculty</Link>.</p>
-              <div className="mt-6"><FacultyList programme={p.slug} /></div>
-            </Section>
-
-            <Section id="curriculum" n={6} title="Curriculum">
-              <p className="max-w-2xl text-ink/70">The programme outline. The full curriculum opens in its own viewer.</p>
-              <ol className="mt-5">
+            <Section id="curriculum" n={4} title="Curriculum">
+              <ol>
                 {learnList(p).map((l, i) => <li key={l} className="flex gap-5 border-t border-ink/10 py-3"><span className="w-6 shrink-0 font-display text-sm font-semibold text-ink/45">{i + 1}</span><span className="text-ink/85">{l}</span></li>)}
               </ol>
               <div className="mt-6"><CurriculumActions p={p} /></div>
             </Section>
 
-            <Section id="outcomes" n={7} title="Programme outcomes">
-              <p className="max-w-2xl text-lg leading-relaxed text-ink/75">On successfully completing the programme, a student should be able to show:</p>
-              <div className="mt-4"><Lines items={copy.outcomes} /></div>
-              <div className="mt-10"><CareerLaunch p={p} /></div>
-            </Section>
-
-            <Section id="structure" n={8} title="Programme structure">
+            <Section id="structure" n={5} title="Programme structure">
               <dl className="grid gap-x-8 sm:grid-cols-2">
                 {([
                   ["Duration", `${duration(p)}.`],
-                  ["Learning format", "Online and one-on-one with your assigned instructor, on Google Meet, with screen sharing in both directions."],
-                  ["Sessions", "One fixed weekly session of 45 to 60 minutes, on the day and time agreed at enrolment."],
-                  ["Assignments", "Set weekly by your instructor and submitted in your dashboard, with marks and written feedback."],
-                  ["Assessment", "Quizzes and instructor-marked assessments throughout the instructional phase."],
-                  ["Internship", `A ${p.internshipMonths}-month intensive practical phase after the training, on structured projects reviewed by your instructor.`],
-                  ["Completion", "Judged on your instructor's assessment of your coursework, assessments and practical work. Students who meet the programme's requirements receive a Skill Mountain Academy certificate."],
-                  ["Support", "Private messaging with your instructor and an AI learning assistant limited to your programme."],
-                ] as [string, string][]).map(([k, v]) => <div key={k} className="border-t border-ink/10 py-4"><dt className="font-display text-sm font-semibold">{k}</dt><dd className="mt-1 text-ink/70">{v}</dd></div>)}
+                  ["Sessions", "One fixed weekly session of 45 to 60 minutes, live and one-on-one on Google Meet."],
+                  ["Coursework", "Weekly assignments, quizzes and instructor-marked assessments, with written feedback."],
+                  ["Internship", `A ${p.internshipMonths}-month practical phase after the training, on structured projects reviewed by your instructor.`],
+                  ["Completion", "Judged on your coursework, assessments and practical work. Students who meet the requirements receive a Skill Mountain Academy certificate."],
+                  ["How learning works", "The weekly rhythm, the live workspace and the learning assistant are described on The Learning Experience."],
+                ] as [string, string][]).map(([k, v]) => <div key={k} className="border-t border-ink/10 py-4"><dt className="font-display text-sm font-semibold">{k}</dt><dd className="mt-1 text-ink/70">{k === "How learning works" ? <>{v.replace(" on The Learning Experience.", " ")}<Link href="/learning-experience/" className="font-semibold text-indigo underline">on The Learning Experience</Link>.</> : v}</dd></div>)}
               </dl>
+              <div className="mt-10"><CareerLaunch p={p} /></div>
+            </Section>
+
+            <Section id="faculty" n={6} title="Faculty">
+              <FacultyList programme={p.slug} />
             </Section>
           </div>
 
@@ -186,7 +173,7 @@ export default async function ProgrammePage({ params }: Params) {
               <p className="mt-2 text-sm text-ink/65">Pay in full, or in 3 parts (50%, 30%, 20%).</p>
               <div className="mt-5"><CountrySelect compact /></div>
               <p className="mt-2 text-xs text-ink/55">Your country sets the currency used for guide amounts. Payment is processed in naira.</p>
-              <a href="#enrol" className={`${btnPrimary} mt-6 w-full`}>Proceed to enrolment</a>
+              <a href="#enrol" className={`${btnPrimary} mt-6 w-full`}>Apply for Admission</a>
               <div className="mt-6 border-t border-ink/10 pt-5"><TrustLines /></div>
             </div>
           </aside>
@@ -194,9 +181,9 @@ export default async function ProgrammePage({ params }: Params) {
 
         <section id="enrol" aria-labelledby="enrol-h" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
           <div className="mx-auto max-w-3xl px-5">
-            <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">09</p>
-            <h2 id="enrol-h" className={`${SERIF} mt-2 text-4xl leading-tight`}>Investment and enrolment</h2>
-            <p className="mt-3 text-ink/70">Enrol in {p.name} here, without leaving this page. Payment is confirmed by our server with Paystack before your place is activated.</p>
+            <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">07</p>
+            <h2 id="enrol-h" className={`${SERIF} mt-2 text-4xl leading-tight`}>Admission and investment</h2>
+            <p className="mt-3 text-ink/70">Apply for {p.name} here. Your place is confirmed once your payment is verified.</p>
             <div className="mt-8"><EnrolSection p={p} /></div>
           </div>
         </section>

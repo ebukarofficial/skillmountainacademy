@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PROGRAMMES } from "@/lib/config";
-import { Arrow, PageHero, ProgrammeGrid, btnOutline } from "../brand";
+import { PROGRAMMES, duration } from "@/lib/config";
+import { CloudBadges } from "../components";
+import { Arrow, PageHero, ProgrammeGrid, SERIF, btnOutline } from "../brand";
 import { SiteFooter, SiteHeader } from "../site-parts";
 
 export const metadata: Metadata = {
@@ -18,13 +19,37 @@ export default function ProgrammesPage() {
       <SiteHeader />
       <main id="main" className="overflow-x-clip">
         <PageHero eyebrow="Programmes" title="Disciplines of professional consequence."
-          lede="Every programme is taught one-on-one by an assigned instructor, assessed through practical work and completed with an intensive practical phase. Choose a programme to read about the experience, the outcomes and the curriculum." />
+          lede="Choose a discipline to see what you will study, what you will be able to do, how the programme is structured and what it costs." />
         {GROUPS.map((g) => (
           <section key={g} aria-labelledby={`g-${g}`} className="mx-auto max-w-6xl px-5 py-14 first-of-type:pt-16">
             <h2 id={`g-${g}`} className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">{g}</h2>
             <div className="mt-6"><ProgrammeGrid list={PROGRAMMES.filter((p) => p.tag === g)} /></div>
           </section>
         ))}
+        <section aria-labelledby="cloud-track" className="mx-auto max-w-6xl px-5 py-14">
+          <div className="rounded-lg border border-ink/10 bg-paper p-6 sm:p-10">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h2 id="cloud-track" className={`${SERIF} text-3xl sm:text-4xl`}>Choosing within the Cloud track</h2>
+                <p className="mt-2 max-w-2xl text-ink/70">All three teach both AWS and Azure. Choose by where you are today.</p>
+              </div>
+              <CloudBadges />
+            </div>
+            <div className="mt-8 grid md:grid-cols-3">
+              {PROGRAMMES.filter((p) => p.track === "cloud").map((p, i) => (
+                <div key={p.slug} className={`flex flex-col py-6 md:px-6 ${i ? "border-t border-ink/10 md:border-l md:border-t-0" : "md:pl-0"}`}>
+                  <h3 className="font-display text-lg font-semibold">{p.name}</h3>
+                  <dl className="mt-4 flex-1 space-y-3 text-sm">
+                    <div><dt className="font-semibold">Level</dt><dd className="text-ink/70">{p.level}</dd></div>
+                    <div><dt className="font-semibold">Suited to</dt><dd className="text-ink/70">{p.audience}</dd></div>
+                    <div><dt className="font-semibold">Duration</dt><dd className="text-ink/70">{duration(p)}</dd></div>
+                  </dl>
+                  <Link href={`/programmes/${p.slug}/`} className="mt-5 inline-flex items-center gap-2 font-display text-sm font-semibold text-indigo">Explore Programme <Arrow /></Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
         <section className="mx-auto max-w-6xl px-5 pb-24 pt-6">
           <div className="flex flex-col items-start justify-between gap-6 border-t border-ink/10 pt-10 sm:flex-row sm:items-center">
             <p className="max-w-xl text-lg text-ink/70">Unsure which programme suits you? Our Admissions team can help you decide before you pay anything.</p>

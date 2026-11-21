@@ -21,9 +21,9 @@ export function EnrolSection({ p }: { p: Programme }) {
       {open && <Script src="https://js.paystack.co/v1/inline.js" strategy="afterInteractive" />}
       {open ? <EnrolmentFlow p={p} embedded /> : (
         <div className="rounded-lg border border-ink/10 bg-paper p-6 sm:p-8">
-          <p className="text-lg text-ink/75">{adm.canEnrol ? "The enrolment form takes about five minutes: your details, a few questions about your goals, then payment." : adm.detail}</p>
+          <p className="text-lg text-ink/75">{adm.canEnrol ? "The application takes about five minutes: your details, a few questions about your goals, then payment." : adm.detail}</p>
           {adm.canEnrol && (
-            <button type="button" onClick={() => { setOpen(true); history.replaceState(null, "", "#enrol"); }} className="mt-5 inline-flex items-center gap-2 rounded-full bg-indigo px-8 py-4 font-display text-sm font-semibold tracking-wide text-cream transition hover:bg-navy">Proceed to enrolment</button>
+            <button type="button" onClick={() => { setOpen(true); history.replaceState(null, "", "#enrol"); }} className="mt-5 inline-flex items-center gap-2 rounded-full bg-indigo px-8 py-4 font-display text-sm font-semibold tracking-wide text-cream transition hover:bg-navy">Apply for Admission</button>
           )}
         </div>
       )}
