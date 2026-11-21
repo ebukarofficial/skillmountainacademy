@@ -212,3 +212,10 @@ theirs (with no link). The old /app/staff/ page forwards to the instructor entra
 Resend and the receiving mailbox. To see where the time goes: Resend dashboard > Emails > open the email: "Sent" and
 "Delivered" times. If Resend shows "Delivered" within a few seconds but the email shows up later, the delay is the
 mailbox's own spam scanning (Northwest webmail). Gmail and Outlook addresses usually receive within seconds.
+
+## I. If an email does not arrive
+1. Admin > Platform > **Send a test email**. It shows Resend's exact answer:
+   - "RESEND_API_KEY is not set": add it again as a **Secret** in Cloudflare (Workers > skillmountainacademy > Settings > Variables and Secrets).
+   - "Resend refused the email (HTTP 401/403)": the API key is wrong or the domain is not verified in Resend.
+   - "Accepted by Resend": the problem is the receiving mailbox. Check spam, and compare with a Gmail address.
+2. Every failed email is also listed under Admin > Platform > Recent errors, with the reason.

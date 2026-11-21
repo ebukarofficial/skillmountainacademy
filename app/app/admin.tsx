@@ -218,12 +218,33 @@ function Courses() {
   );
 }
 
+// Sends a test email to the signed-in admin and shows Resend's answer.
+function EmailCheck() {
+  const [res, setRes] = useState<{ sent: boolean; to: string; reason: string; ms: number; from: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function go() {
+    setBusy(true); setErr(""); setRes(null);
+    try { setRes(await api("/api/app/admin/test-email", { method: "POST" })); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <Card title="Email check" action={<Btn small disabled={busy} onClick={go}>{busy ? "Sending…" : "Send a test email"}</Btn>}>
+      <p className="text-sm text-ink/65">Sends a test to your own address straight away and shows what Resend answered.</p>
+      {res && (res.sent
+        ? <p className="mt-3 rounded-lg bg-indigo/[0.06] p-3 text-sm"><b>Accepted by Resend in {(res.ms / 1000).toFixed(1)} s</b> and sent to {res.to} from {res.from}. If it does not arrive within a minute, the delay is at the receiving mailbox: check spam, and try a Gmail address to compare.</p>
+        : <p className="mt-3 rounded-lg bg-brand-red/10 p-3 text-sm text-brand-red"><b>Not sent.</b> {res.reason}</p>)}
+      <Msg text={err} />
+    </Card>
+  );
+}
+
 function Platform() {
   const { data } = useLoad<{ platform: Record<string, number>; errors: { at: string; route: string; message: string }[]; website: { note: string } }>("/api/app/admin/platform");
   const audit = useLoad<{ entries: { at: string; action: string; actor_name: string | null; target_type: string | null }[] }>("/api/app/admin/audit?limit=50");
   const p = data?.platform;
   return (
     <div className="space-y-5">
+      <EmailCheck />
       {p && <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Active users (7 days)" value={p.users_active_7d} note={`${p.sign_ins_7d} sign-ins`} />
         <Stat label="Errors" value={p.errors_24h} note={`last 24 h · ${p.errors_7d} in 7 days`} />
