@@ -1,16 +1,19 @@
 "use client";
-// The student's learning space. Home puts the next class and the next responsibility first; the other sections
-// hold classes and the calendar, coursework, materials, the assistant, messages, progress and the account.
-import { useEffect, useState } from "react";
+// The student's learning space, laid out like an academic learning environment: Home answers "what am I studying,
+// what must I do, when is my next class, has my instructor written, how am I doing"; then My Programme (modules),
+// Learning Materials, Assignments, Assessments, Calendar, Messages, Notifications and Profile.
+// Everything shown comes from the student's own records; nothing is invented.
+import { useMemo, useState } from "react";
 import type { Me } from "./page";
 import { Messages, ProfileEditor, ProgressView, type Progress } from "./shared";
-import { api, Badge, Btn, Card, Empty, inputCls, Msg, naira, PageTitle, Stat, upload, useAction, useLoad, useNow, useTab, Avatar, VerifiedBadge } from "./ui";
-import { AppShell, Icon, type NavItem } from "./shell";
+import { api, Avatar, Badge, Bar, Btn, Card, Empty, inputCls, Msg, naira, PageTitle, upload, useAction, useLoad, useNow, useTab, VerifiedBadge, when } from "./ui";
+import { AppShell, Icon, NotificationsPage, targetOf, useNotifications, type NavItem, type Note } from "./shell";
+import { AcademicCalendar, UpcomingList, type CalEvent } from "./calendar";
 
 type Session = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetStatus: string; joinOpen: boolean; instructor: { fullName: string } | null };
 type Overview = { enrolments: { id: string; programme: string; programmeName: string; status: string; startedAt: string; instructor: { id: string; fullName: string; email: string; bio: string | null; photo: string | null; specialization: string | null; verified?: boolean; headline?: string | null } | null; timetable: { day: string; startTime: string; durationMin: number } | null }[]; nextSession: Session | null };
-type Assignment = { id: string; title: string; description: string | null; dueText: string; status: string; maxScore: number; submission: { text: string | null; fileName: string | null } | null; grade: { score: number; feedback: string | null } | null };
-type Quiz = { id: string; kind: string; title: string; instructions: string | null; durationMin: number | null; dueText: string; status: string; score: number | null; maxScore: number; feedback: string | null;
+type Assignment = { id: string; title: string; description: string | null; dueAt: string; dueText: string; programme?: string; status: string; maxScore: number; submission: { text: string | null; fileName: string | null } | null; grade: { score: number; feedback: string | null } | null };
+type Quiz = { id: string; kind: string; title: string; instructions: string | null; durationMin: number | null; dueAt: string; dueText: string; programme?: string; status: string; score: number | null; maxScore: number; feedback: string | null;
   questions: { n?: number; type: string; prompt: string; options?: string[]; points: number; answer?: number }[]; answers: (number | string | null)[] | null };
 
 const left = (ms: number) => {
@@ -20,30 +23,32 @@ const left = (ms: number) => {
   return d >= 1 ? `${d} day${d > 1 ? "s" : ""}${h % 24 ? ` ${h % 24} h` : ""}` : `${h} h${m % 60 ? ` ${m % 60} min` : ""}`;
 };
 
+// The next live class: prominent, but a white card rather than a dark banner.
 function NextClass({ s, now }: { s: Session | null; now: number }) {
   if (!s) return (
-    <section className="rounded-2xl bg-indigo p-6 text-white sm:p-7">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">Next class</p>
-      <p className="mt-3 font-display text-xl font-semibold">Your weekly class time is being arranged.</p>
-      <p className="mt-1 text-sm text-white/70">It appears here as soon as the Academy confirms it, and you will be notified.</p>
-    </section>
+    <Card title="Next class">
+      <p className="text-[0.95rem] text-ink/75">Your weekly class time is being arranged. It appears here as soon as the Academy confirms it, and you will be notified.</p>
+    </Card>
   );
   const start = Date.parse(s.startsAt), live = now >= start && now < Date.parse(s.endsAt);
+  const date = new Date(s.startsAt).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Lagos" });
+  const t = new Date(s.startsAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" });
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-indigo p-6 text-white sm:p-7">
-      <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/[0.04]" aria-hidden="true" />
-      <div className="relative flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">Next class</p>
-          <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight">{s.programmeName}</h2>
-          <p className="mt-1 text-sm text-white/75">{s.lagosTime} · {s.durationMin} min{s.instructor ? ` · ${s.instructor.fullName}` : ""}</p>
-        </div>
-        {now > 0 && <span className={`rounded-full px-3 py-1 text-xs font-semibold ${live ? "bg-brand-orange text-ink" : "bg-white/10 text-white"}`}>{live ? "In session now" : now < start ? `Starts in ${left(start - now)}` : "Ended"}</span>}
+    <section aria-labelledby="next-class" className="rounded-xl border border-ink/10 border-l-4 border-l-indigo bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 id="next-class" className="font-display text-lg font-semibold">Next class</h2>
+        {now > 0 && <span className={`rounded-md px-2.5 py-1 text-sm font-semibold ${live ? "bg-brand-orange/20 text-ink" : "bg-indigo/[0.08] text-indigo"}`}>{live ? "In session now" : now < start ? `Starts in ${left(start - now)}` : "Ended"}</span>}
       </div>
-      <div className="relative mt-5">
+      <dl className="mt-3 grid gap-x-6 gap-y-2 text-[0.95rem] sm:grid-cols-2">
+        <div><dt className="text-sm text-ink/65">Date</dt><dd className="font-semibold">{date}</dd></div>
+        <div><dt className="text-sm text-ink/65">Time (Lagos)</dt><dd className="font-semibold">{t} · {s.durationMin} minutes</dd></div>
+        <div><dt className="text-sm text-ink/65">Programme</dt><dd className="font-semibold">{s.programmeName}</dd></div>
+        <div><dt className="text-sm text-ink/65">Instructor</dt><dd className="font-semibold">{s.instructor?.fullName ?? "Being assigned"}</dd></div>
+      </dl>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         {s.joinOpen && s.meetUrl
-          ? <a href={s.meetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 font-display text-sm font-semibold text-indigo transition hover:bg-paper">Join the live session</a>
-          : <p className="rounded-lg bg-white/[0.08] px-4 py-3 text-sm text-white/85">{s.meetUrl ? "Your Google Meet link is ready. The join button appears 15 minutes before class." : "Your instructor has not added the meeting link yet. You will be notified when they do."}</p>}
+          ? <a href={s.meetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-indigo px-5 font-display text-[0.95rem] font-semibold text-white hover:bg-navy"><Icon name="play" /> Join the live session</a>
+          : <p className="text-[0.95rem] text-ink/75">{s.meetUrl ? "Your Google Meet link is ready. The Join button appears 15 minutes before class." : "Your instructor has not added the meeting link yet. You will be notified when they do."}</p>}
       </div>
     </section>
   );
@@ -58,7 +63,7 @@ function Assistant() {
     <Card title="Learning assistant" action={data ? <span className="text-xs text-ink/60">{data.remainingToday} questions left today</span> : null}>
       {data && !data.available ? <Empty>The assistant is not switched on yet. Please message your instructor.</Empty> : <>
         <p className="mb-2 text-xs text-ink/60">Helps with your programme using approved materials. It guides you; it does not do graded work, and your instructor has the final word.</p>
-        <ul className="max-h-[28rem] min-h-48 space-y-3 overflow-auto rounded-xl bg-paper p-4" aria-live="polite">
+        <ul className="max-h-[28rem] min-h-48 space-y-3 overflow-auto rounded-xl bg-ink/[0.03] p-4" aria-live="polite">
           {data?.history.map((m, i) => <li key={i} className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "ml-auto rounded-br-md bg-indigo text-white" : "rounded-bl-md border border-ink/[0.07] bg-white"}`}>{m.content}</li>)}
           {!data?.history.length && <li className="text-sm text-ink/60">Ask anything about your lessons, assignments or practical work.</li>}
           {busy && <li className="text-sm text-ink/60">Thinking…</li>}
@@ -81,13 +86,13 @@ function AssignmentItem({ a, reload }: { a: Assignment; reload: () => void }) {
   const { busy, msg, run } = useAction();
   const locked = a.status === "graded";
   return (
-    <li className="rounded-xl border border-ink/[0.07] bg-white p-4">
+    <li className="rounded-lg border border-ink/10 bg-white p-4">
       <button className="flex w-full items-start justify-between gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span><b className="text-sm">{a.title}</b><span className="block text-xs text-ink/60">Due {a.dueText}</span></span><Badge s={a.status} />
+        <span><b className="text-[0.95rem]">{a.title}</b><span className="block text-sm text-ink/70">Due {a.dueText}</span></span><Badge s={a.status} />
       </button>
       {open && <div className="mt-2 space-y-2 text-sm">
         {a.description && <p className="whitespace-pre-wrap text-ink/80">{a.description}</p>}
-        {a.grade && <p className="rounded-lg bg-paper p-3"><b>Score: {a.grade.score}/{a.maxScore}</b>{a.grade.feedback ? ` · ${a.grade.feedback}` : ""}</p>}
+        {a.grade && <p className="rounded-lg bg-ink/[0.03] p-3"><b>Score: {a.grade.score}/{a.maxScore}</b>{a.grade.feedback ? ` · ${a.grade.feedback}` : ""}</p>}
         {!locked && <>
           <label className="sr-only" htmlFor={`t-${a.id}`}>Your answer</label>
           <textarea id={`t-${a.id}`} rows={4} value={text} onChange={(e) => setText(e.target.value)} className={inputCls} placeholder="Type your answer or notes" />
@@ -109,18 +114,18 @@ function QuizItem({ q, reload }: { q: Quiz; reload: () => void }) {
   const { busy, msg, run } = useAction();
   const taking = q.status === "in_progress";
   return (
-    <li className="rounded-xl border border-ink/[0.07] bg-white p-4">
+    <li className="rounded-lg border border-ink/10 bg-white p-4">
       <button className="flex w-full items-start justify-between gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span><b className="text-sm">{q.title}</b><span className="block text-xs text-ink/60">{q.kind} · due {q.dueText}{q.durationMin ? ` · ${q.durationMin} min` : ""}</span></span><Badge s={q.status} />
+        <span><b className="text-[0.95rem]">{q.title}</b><span className="block text-sm text-ink/70">{q.kind} · due {q.dueText}{q.durationMin ? ` · ${q.durationMin} min` : ""}</span></span><Badge s={q.status} />
       </button>
       {open && <div className="mt-2 space-y-3 text-sm">
         {q.instructions && <p className="text-ink/80">{q.instructions}</p>}
-        {q.status === "graded" && <p className="rounded-lg bg-paper p-3"><b>Score: {q.score}/{q.maxScore}</b>{q.feedback ? ` · ${q.feedback}` : ""}</p>}
+        {q.status === "graded" && <p className="rounded-lg bg-ink/[0.03] p-3"><b>Score: {q.score}/{q.maxScore}</b>{q.feedback ? ` · ${q.feedback}` : ""}</p>}
         {q.status === "open" && <Btn small disabled={busy} onClick={() => run(() => api(`/api/app/student/quizzes/${q.id}/start`, { method: "POST" }), "", reload)}>Start{q.durationMin ? ` (${q.durationMin} min timer)` : ""}</Btn>}
         {taking && <form onSubmit={(e) => { e.preventDefault(); run(() => api(`/api/app/student/quizzes/${q.id}/submit`, { method: "POST", body: { answers } }), "Submitted.", reload); }} className="space-y-3">
           {q.questions.map((qq, i) => (
             <fieldset key={i} className="rounded-lg border border-ink/10 p-3">
-              <legend className="font-semibold">{i + 1}. {qq.prompt} <span className="text-xs text-ink/50">({qq.points} pt)</span></legend>
+              <legend className="font-semibold">{i + 1}. {qq.prompt} <span className="text-xs text-ink/65">({qq.points} pt)</span></legend>
               {qq.type === "mcq" ? qq.options!.map((o, k) => (
                 <label key={k} className="mt-1 flex items-center gap-2"><input type="radio" name={`q${i}`} onChange={() => { const a = [...answers]; a[i] = k; setAnswers(a); }} className="accent-indigo" />{o}</label>
               )) : <textarea rows={3} className={inputCls} aria-label={`Answer ${i + 1}`} onChange={(e) => { const a = [...answers]; a[i] = e.target.value; setAnswers(a); }} />}
@@ -135,15 +140,52 @@ function QuizItem({ q, reload }: { q: Quiz; reload: () => void }) {
   );
 }
 
-const TABS = ["home", "classes", "coursework", "materials", "assistant", "messages", "progress", "account"] as const;
+const TABS = ["home", "programme", "materials", "assignments", "assessments", "calendar", "messages", "notifications", "profile"] as const;
 type Tab = (typeof TABS)[number];
 type Pay = { orders: { reference: string; programme: string; plan: string; totalNaira: number; paidNaira: number; outstandingNaira: number; status: string; parts: { part: number; naira: number; due: string; status: string; payLink: string | null }[] }[] };
+type Lesson = { id: string; title: string; objectives: string | null; completedAt?: string | null };
+type Module = { id: string; title: string; description: string | null; lessons: Lesson[] };
+type Contact = { id: string; fullName: string; photo: string | null; unread: number; lastAt: string | null; lastMessage: string | null };
+type Resource = { id: string; title: string; kind: string; url: string | null; file: string | null };
 
-const greeting = (now: number) => {
-  const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Africa/Lagos" }).format(now || Date.now()));
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-};
-const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Lagos" });
+const firstName = (n: string) => n.split(" ")[0];
+const pctOf = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+
+// A Brightspace-style module card: title, completion bar and "x/y topics completed"; opens to its lessons.
+function ModuleCard({ m, n, reload, current }: { m: Module; n: number; reload: () => void; current: boolean }) {
+  const [open, setOpen] = useState(current);
+  const { busy, msg, run } = useAction();
+  const done = m.lessons.filter((l) => l.completedAt).length;
+  return (
+    <li className={`rounded-xl border bg-white ${current ? "border-indigo" : "border-ink/10"}`}>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-start gap-4 p-5 text-left">
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg font-display text-base font-semibold ${done === m.lessons.length && m.lessons.length ? "bg-indigo text-white" : "bg-indigo/[0.08] text-indigo"}`}>{n}</span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2"><span className="font-display text-lg font-semibold text-indigo">{m.title}</span>{current && <span className="rounded-md bg-brand-orange/20 px-2 py-0.5 text-xs font-semibold text-ink">Current module</span>}</span>
+          {m.description && <span className="mt-0.5 block text-[0.95rem] text-ink/75">{m.description}</span>}
+          <span className="mt-3 block h-2 rounded-full bg-ink/[0.08]" role="progressbar" aria-label={`${m.title} completion`} aria-valuenow={pctOf(done, m.lessons.length)} aria-valuemin={0} aria-valuemax={100}><span className="block h-2 rounded-full bg-indigo" style={{ width: `${pctOf(done, m.lessons.length)}%` }} /></span>
+          <span className="mt-1.5 block text-sm text-ink/75">{done}/{m.lessons.length} topics completed</span>
+        </span>
+        <Icon name="down" className={`mt-1 h-5 w-5 shrink-0 text-ink/60 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <ul className="border-t border-ink/10 px-5 py-2">
+          {m.lessons.map((l) => (
+            <li key={l.id} className="flex items-start justify-between gap-3 border-b border-ink/[0.06] py-3 last:border-0">
+              <span className="flex items-start gap-3">
+                <span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs font-bold ${l.completedAt ? "bg-indigo text-white" : "border-2 border-ink/25"}`}>{l.completedAt ? "✓" : ""}</span>
+                <span><span className="block font-semibold">{l.title}</span>{l.objectives && <span className="block text-sm text-ink/70">{l.objectives}</span>}<span className="block text-sm text-ink/65">{l.completedAt ? "Completed" : "Not yet completed"}</span></span>
+              </span>
+              <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/student/lessons/${l.id}/complete`, { method: l.completedAt ? "DELETE" : "POST" }), "", reload)}>{l.completedAt ? "Mark as not done" : "Mark complete"}</Btn>
+            </li>
+          ))}
+          {!m.lessons.length && <li className="py-3"><Empty>Topics for this module are being published.</Empty></li>}
+          <li><Msg text={msg.text} kind={msg.kind} /></li>
+        </ul>
+      )}
+    </li>
+  );
+}
 
 export function StudentDashboard({ me }: { me: Me }) {
   const [tab, setTab] = useTab(TABS, "home");
@@ -151,203 +193,268 @@ export function StudentDashboard({ me }: { me: Me }) {
   const sessions = useLoad<{ sessions: Session[] }>("/api/app/student/sessions");
   const asg = useLoad<{ assignments: Assignment[] }>("/api/app/student/assignments");
   const quizzes = useLoad<{ quizzes: Quiz[] }>("/api/app/student/quizzes");
-  const res = useLoad<{ resources: { id: string; title: string; kind: string; url: string | null; file: string | null }[] }>("/api/app/resources");
+  const res = useLoad<{ resources: Resource[] }>(tab === "home" || tab === "materials" ? "/api/app/resources" : null);
   const prog = useLoad<{ progress: Progress[] }>(`/api/app/students/${me.id}/progress`);
-  const pay = useLoad<Pay>("/api/app/student/payments");
-  const msgs = useLoad<{ unread: number }>("/api/app/messages");
-  const now = useNow();
-  const [first, setFirst] = useState(false);
-  useEffect(() => {
-    // The first visit gets a welcome; afterwards the greeting follows the day's work.
-    const k = `sma-welcomed-${me.id}`;
-    let seen = true;
-    try { seen = !!localStorage.getItem(k); localStorage.setItem(k, "1"); } catch { /* private mode */ }
-    const t = setTimeout(() => setFirst(!seen), 0);
-    return () => clearTimeout(t);
-  }, [me.id]);
-
-  const todo = (asg.data?.assignments ?? []).filter((a) => a.status === "pending" || a.status === "overdue");
-  const openQ = (quizzes.data?.quizzes ?? []).filter((q) => q.status === "open" || q.status === "in_progress");
-  const graded = [...(asg.data?.assignments ?? []).filter((a) => a.grade).map((a) => ({ id: a.id, title: a.title, score: `${a.grade!.score}/${a.maxScore}`, feedback: a.grade!.feedback })),
-    ...(quizzes.data?.quizzes ?? []).filter((q) => q.status === "graded").map((q) => ({ id: q.id, title: q.title, score: `${q.score}/${q.maxScore}`, feedback: q.feedback }))];
-  const upcoming = (sessions.data?.sessions ?? []).filter((s) => now > 0 && Date.parse(s.endsAt) > now);
+  const pay = useLoad<Pay>(tab === "profile" ? "/api/app/student/payments" : null);
+  const msgs = useLoad<{ contacts: Contact[]; unread: number }>("/api/app/messages");
+  const notes = useNotifications();
   const e0 = ov.data?.enrolments[0];
+  const mods = useLoad<{ courses: Module[] }>(e0 ? `/api/app/programmes/${e0.programme}/courses` : null);
+  const now = useNow();
+
+  const assignments = asg.data?.assignments ?? [];
+  const allQuizzes = quizzes.data?.quizzes ?? [];
+  const todoA = assignments.filter((a) => a.status === "pending" || a.status === "overdue");
+  const todoQ = allQuizzes.filter((q) => q.status === "open" || q.status === "in_progress");
+  const tasks = [
+    ...todoA.map((a) => ({ id: a.id, title: a.title, type: "Assignment", due: a.dueAt, dueText: a.dueText, status: a.status, to: "assignments" as Tab })),
+    ...todoQ.map((q) => ({ id: q.id, title: q.title, type: q.kind === "assessment" ? "Assessment" : "Quiz", due: q.dueAt, dueText: q.dueText, status: q.status, to: "assessments" as Tab })),
+  ].sort((a, b) => a.due.localeCompare(b.due));
   const p0 = prog.data?.progress[0];
-  const ins = ov.data?.enrolments.find((e) => e.instructor)?.instructor;
-  const outstanding = (pay.data?.orders ?? []).reduce((n, o) => n + o.outstandingNaira, 0);
+  const ins = e0?.instructor ?? null;
+  const modules = mods.data?.courses ?? [];
+  const current = modules.find((m) => m.lessons.some((l) => !l.completedAt)) ?? null;
+  const modulesDone = modules.filter((m) => m.lessons.length && m.lessons.every((l) => l.completedAt)).length;
+  const goTab = (t: Tab) => setTab(t);
+
+  const events: CalEvent[] = useMemo(() => [
+    ...(sessions.data?.sessions ?? []).filter((x) => x.status !== "cancelled").map((x) => ({ id: `s${x.id}`, at: x.startsAt, title: x.programmeName, kind: "class" as const, meta: `${x.durationMin} min${x.instructor ? ` with ${x.instructor.fullName}` : ""}`, status: x.status === "scheduled" ? undefined : x.status.replace(/_/g, " "), onOpen: () => goTab("calendar") })),
+    ...assignments.map((a) => ({ id: `a${a.id}`, at: a.dueAt, title: a.title, kind: "assignment" as const, status: a.status.replace(/_/g, " "), onOpen: () => goTab("assignments") })),
+    ...allQuizzes.map((q) => ({ id: `q${q.id}`, at: q.dueAt, title: q.title, kind: (q.kind === "assessment" ? "assessment" : "quiz") as CalEvent["kind"], status: q.status.replace(/_/g, " "), onOpen: () => goTab("assessments") })),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [sessions.data, asg.data, quizzes.data]);
+
+  // Announcements and messages: notices and the latest message from each contact, newest first.
+  const feed = [
+    ...(notes.data?.notifications ?? []).filter((n) => !/^message/.test(n.kind)).map((n) => ({ id: n.id, at: n.created_at, title: n.title, body: n.body, unread: !n.read_at, note: n as Note | null, contact: null as Contact | null })),
+    ...(msgs.data?.contacts ?? []).filter((c) => c.lastAt).map((c) => ({ id: `m${c.id}`, at: c.lastAt!, title: `Message from ${c.fullName}`, body: c.lastMessage, unread: c.unread > 0, note: null, contact: c })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
 
   const nav: NavItem<Tab>[] = [
     { id: "home", label: "Home", icon: "home" },
-    { id: "classes", label: "Classes & calendar", icon: "calendar" },
-    { id: "coursework", label: "Coursework", icon: "book", badge: todo.length + openQ.length },
-    { id: "materials", label: "Materials", icon: "folder" },
-    { id: "assistant", label: "Learning assistant", icon: "spark" },
-    { id: "messages", label: "Messages", icon: "chat", badge: msgs.data?.unread },
-    { id: "progress", label: "Progress", icon: "chart" },
-    { id: "account", label: "My account", icon: "user" },
+    { id: "programme", label: "My Programme", icon: "school" },
+    { id: "materials", label: "Learning Materials", icon: "folder" },
+    { id: "assignments", label: "Assignments", icon: "clipboard", badge: todoA.length },
+    { id: "assessments", label: "Assessments", icon: "check", badge: todoQ.length },
+    { id: "calendar", label: "Calendar", icon: "calendar" },
+    { id: "messages", label: "Messages", icon: "mail", badge: msgs.data?.unread },
+    { id: "notifications", label: "Notifications", icon: "bell", badge: notes.data?.unread },
+    { id: "profile", label: "Profile", icon: "user" },
   ];
 
-  const responsibilities = [
-    ...todo.map((a) => ({ id: a.id, title: a.title, meta: a.status === "overdue" ? `Overdue · was due ${a.dueText}` : `Assignment · due ${a.dueText}`, urgent: a.status === "overdue" })),
-    ...openQ.map((q) => ({ id: q.id, title: q.title, meta: `${q.kind === "assessment" ? "Assessment" : "Quiz"} · due ${q.dueText}${q.status === "in_progress" ? " · in progress" : ""}`, urgent: q.status === "in_progress" })),
-  ];
+  const myProgramme = (
+    <Card title="My Programme">
+      {e0 ? <>
+        <p className="font-display text-lg font-semibold">{e0.programmeName}</p>
+        <dl className="mt-3 space-y-2.5 text-[0.95rem]">
+          <div className="flex justify-between gap-3"><dt className="text-ink/70">Instructor</dt><dd className="flex items-center gap-1 text-right font-semibold">{ins ? <>{ins.fullName}{ins.verified && <VerifiedBadge />}</> : "Being assigned"}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-ink/70">Current module</dt><dd className="text-right font-semibold">{current?.title ?? (modules.length ? "All modules completed" : "Being published")}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-ink/70">Status</dt><dd><Badge s={e0.status} /></dd></div>
+          {e0.timetable && <div className="flex justify-between gap-3"><dt className="text-ink/70">Weekly class</dt><dd className="text-right font-semibold">{e0.timetable.day}s, {e0.timetable.startTime}</dd></div>}
+        </dl>
+        <div className="mt-4"><Bar pct={p0 ? p0.overall : null} label="Programme progress" /></div>
+        <div className="mt-4"><Btn onClick={() => goTab("programme")}>Continue learning</Btn></div>
+      </> : <Empty>Your programme appears here once your admission is complete.</Empty>}
+    </Card>
+  );
 
   return (
-    <AppShell me={me} nav={nav} tab={tab} setTab={setTab}>
+    <AppShell me={me} nav={nav} tab={tab} setTab={setTab} context={e0?.programmeName} primary={9}>
       {tab === "home" && <>
-        <div className="mb-7">
-          <p className="text-sm font-medium text-ink/55">{now ? greeting(now) : "Welcome"}, {me.fullName.split(" ")[0]}.</p>
-          <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight sm:text-3xl">{first ? "Welcome to your learning space." : responsibilities.length ? `You have ${responsibilities.length} thing${responsibilities.length > 1 ? "s" : ""} to complete.` : "You are up to date."}</h1>
-          <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink/60">
+        <div className="mb-6">
+          <h1 className="font-display text-2xl font-semibold sm:text-3xl">Welcome, {firstName(me.fullName)}.</h1>
+          <p className="mt-1 flex flex-wrap gap-x-3 text-[0.95rem] text-ink/75">
             {e0 && <span>{e0.programmeName}</span>}
-            {me.studentNo && <span>Registration No: <b className="font-semibold text-ink/80">{me.studentNo}</b></span>}
+            {me.studentNo && <span>Registration No: <b className="font-semibold text-ink">{me.studentNo}</b></span>}
           </p>
         </div>
-        <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-          <div className="space-y-5">
+        <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
             <NextClass s={ov.data?.nextSession ?? null} now={now} />
-            <Card title="Your responsibilities" action={responsibilities.length ? <button onClick={() => setTab("coursework")} className="text-xs font-semibold text-indigo hover:underline">Open coursework</button> : null}>
-              {responsibilities.length ? (
+            <Card title="Your Academic Tasks" action={tasks.length ? <span className="text-sm text-ink/70">{tasks.length} to complete</span> : null}>
+              {tasks.length ? (<>
+                {/* Phones: one stacked item per task. */}
+                <ul className="divide-y divide-ink/[0.07] sm:hidden">{tasks.slice(0, 8).map((t) => {
+                  const soon = now > 0 && Date.parse(t.due) - now < 48 * 3600_000;
+                  return (
+                    <li key={t.id} className="py-3">
+                      <p className="flex items-center gap-2 font-semibold">{(t.status === "overdue" || soon) && <span className={`h-2 w-2 shrink-0 rounded-full ${t.status === "overdue" ? "bg-brand-red" : "bg-brand-orange"}`} aria-hidden="true" />}{t.title}</p>
+                      <p className="mt-0.5 text-[0.95rem] text-ink/75">{t.type} · due {t.dueText}{t.status !== "overdue" && soon ? " · due soon" : ""}</p>
+                      <div className="mt-2 flex items-center justify-between gap-3"><Badge s={t.status} /><Btn small kind="ghost" onClick={() => goTab(t.to)}>{t.status === "in_progress" ? "Continue" : "Open"}</Btn></div>
+                    </li>
+                  );
+                })}</ul>
+                <div className="relative -mx-2 hidden overflow-x-auto sm:block">
+                  <table className="w-full min-w-[34rem] text-left text-[0.95rem]">
+                    <thead><tr className="border-b border-ink/10 text-sm text-ink/70"><th className="px-2 py-2 font-semibold">Task</th><th className="px-2 py-2 font-semibold">Type</th><th className="px-2 py-2 font-semibold">Deadline</th><th className="px-2 py-2 font-semibold">Status</th><th className="px-2 py-2"><span className="sr-only">Action</span></th></tr></thead>
+                    <tbody>{tasks.slice(0, 8).map((t) => {
+                      const soon = now > 0 && Date.parse(t.due) - now < 48 * 3600_000;
+                      return (
+                        <tr key={t.id} className="border-b border-ink/[0.06] last:border-0">
+                          <td className="px-2 py-3 font-semibold"><span className="flex items-center gap-2">{(t.status === "overdue" || soon) && <span className={`h-2 w-2 shrink-0 rounded-full ${t.status === "overdue" ? "bg-brand-red" : "bg-brand-orange"}`} aria-hidden="true" />}{t.title}</span></td>
+                          <td className="px-2 py-3 text-ink/75">{t.type}</td>
+                          <td className="px-2 py-3 text-ink/75">{t.dueText}{t.status !== "overdue" && soon ? <span className="block text-sm font-semibold text-ink">Due soon</span> : null}</td>
+                          <td className="px-2 py-3"><Badge s={t.status} /></td>
+                          <td className="px-2 py-3 text-right"><Btn small kind="ghost" onClick={() => goTab(t.to)}>{t.status === "in_progress" ? "Continue" : "Open"}</Btn></td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
+              </>) : <Empty>All clear for now. New assignments, quizzes and assessments from your instructor appear here.</Empty>}
+            </Card>
+            <Card title="Announcements and messages" action={<button onClick={() => goTab("notifications")} className="text-sm font-semibold text-indigo hover:underline">View all</button>}>
+              {feed.length ? (
                 <ul className="divide-y divide-ink/[0.07]">
-                  {responsibilities.slice(0, 6).map((r) => (
-                    <li key={r.id}><button onClick={() => setTab("coursework")} className="flex w-full items-center gap-3 py-3 text-left">
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${r.urgent ? "bg-brand-red/10 text-brand-red" : "bg-indigo/[0.07] text-indigo"}`}><Icon name="clipboard" /></span>
-                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{r.title}</span><span className={`block text-xs ${r.urgent ? "text-brand-red" : "text-ink/55"}`}>{r.meta}</span></span>
-                      <span className="text-ink/30" aria-hidden="true">›</span>
-                    </button></li>
+                  {feed.slice(0, 6).map((f) => (
+                    <li key={f.id}>
+                      <button onClick={async () => {
+                        if (f.contact) return goTab("messages");
+                        if (f.note && !f.note.read_at) await api("/api/app/notifications/read", { method: "POST", body: { ids: [f.note.id] } }).catch(() => undefined);
+                        notes.reload();
+                        const t = f.note ? targetOf(f.note.kind, TABS as unknown as string[]) : null;
+                        goTab((t as Tab) ?? "notifications");
+                      }} className="flex w-full gap-3 py-3 text-left">
+                        <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${f.unread ? "bg-indigo" : "bg-transparent"}`} aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-semibold text-indigo">{f.title}{f.unread && <span className="sr-only"> (unread)</span>}</span>
+                          {f.body && <span className="block truncate text-[0.95rem] text-ink/75">{f.body}</span>}
+                          <span className="block text-sm text-ink/65">{when(f.at)}</span>
+                        </span>
+                      </button>
+                    </li>
                   ))}
                 </ul>
-              ) : <Empty>Nothing waiting. New assignments and quizzes from your instructor appear here.</Empty>}
+              ) : <Empty>No announcements or messages yet.</Empty>}
             </Card>
-            {graded.length > 0 && <Card title="Recent feedback">
-              <ul className="divide-y divide-ink/[0.07]">{graded.slice(0, 3).map((g) => <li key={g.id} className="flex items-start justify-between gap-3 py-3 text-sm"><span><b className="font-semibold">{g.title}</b>{g.feedback && <span className="mt-0.5 block text-ink/60">{g.feedback}</span>}</span><span className="shrink-0 rounded-md bg-indigo/[0.07] px-2 py-0.5 text-xs font-semibold text-indigo">{g.score}</span></li>)}</ul>
-            </Card>}
           </div>
-          <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <Stat label="Progress" value={p0 ? `${p0.overall}%` : "–"} note={p0 ? "of the programme" : undefined} />
-              <Stat label="Attendance" value={p0?.attendance.pct != null ? `${p0.attendance.pct}%` : "–"} note={p0 ? `${p0.attendance.attended} attended` : undefined} />
-            </div>
-            <Card title="Your instructor">
-              {ins ? <div className="text-sm"><div className="flex items-center gap-3"><Avatar src={ins.photo} name={ins.fullName} size={44} /><div><p className="flex items-center gap-1 font-semibold">{ins.fullName}{ins.verified && <VerifiedBadge />}</p>{(ins.headline || ins.specialization) && <p className="text-ink/60">{ins.headline || ins.specialization}</p>}</div></div>
-                <div className="mt-3 flex gap-2"><Btn small kind="ghost" onClick={() => setTab("messages")}>Message{msgs.data?.unread ? ` (${msgs.data.unread} new)` : ""}</Btn></div></div>
-                : <Empty>Your instructor is being assigned. You will be notified.</Empty>}
-              {e0?.timetable && <p className="mt-4 border-t border-ink/[0.07] pt-3 text-sm text-ink/70">Weekly class: <b className="text-ink">{e0.timetable.day}s at {e0.timetable.startTime}</b> (Lagos time)</p>}
+          <div className="space-y-6">
+            {myProgramme}
+            <Card title="Upcoming events" action={<button onClick={() => goTab("calendar")} className="text-sm font-semibold text-indigo hover:underline">Calendar</button>}>
+              <UpcomingList events={events} now={now} limit={5} empty="There are no upcoming events." />
             </Card>
-            {upcoming.length > 1 && <Card title="Coming up" action={<button onClick={() => setTab("classes")} className="text-xs font-semibold text-indigo hover:underline">Calendar</button>}>
-              <ul className="space-y-2 text-sm">{upcoming.slice(1, 4).map((s) => <li key={s.id} className="flex justify-between gap-2"><span className="text-ink/75">{s.lagosTime}</span><Badge s={s.status === "scheduled" ? s.meetStatus : s.status} /></li>)}</ul>
-            </Card>}
+            <Card title="Academic progress" action={<button onClick={() => goTab("programme")} className="text-sm font-semibold text-indigo hover:underline">Details</button>}>
+              {p0 ? <div className="space-y-3">
+                <Bar pct={p0.overall} label="Programme completion" />
+                <p className="text-[0.95rem]"><span className="text-ink/70">Modules completed: </span><b>{modulesDone} of {modules.length}</b></p>
+                <Bar pct={p0.attendance.pct} label={`Attendance (${p0.attendance.attended} attended)`} />
+                <Bar pct={p0.assignments.avgScorePct} label="Assignment average" />
+                <Bar pct={p0.assessments.avgScorePct ?? p0.quizzes.avgScorePct} label="Assessment average" />
+              </div> : <Empty>Progress appears once your programme starts.</Empty>}
+            </Card>
+            <Card title="Learning resources" action={<button onClick={() => goTab("materials")} className="text-sm font-semibold text-indigo hover:underline">All materials</button>}>
+              {res.data?.resources.length ? <ul className="space-y-2">{res.data.resources.slice(0, 4).map((r) => <li key={r.id}><a href={r.url ?? r.file ?? undefined} target={r.url ? "_blank" : undefined} rel="noopener noreferrer" className="flex items-center gap-2 font-semibold text-indigo hover:underline"><Icon name="folder" className="h-4 w-4 shrink-0" />{r.title}</a></li>)}</ul> : <Empty>Materials appear when your instructors publish them.</Empty>}
+            </Card>
           </div>
         </div>
       </>}
 
-      {tab === "classes" && <>
-        <PageTitle title="Classes and calendar" sub="Your live sessions for the next four weeks, and work that is due. Times are Lagos time." />
-        <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-          <div className="space-y-5">
-            <NextClass s={ov.data?.nextSession ?? null} now={now} />
-            <Card title="Calendar">
-              {Object.entries(upcoming.reduce<Record<string, Session[]>>((m, s) => { (m[dayKey(s.startsAt)] ??= []).push(s); return m; }, {})).map(([day, list]) => (
-                <div key={day} className="border-t border-ink/[0.07] py-3 first:border-0 first:pt-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">{day}</p>
-                  {list.map((s) => <div key={s.id} className="mt-2 flex items-center justify-between gap-3 text-sm"><span><b className="font-semibold">{s.programmeName}</b><span className="block text-ink/60">{new Date(s.startsAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" })} · {s.durationMin} min{s.instructor ? ` · ${s.instructor.fullName}` : ""}</span></span><Badge s={s.status === "scheduled" ? s.meetStatus : s.status} /></div>)}
-                </div>
-              ))}
-              {sessions.data && now > 0 && !upcoming.length && <Empty>No classes in the next four weeks.</Empty>}
-            </Card>
+      {tab === "programme" && <>
+        <PageTitle title="My Programme" sub={e0 ? <>{e0.programmeName}{ins ? <> · Instructor: <b className="font-semibold text-ink">{ins.fullName}</b></> : null}</> : undefined} />
+        <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <h2 className="mb-3 font-display text-lg font-semibold">Course modules</h2>
+            {modules.length ? <ol className="space-y-4">{modules.map((m, i) => <ModuleCard key={m.id} m={m} n={i + 1} current={current?.id === m.id} reload={() => { mods.reload(); prog.reload(); }} />)}</ol>
+              : <Card><Empty>The modules for your programme are being published. They appear here as soon as they are ready.</Empty></Card>}
           </div>
-          <Card title="Deadlines">
-            <ul className="space-y-3 text-sm">{responsibilities.map((r) => <li key={r.id}><b className="font-semibold">{r.title}</b><span className={`block text-xs ${r.urgent ? "text-brand-red" : "text-ink/55"}`}>{r.meta}</span></li>)}</ul>
-            {!responsibilities.length && <Empty>No deadlines coming up.</Empty>}
-          </Card>
-        </div>
-      </>}
-
-      {tab === "coursework" && <>
-        <PageTitle title="Coursework" sub="Assignments, quizzes and assessments set by your instructor." />
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Card title="Assignments">
-            {asg.error && <Msg text={asg.error} />}
-            <ul className="space-y-3">{asg.data?.assignments.map((a) => <AssignmentItem key={a.id} a={a} reload={asg.reload} />)}</ul>
-            {asg.data && !asg.data.assignments.length && <Empty>No assignments yet.</Empty>}
-          </Card>
-          <div className="space-y-5">
-            <Card title="Quizzes and assessments">
-              <ul className="space-y-3">{openQ.map((q) => <QuizItem key={q.id} q={q} reload={quizzes.reload} />)}</ul>
-              {quizzes.data && !openQ.length && <Empty>No quizzes open.</Empty>}
-            </Card>
-            <Card title="Marked work">
-              <ul className="space-y-3">{(quizzes.data?.quizzes ?? []).filter((q) => q.status === "graded" || q.status === "submitted").map((q) => <QuizItem key={q.id} q={q} reload={quizzes.reload} />)}</ul>
-              {!graded.length && <Empty>Marked work and feedback appear here.</Empty>}
-            </Card>
+          <div className="space-y-6">
+            {ins && <Card title="Your instructor">
+              <div className="flex items-center gap-3"><Avatar src={ins.photo} name={ins.fullName} size={52} /><div><p className="flex items-center gap-1 font-semibold">{ins.fullName}{ins.verified && <VerifiedBadge />}</p>{(ins.headline || ins.specialization) && <p className="text-[0.95rem] text-ink/70">{ins.headline || ins.specialization}</p>}</div></div>
+              <div className="mt-4"><Btn small kind="ghost" onClick={() => goTab("messages")}>Send a message</Btn></div>
+            </Card>}
+            <Card title="Academic standing">{prog.data?.progress.map((p) => <ProgressView key={p.enrolmentId} p={p} />)}{prog.data && !prog.data.progress.length && <Empty>Progress appears once you are enrolled.</Empty>}</Card>
           </div>
         </div>
       </>}
 
       {tab === "materials" && <>
-        <PageTitle title="Learning materials" sub="Materials approved for your programme." />
-        <div className="grid gap-3 sm:grid-cols-2">
-          {res.data?.resources.map((r) => {
-            const href = r.url ?? r.file;
-            return (
-              <a key={r.id} href={href ?? undefined} target={r.url ? "_blank" : undefined} rel="noopener noreferrer" className="flex items-center gap-4 rounded-2xl border border-ink/[0.07] bg-white p-4 shadow-sm shadow-ink/5 transition hover:border-indigo/30">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-indigo/[0.07] text-indigo"><Icon name={r.kind === "video" ? "spark" : "folder"} /></span>
-                <span className="min-w-0"><span className="block truncate text-sm font-semibold">{r.title}</span><span className="text-xs capitalize text-ink/55">{r.kind}</span></span>
-              </a>
-            );
-          })}
+        <PageTitle title="Learning Materials" sub="Materials approved for your programme, and a learning assistant that answers from them." />
+        <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Card title="Materials">
+              {res.data?.resources.length ? <ul className="divide-y divide-ink/[0.07]">{res.data.resources.map((r) => (
+                <li key={r.id}><a href={r.url ?? r.file ?? undefined} target={r.url ? "_blank" : undefined} rel="noopener noreferrer" className="flex items-center gap-4 py-3 hover:bg-ink/[0.02]">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-indigo/[0.07] text-indigo"><Icon name={r.kind === "video" ? "play" : "folder"} /></span>
+                  <span className="min-w-0"><span className="block font-semibold text-indigo">{r.title}</span><span className="block text-sm capitalize text-ink/70">{r.kind}{r.url ? " · opens in a new tab" : " · download"}</span></span>
+                </a></li>
+              ))}</ul> : <Empty>Materials appear here when your instructors publish them.</Empty>}
+            </Card>
+          </div>
+          <Assistant />
         </div>
-        {res.data && !res.data.resources.length && <Card><Empty>Materials appear here when your instructors publish them.</Empty></Card>}
       </>}
 
-      {tab === "assistant" && <><PageTitle title="Learning assistant" sub="Explanations, examples and revision help, grounded in your programme's approved materials." /><div className="max-w-3xl"><Assistant /></div></>}
+      {tab === "assignments" && <>
+        <PageTitle title="Assignments" sub="Submit your work and read your instructor's feedback." />
+        <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-2">
+          <Card title={`To do (${todoA.length})`}><ul className="space-y-3">{todoA.map((a) => <AssignmentItem key={a.id} a={a} reload={asg.reload} />)}</ul>{asg.data && !todoA.length && <Empty>No assignments waiting.</Empty>}</Card>
+          <Card title="Submitted and marked"><ul className="space-y-3">{assignments.filter((a) => !todoA.includes(a)).map((a) => <AssignmentItem key={a.id} a={a} reload={asg.reload} />)}</ul>{asg.data && assignments.length === todoA.length && <Empty>Your submitted work appears here.</Empty>}</Card>
+        </div>
+      </>}
+
+      {tab === "assessments" && <>
+        <PageTitle title="Assessments" sub="Quizzes, tests and assessments. Timed ones start their timer when you press Start." />
+        <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-2">
+          <Card title={`Open (${todoQ.length})`}><ul className="space-y-3">{todoQ.map((q) => <QuizItem key={q.id} q={q} reload={quizzes.reload} />)}</ul>{quizzes.data && !todoQ.length && <Empty>No quizzes or assessments open.</Empty>}</Card>
+          <Card title="Results">
+            <ul className="space-y-3">{allQuizzes.filter((q) => q.status === "graded" || q.status === "submitted").map((q) => <QuizItem key={q.id} q={q} reload={quizzes.reload} />)}</ul>
+            {quizzes.data && !allQuizzes.some((q) => q.status === "graded" || q.status === "submitted") && <Empty>Your results appear here once marked.</Empty>}
+          </Card>
+        </div>
+      </>}
+
+      {tab === "calendar" && <>
+        <PageTitle title="Calendar" sub="Live classes and deadlines. Times are Lagos time (WAT)." />
+        <div className="space-y-6"><NextClass s={ov.data?.nextSession ?? null} now={now} /><AcademicCalendar events={events} now={now} title="Academic calendar" /></div>
+      </>}
+
       {tab === "messages" && <><PageTitle title="Messages" sub="Private conversation with your instructor." /><div className="max-w-3xl"><Messages /></div></>}
-      {tab === "progress" && <>
-        <PageTitle title="Progress" sub="Calculated from your lessons, coursework and attendance." />
-        <div className="max-w-3xl space-y-5">{prog.data?.progress.map((p) => <Card key={p.enrolmentId}><ProgressView p={p} /></Card>)}{prog.data && !prog.data.progress.length && <Card><Empty>Progress appears once you are enrolled.</Empty></Card>}</div>
-      </>}
 
-      {tab === "account" && <StudentAccount me={me} ov={ov.data} pay={pay.data} outstanding={outstanding} ins={ins ?? null} />}
+      {tab === "notifications" && <NotificationsPage ids={TABS as unknown as string[]} onGo={(t) => goTab(t as Tab)} />}
+
+      {tab === "profile" && <StudentAccount me={me} ov={ov.data} pay={pay.data} ins={ins} />}
     </AppShell>
   );
 }
 
-function StudentAccount({ me, ov, pay, outstanding, ins }: { me: Me; ov: Overview | null; pay: Pay | null; outstanding: number; ins: { id: string; fullName: string } | null }) {
+function StudentAccount({ me, ov, pay, ins }: { me: Me; ov: Overview | null; pay: Pay | null; ins: { id: string; fullName: string } | null }) {
   const [rate, setRate] = useState(0);
   const { busy, msg, run } = useAction();
   const prefs = me.emailPrefs ?? {};
+  const outstanding = (pay?.orders ?? []).reduce((n, o) => n + o.outstandingNaira, 0);
   const rows: [string, string][] = [
     ["Registration No", me.studentNo ?? "Being issued"], ["Email", me.email],
-    ...((ov?.enrolments ?? []).flatMap((e) => [["Programme", e.programmeName], ["Admitted", new Date(e.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })], ["Instructor", e.instructor?.fullName ?? "Being assigned"], ["Status", e.status.replace(/_/g, " ")]] as [string, string][])),
+    ...((ov?.enrolments ?? []).flatMap((e) => [["Programme", e.programmeName], ["Admitted", new Date(e.startedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })], ["Instructor", e.instructor?.fullName ?? "Being assigned"], ["Programme status", e.status.replace(/_/g, " ")]] as [string, string][])),
+    ["Account status", "Active"],
     ["Payment", pay ? (outstanding > 0 ? `${naira(outstanding)} outstanding` : "Fully paid") : "…"],
   ];
   return (
     <>
-      <PageTitle title="My account" />
-      <div className="grid gap-5 lg:grid-cols-2">
+      <PageTitle title="Profile" sub="Your academic record, payments, profile and email preferences." />
+      <div className="grid gap-5 [&>*]:min-w-0 lg:grid-cols-2">
         <div className="space-y-5">
           <Card title="Academic record">
-            <dl className="divide-y divide-ink/[0.07] text-sm">{rows.map(([k, v], i) => <div key={i} className="flex justify-between gap-4 py-2.5"><dt className="text-ink/55">{k}</dt><dd className="text-right font-semibold">{v}</dd></div>)}</dl>
+            <dl className="divide-y divide-ink/[0.07] text-sm">{rows.map(([k, v], i) => <div key={i} className="flex justify-between gap-4 py-2.5"><dt className="text-ink/65">{k}</dt><dd className="text-right font-semibold">{v}</dd></div>)}</dl>
           </Card>
           <Card title="Payments">
             {pay?.orders.map((o) => (
               <div key={o.reference} className="mb-4 last:mb-0">
                 <div className="flex items-center justify-between gap-2 text-sm"><b className="font-semibold">{o.programme}</b><Badge s={o.status} /></div>
                 <p className="mt-1 text-xs text-ink/60">{o.plan} · total {naira(o.totalNaira)} · paid {naira(o.paidNaira)}</p>
-                <ul className="mt-2 divide-y divide-ink/[0.07] rounded-lg border border-ink/[0.07] text-sm">{o.parts.map((p) => <li key={p.part} className="flex items-center justify-between gap-2 px-3 py-2"><span>Part {p.part} · {naira(p.naira)} <span className="text-xs text-ink/50">due {p.due}</span></span><span className="flex items-center gap-2"><Badge s={p.status} />{p.payLink && <a href={p.payLink} className="text-xs font-semibold text-indigo underline">Pay</a>}</span></li>)}</ul>
+                <ul className="mt-2 divide-y divide-ink/[0.07] rounded-lg border border-ink/[0.07] text-sm">{o.parts.map((p) => <li key={p.part} className="flex items-center justify-between gap-2 px-3 py-2"><span>Part {p.part} · {naira(p.naira)} <span className="text-xs text-ink/65">due {p.due}</span></span><span className="flex items-center gap-2"><Badge s={p.status} />{p.payLink && <a href={p.payLink} className="text-xs font-semibold text-indigo underline">Pay</a>}</span></li>)}</ul>
               </div>
             ))}
             {pay && !pay.orders.length && <Empty>No payments found for {me.email}.</Empty>}
-            <p className="mt-3 text-xs text-ink/50">Amounts are in naira, the currency in which payments are settled.</p>
+            <p className="mt-3 text-xs text-ink/65">Amounts are in naira, the currency in which payments are settled.</p>
           </Card>
         </div>
         <div className="space-y-5">
           <ProfileEditor me={me} onSaved={() => window.location.reload()} />
           <Card title="Email preferences">
             <form className="space-y-3 text-sm" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); run(() => api("/api/me", { method: "PATCH", body: { emailPrefs: { reminders: f.get("reminders") === "on", updates: f.get("updates") === "on" } } }), "Saved."); }}>
-              <label className="flex items-start gap-3"><input type="checkbox" name="reminders" defaultChecked={prefs.reminders !== false} className="mt-1 accent-indigo" /><span><b className="font-semibold">Class reminders</b><span className="block text-ink/55">24 hours, 1 hour and 15 minutes before each class.</span></span></label>
-              <label className="flex items-start gap-3"><input type="checkbox" name="updates" defaultChecked={prefs.updates !== false} className="mt-1 accent-indigo" /><span><b className="font-semibold">Updates</b><span className="block text-ink/55">New materials and announcements.</span></span></label>
-              <p className="text-xs text-ink/50">Sign-in links, payments, coursework and messages are always emailed. Everything also appears under notifications.</p>
+              <label className="flex items-start gap-3"><input type="checkbox" name="reminders" defaultChecked={prefs.reminders !== false} className="mt-1 accent-indigo" /><span><b className="font-semibold">Class reminders</b><span className="block text-ink/65">24 hours, 1 hour and 15 minutes before each class.</span></span></label>
+              <label className="flex items-start gap-3"><input type="checkbox" name="updates" defaultChecked={prefs.updates !== false} className="mt-1 accent-indigo" /><span><b className="font-semibold">Updates</b><span className="block text-ink/65">New materials and announcements.</span></span></label>
+              <p className="text-xs text-ink/65">Sign-in links, payments, coursework and messages are always emailed. Everything also appears under notifications.</p>
               <Btn type="submit" small disabled={busy}>Save preferences</Btn>
             </form>
           </Card>

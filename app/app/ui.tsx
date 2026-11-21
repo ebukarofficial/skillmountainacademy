@@ -62,16 +62,17 @@ export function useLoad<T>(path: string | null) {
 
 export function Card({ title, children, action, className = "" }: { title?: ReactNode; children: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-sm shadow-ink/5 sm:p-6 ${className}`}>
-      {(title || action) && <div className="mb-4 flex items-center justify-between gap-3"><h2 className="font-display text-[0.95rem] font-semibold tracking-tight text-ink">{title}</h2>{action}</div>}
+    <section className={`rounded-xl border border-ink/10 bg-white p-5 sm:p-6 ${className}`}>
+      {(title || action) && <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="font-display text-lg font-semibold text-ink">{title}</h2>{action}</div>}
       {children}
     </section>
   );
 }
 
 export function Btn({ children, onClick, kind = "primary", type = "button", disabled, small }: { children: ReactNode; onClick?: () => void; kind?: "primary" | "ghost" | "dark"; type?: "button" | "submit"; disabled?: boolean; small?: boolean }) {
-  const k = kind === "primary" ? "bg-indigo text-white shadow-sm shadow-indigo/20 hover:bg-navy" : kind === "dark" ? "bg-ink text-white hover:bg-navy" : "border border-ink/15 bg-white text-ink hover:border-indigo/40 hover:text-indigo";
-  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-display font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo disabled:opacity-50 ${small ? "px-3 py-1.5 text-xs" : "px-4 py-2.5 text-sm"} ${k}`}>{children}</button>;
+  const k = kind === "primary" ? "bg-indigo text-white hover:bg-navy" : kind === "dark" ? "bg-ink text-white hover:bg-navy" : "border border-ink/20 bg-white text-ink hover:border-indigo hover:text-indigo";
+  // Disabled buttons are visibly different (no colour, dashed outline) as well as faded.
+  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-display font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo disabled:cursor-not-allowed disabled:border disabled:border-dashed disabled:border-ink/30 disabled:bg-ink/[0.04] disabled:text-ink/60 ${small ? "min-h-9 px-3 py-1.5 text-sm" : "min-h-11 px-4 py-2.5 text-[0.95rem]"} ${k}`}>{children}</button>;
 }
 
 const TONES: Record<string, string> = {
@@ -82,19 +83,20 @@ const TONES: Record<string, string> = {
   approved: "bg-indigo text-white", rejected: "bg-brand-red/15 text-brand-red", application_received: "bg-ink/10 text-ink", under_review: "bg-indigo/10 text-indigo",
   assessment_pending: "bg-brand-orange/20 text-ink", interview_pending: "bg-brand-orange/20 text-ink", upcoming: "bg-indigo/10 text-indigo", closed: "bg-ink/10 text-ink/70", full: "bg-brand-red/15 text-brand-red",
 };
-export const Badge = ({ s }: { s: string }) => <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[0.7rem] font-semibold capitalize ${TONES[s] ?? "bg-ink/[0.06] text-ink/80"}`}>{s.replace(/_/g, " ")}</span>;
+const label = (s: string) => { const t = s.replace(/_/g, " "); return t.charAt(0).toUpperCase() + t.slice(1); };
+export const Badge = ({ s }: { s: string }) => <span className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${TONES[s] ?? "bg-ink/[0.06] text-ink/80"}`}>{label(s)}</span>;
 
-export const inputCls = "mt-1.5 w-full rounded-lg border border-ink/15 bg-white px-3 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/40 focus:border-indigo focus:ring-4 focus:ring-indigo/10";
+export const inputCls = "mt-1.5 w-full rounded-lg border border-ink/25 bg-white px-3 py-2.5 text-[0.95rem] text-ink outline-none transition placeholder:text-ink/50 focus:border-indigo focus:ring-4 focus:ring-indigo/15 aria-[invalid=true]:border-brand-red";
 export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="block text-[0.8rem] font-semibold text-ink/80">{label}{children}</label>;
+  return <label className="block text-sm font-semibold text-ink">{label}{children}</label>;
 }
 
 export function Bar({ pct, label }: { pct: number | null; label: string }) {
   const v = pct ?? 0;
   return (
     <div>
-      <div className="flex justify-between text-xs text-ink/70"><span>{label}</span><span className="font-semibold text-ink">{pct === null ? "n/a" : `${v}%`}</span></div>
-      <div className="mt-1.5 h-1.5 rounded-full bg-ink/[0.07]" role="progressbar" aria-label={label} aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}><div className="h-1.5 rounded-full bg-indigo" style={{ width: `${Math.min(100, v)}%` }} /></div>
+      <div className="flex justify-between text-sm text-ink/75"><span>{label}</span><span className="font-semibold text-ink">{pct === null ? "n/a" : `${v}%`}</span></div>
+      <div className="mt-1.5 h-2 rounded-full bg-ink/[0.08]" role="progressbar" aria-label={label} aria-valuenow={v} aria-valuemin={0} aria-valuemax={100}><div className="h-2 rounded-full bg-indigo" style={{ width: `${Math.min(100, v)}%` }} /></div>
     </div>
   );
 }
@@ -104,7 +106,7 @@ export function Msg({ text, kind = "error" }: { text: string; kind?: "error" | "
   return <p role={kind === "error" ? "alert" : "status"} className={`mt-2 text-sm font-medium ${kind === "error" ? "text-brand-red" : "text-indigo"}`}>{text}</p>;
 }
 
-export const Empty = ({ children }: { children: ReactNode }) => <p className="text-sm text-ink/60">{children}</p>;
+export const Empty = ({ children }: { children: ReactNode }) => <p className="text-[0.95rem] text-ink/70">{children}</p>;
 export const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" });
 export const naira = (n: number) => "₦" + Math.round(n).toLocaleString("en-NG");
 
@@ -122,10 +124,10 @@ export function useAction() {
 // A headline figure: label, value and an optional note.
 export function Stat({ label, value, note, tone = "plain" }: { label: string; value: ReactNode; note?: ReactNode; tone?: "plain" | "alert" }) {
   return (
-    <div className="rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-sm shadow-ink/5">
-      <p className="text-xs font-semibold text-ink/55">{label}</p>
-      <p className={`mt-2 font-display text-3xl font-semibold tracking-tight ${tone === "alert" ? "text-brand-red" : "text-ink"}`}>{value}</p>
-      {note && <p className="mt-1 text-xs text-ink/55">{note}</p>}
+    <div className="rounded-xl border border-ink/10 bg-white p-4">
+      <p className="text-sm font-medium text-ink/70">{label}</p>
+      <p className={`mt-1 font-display text-2xl font-semibold ${tone === "alert" ? "text-brand-red" : "text-ink"}`}>{value}</p>
+      {note && <p className="mt-0.5 text-sm text-ink/65">{note}</p>}
     </div>
   );
 }
@@ -134,7 +136,7 @@ export function Stat({ label, value, note, tone = "plain" }: { label: string; va
 export function PageTitle({ title, sub, action }: { title: ReactNode; sub?: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div><h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-[1.7rem]">{title}</h1>{sub && <div className="mt-1 text-sm text-ink/60">{sub}</div>}</div>
+      <div><h1 className="font-display text-2xl font-semibold text-ink sm:text-[1.75rem]">{title}</h1>{sub && <div className="mt-1 text-[0.95rem] text-ink/70">{sub}</div>}</div>
       {action}
     </div>
   );

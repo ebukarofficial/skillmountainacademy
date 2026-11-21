@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import banner from "@/assets/photos/banner-students.webp";
-import { AUDIENCE, BUSINESS, CFG, faqList, GOALS, PROGRAMMES, REVIEW_SHOTS, duration, findProgramme, type Programme } from "@/lib/config";
+import logoMark from "@/assets/sma-logo.png";
+import { BUSINESS, CFG, faqList, PROGRAMMES, REVIEW_SHOTS, duration, type Programme } from "@/lib/config";
 import { MENTORS, REVIEWS, SHOW_MENTORS, SHOW_REVIEWS } from "@/lib/content";
 import { BRAND } from "@/lib/institution";
-import { CalendlyEmbed, FOCUS, Intro, PHOTO, Reveal, SMA_PHOTO, SocialIcon, postSheet } from "./components";
-import { Arrow, Eyebrow, ProgrammeGrid, Rule, SERIF, SectionHead, btnLight, btnOutline, btnOutlineLight, btnPrimary } from "./brand";
+import { FOCUS, Intro, PHOTO, Reveal, SocialIcon, postSheet } from "./components";
+import { Arrow, Eyebrow, ProgrammeGrid, Rule, SERIF, SectionHead, btnOutline, btnPrimary } from "./brand";
 import { useAdmission } from "./admissions-status";
 import { SiteHeader } from "./header";
 import { SiteFooter } from "./site-parts";
@@ -38,7 +39,6 @@ export default function Home() {
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [cat, setCat] = useState("All");
-  const [goal, setGoal] = useState(0);
   const [shot, setShot] = useState<number | null>(null);
   const [subbed, setSubbed] = useState(false);
   const [notice, setNotice] = useState<"" | "removed" | "pay-unavailable">("");
@@ -46,7 +46,6 @@ export default function Home() {
 
   const cats = ["All", ...Array.from(new Set(PROGRAMMES.map((p) => p.tag)))];
   const list = PROGRAMMES.filter((p) => cat === "All" || p.tag === cat);
-  const rec = findProgramme(GOALS[goal].slug)!;
 
   // Links to programmes that are no longer offered arrive here as /?notice=removed (see public/_redirects and the checkout page).
   useEffect(() => {
@@ -116,9 +115,9 @@ export default function Home() {
             <em className="font-medium text-brand-red">made for more.</em>
           </h1>
           <p className="mt-7 max-w-lg text-xl leading-relaxed text-ink/75">{BRAND.positioning}</p>
-          <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
             <a href="#programmes" className={btnPrimary}>Explore programmes <Arrow /></a>
-            <Link href="/learning-experience/" className="font-display text-sm font-semibold text-ink underline decoration-ink/30 underline-offset-[6px] transition hover:decoration-brand-red">The learning experience</Link>
+            <Link href="/admissions/" className="font-display text-[0.95rem] font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px] transition hover:decoration-indigo">How admission works</Link>
           </div>
         </div>
 
@@ -155,98 +154,134 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Three principles */}
-      <section aria-label="Our principles" className="border-y border-ink/10 bg-paper">
-        <div className="mx-auto grid max-w-6xl md:grid-cols-3">
-          {[["Human mentorship", "One instructor, one student, every week."], ["Intelligent learning", "Support between sessions, grounded in your programme."], ["Practical mastery", "Competence shown in finished work."]].map(([t, d], i) => (
-            <div key={t} className={`px-5 py-9 md:px-8 ${i ? "border-t border-ink/10 md:border-l md:border-t-0" : ""}`}>
-              <p className={`${SERIF} text-2xl`}>{t}<span className="text-brand-red">.</span></p>
-              <p className="mt-2 text-ink/70">{d}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* The institution */}
-      <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-14 px-5 py-20 sm:py-28 lg:grid-cols-2">
+      {/* 3. A concise introduction to the Academy */}
+      <section id="why" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-12 border-t border-ink/10 px-5 py-16 sm:py-20 lg:grid-cols-2">
         <Reveal>
-          <SectionHead eyebrow="The Academy" title={<>Taught by people who practise what they teach.</>}
-            lede="Each student studies with one instructor, chosen for their command of the discipline and their ability to teach it." />
-          <div className="mt-8 flex flex-wrap gap-4">
+          <SectionHead eyebrow="The Academy" title="An online academy for professional digital disciplines."
+            lede="Skill Mountain Academy teaches eight programmes in design, engineering, security, cloud and marketing. Each student is admitted to one programme and studies it with an assigned instructor, live and online." />
+          <div className="mt-7 flex flex-wrap gap-4">
             <Link href="/about/" className={btnOutline}>About the Academy</Link>
-            <Link href="/faculty/" className="self-center font-display text-sm font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">Our Faculty</Link>
           </div>
         </Reveal>
-        <Reveal delay={150} className="relative">
-          <div className="relative overflow-hidden rounded-lg bg-indigo pt-10">
-            <Image src={banner} alt="Five students sitting together with their hands raised" className="relative mx-auto h-auto w-full max-w-[34rem] px-4" />
-          </div>
-          <div className="absolute -bottom-6 left-6 rounded-md bg-paper px-6 py-4 shadow-xl shadow-ink/10">
-            <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-ink/55">Learning format</p>
-            <p className={`${SERIF} mt-1 text-xl`}>One instructor, one student</p>
+        <Reveal delay={150}>
+          <div className="relative overflow-hidden rounded-xl bg-indigo pt-8">
+            <Image src={banner} alt="Five students sitting together with their hands raised" className="relative mx-auto h-auto w-full max-w-[32rem] px-4" />
           </div>
         </Reveal>
       </section>
 
-      {/* Programmes */}
-      <section id="programmes" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-28">
+      {/* 4. Programme discovery */}
+      <section id="programmes" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
         <div className="mx-auto max-w-6xl px-5">
-          <Reveal className="flex flex-wrap items-end justify-between gap-6">
-            <SectionHead eyebrow="Programmes" title="Disciplines of professional consequence." lede="Eight programmes in design, engineering, security and marketing. Choose one to see what you will study, how long it takes and what it costs." />
-            <Link href="/programmes/" className="font-display text-sm font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">All programmes</Link>
-          </Reveal>
-          <div className="mt-10 flex gap-1 overflow-x-auto border-b border-ink/10 no-scrollbar" role="tablist" aria-label="Disciplines">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <SectionHead eyebrow="Programmes" title="Choose a discipline." lede="Each programme page sets out what you will study, how long it takes, the internship and the investment." />
+            <Link href="/programmes/" className="font-display text-[0.95rem] font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">Search the catalogue</Link>
+          </div>
+          <div className="mt-8 flex gap-1 overflow-x-auto border-b border-ink/15 no-scrollbar" role="tablist" aria-label="Disciplines">
             {cats.map((c) => (
-              <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)} className={`-mb-px shrink-0 border-b-2 px-4 py-3 font-display text-sm font-medium transition ${cat === c ? "border-brand-red text-ink" : "border-transparent text-ink/60 hover:text-ink"}`}>{c}</button>
+              <button key={c} role="tab" aria-selected={cat === c} onClick={() => setCat(c)} className={`-mb-px shrink-0 border-b-[3px] px-4 py-3 font-display text-[0.95rem] font-semibold transition ${cat === c ? "border-indigo text-indigo" : "border-transparent text-ink/70 hover:text-ink"}`}>{c}</button>
             ))}
           </div>
-          <div className="mt-10"><ProgrammeGrid list={list} /></div>
+          <div className="mt-8"><ProgrammeGrid list={list} /></div>
+        </div>
+      </section>
 
-          {/* Goal finder */}
-          <Reveal className="mt-8">
-            <div id="goal" className="scroll-mt-24 rounded-lg bg-indigo p-6 text-white sm:p-10">
-              <Eyebrow light>Find your discipline</Eyebrow>
-              <p className={`${SERIF} mt-3 text-3xl`}>What do you want to be able to do?</p>
-              <div className="mt-6 flex flex-wrap gap-2">
-                {GOALS.map((g, i) => (
-                  <button key={g.goal} onClick={() => setGoal(i)} aria-pressed={goal === i} className={`rounded-full border px-4 py-2 text-sm font-medium transition ${goal === i ? "border-cream bg-cream text-indigo" : "border-white/25 hover:border-white/60"}`}>{g.goal}</button>
-                ))}
-              </div>
-              <div className="mt-8 grid items-end gap-6 border-t border-white/15 pt-6 sm:grid-cols-[1fr_auto]">
-                <div>
-                  <p className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-white/60">We suggest</p>
-                  <p className={`${SERIF} mt-2 text-3xl`}>{rec.name}</p>
-                  <p className="mt-2 max-w-2xl text-white/75">{GOALS[goal].why}</p>
+      {/* 5. Institutional credibility: what the Academy actually issues and checks */}
+      <section id="certificate" aria-labelledby="cert-h" className="mx-auto grid max-w-6xl scroll-mt-20 items-center gap-12 px-5 py-16 sm:py-20 lg:grid-cols-[1fr_1.05fr]">
+        <Reveal>
+          <Eyebrow>Records and certification</Eyebrow>
+          <h2 id="cert-h" className={`${SERIF} mt-2 text-3xl leading-tight sm:text-4xl`}>Your study is recorded, and your completion is certified.</h2>
+          <p className="mt-4 text-lg leading-relaxed text-ink/75">Students who complete their programme&apos;s requirements receive a Skill Mountain Academy certificate. It is the Academy&apos;s own certificate, not a university degree or a government or professional qualification.</p>
+          <ul className="mt-7 divide-y divide-ink/10 border-y border-ink/10">
+            {[["A registration number for every student", "Issued on admission, in the form SMA/26/000001, and used on your records."],
+              ["Verified instructors", "Identity, credentials and a technical assessment are checked before an instructor teaches."],
+              ["Assessed coursework and attendance", "Assignments, assessments and every class are recorded in your learning space."]].map(([t, d]) => (
+              <li key={t} className="py-4"><p className="font-display font-semibold">{t}</p><p className="mt-1 text-ink/75">{d}</p></li>
+            ))}
+          </ul>
+        </Reveal>
+        <Reveal delay={150}>
+          <figure>
+            {/* An illustrative certificate drawn in HTML: clearly marked as a sample. */}
+            <div className="relative overflow-hidden rounded-md border-[6px] border-double border-indigo/70 bg-white p-2 shadow-xl shadow-ink/10">
+              <div className="relative border border-indigo/30 px-6 py-8 text-center sm:px-10 sm:py-10">
+                <Image src={logoMark} alt="Skill Mountain Academy" className="mx-auto h-12 w-auto" />
+                <p className="mt-5 text-sm text-ink/70">This is to certify that</p>
+                <p className="mt-1 font-display text-2xl font-semibold text-ink sm:text-3xl">Student Name</p>
+                <p className="mt-3 text-sm text-ink/70">has successfully completed the programme</p>
+                <p className="mt-1 font-display text-xl font-semibold text-indigo sm:text-2xl">UI/UX Design (Product Design)</p>
+                <p className="mt-2 text-sm text-ink/70">Registration No. SMA/26/000000</p>
+                <div className="mt-8 grid grid-cols-2 gap-6 text-xs text-ink/70">
+                  <div className="border-t border-ink/30 pt-2">Programme instructor</div>
+                  <div className="border-t border-ink/30 pt-2">For the Academy</div>
                 </div>
-                <Link href={progHref(rec)} className={btnLight}>Explore Programme <Arrow /></Link>
+                <p aria-hidden="true" className="pointer-events-none absolute inset-0 grid place-items-center font-display text-4xl font-bold text-brand-red/15 [rotate:-18deg] [letter-spacing:0.3em] sm:text-[2.5rem]">SAMPLE</p>
               </div>
             </div>
-          </Reveal>
+            <figcaption className="mt-3 text-sm text-ink/70">Illustration only. The certificate actually issued may differ in layout and wording.</figcaption>
+          </figure>
+        </Reveal>
+      </section>
+
+      {/* 6. The learning model, once and briefly */}
+      <section id="model" aria-labelledby="model-h" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-5">
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <div className="max-w-3xl"><Eyebrow>How you learn</Eyebrow><h2 id="model-h" className={`${SERIF} mt-2 text-3xl leading-tight sm:text-4xl`}>One programme, one instructor, one weekly class.</h2></div>
+            <Link href="/learning-experience/" className="font-display text-[0.95rem] font-semibold text-indigo underline decoration-indigo/30 underline-offset-[6px]">The Learning Experience</Link>
+          </div>
+          <ol className="mt-10 grid gap-6 md:grid-cols-4">
+            {[["Live classes", "A fixed weekly class with your instructor on Google Meet."],
+              ["Coursework", "Assignments and assessments, marked with written feedback."],
+              ["Between classes", "Approved materials and a learning assistant grounded in them."],
+              ["Practical work", "Finished projects, followed by the programme's internship period."]].map(([t, d], i) => (
+              <li key={t} className="rounded-xl border border-ink/10 bg-paper p-5">
+                <span className="font-display text-sm font-semibold text-brand-red">Step {i + 1}</span>
+                <p className="mt-1 font-display text-lg font-semibold">{t}</p>
+                <p className="mt-1.5 text-ink/75">{d}</p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
-      {/* Who we teach */}
-      <section id="who" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-24">
-        <div className="mx-auto max-w-6xl px-5">
-          <Reveal><SectionHead eyebrow="Who we teach" title="For people who intend to go further." /></Reveal>
-          <div className="mt-10 grid gap-x-10 sm:grid-cols-2 lg:grid-cols-3">
-            {AUDIENCE.map(([t, d, href]) => (
-              <div key={t} className="border-t border-ink/10 py-6">
-                <h3 className="font-display text-base font-semibold">{href ? <Link href={href} className="hover:text-brand-red">{t}</Link> : t}</h3>
-                <p className="mt-1.5 text-ink/70">{d}</p>
-                {href && <Link href={href} className="mt-2 inline-block text-sm font-semibold text-brand-red underline">About the children&apos;s package</Link>}
-              </div>
+      {/* 7. Faculty introduction */}
+      <section id="faculty" aria-labelledby="fac-h" className="mx-auto grid max-w-6xl scroll-mt-20 gap-10 px-5 py-16 sm:py-20 lg:grid-cols-[1fr_1.2fr]">
+        <Reveal>
+          <Eyebrow>Faculty</Eyebrow>
+          <h2 id="fac-h" className={`${SERIF} mt-2 text-3xl leading-tight sm:text-4xl`}>Instructors who practise what they teach.</h2>
+          <p className="mt-4 text-lg leading-relaxed text-ink/75">Every instructor completes a faculty profile, with certifications that can be checked, and is verified by the Academy before teaching. Verified instructors carry a badge beside their name.</p>
+          <Link href="/faculty/" className={`${btnOutline} mt-7`}>Our Faculty</Link>
+        </Reveal>
+        <Reveal delay={150}>
+          <ol className="grid gap-4 sm:grid-cols-2">
+            {[["Profile", "Biography, discipline, languages and professional links."], ["Credentials", "Certifications with public verification links."], ["Assessment", "A discipline-specific technical assessment."], ["Approval", "Identity and credentials confirmed by the Academy."]].map(([t, d]) => (
+              <li key={t} className="rounded-xl border border-ink/10 p-5"><p className="font-display font-semibold">{t}</p><p className="mt-1 text-ink/75">{d}</p></li>
             ))}
+          </ol>
+        </Reveal>
+      </section>
+
+      {/* 8. Admissions pathway */}
+      <section id="book" aria-labelledby="adm-h" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-5">
+          <SectionHead eyebrow="Admissions" title={<span id="adm-h">From programme to learning space in three steps.</span>} />
+          <ol className="mt-10 grid gap-6 md:grid-cols-3">
+            {[["Choose your programme", "Read the programme page: curriculum, duration, internship and investment."],
+              ["Apply for admission", "Complete the short admission form on the programme page and pay in full or in three parts."],
+              ["Receive your access", "Your registration number and admission confirmation are emailed, followed by a link to your learning space."]].map(([t, d], i) => (
+              <li key={t} className="relative rounded-xl border border-ink/10 bg-paper p-6">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-indigo font-display font-semibold text-white">{i + 1}</span>
+                <p className="mt-4 font-display text-lg font-semibold">{t}</p>
+                <p className="mt-1.5 text-ink/75">{d}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <a href="#programmes" className={btnPrimary}>Apply for Admission <Arrow /></a>
+            <a href={CFG.calendlyConsult} target="_blank" rel="noopener noreferrer" className={btnOutline}>Speak with Admissions</a>
           </div>
         </div>
-      </section>
-
-      {/* Free consultation */}
-      <section id="book" className="scroll-mt-20 border-t border-ink/10 px-5 py-20 text-center sm:py-24">
-        <Reveal className="mx-auto max-w-3xl">
-          <SectionHead center eyebrow="Speak with Admissions" title="Questions before you decide?" lede="Book a call. We will listen to your goals and help you choose the right programme before you pay anything." />
-          <div className="mt-8"><CalendlyEmbed url={CFG.calendlyConsult} /></div>
-        </Reveal>
       </section>
 
       {(SHOW_REVIEWS || REVIEW_SHOTS.length > 0) && (
@@ -301,36 +336,18 @@ export default function Home() {
         </section>
       )}
 
-      {/* FAQ */}
-      <section id="faq" className="scroll-mt-20 border-t border-ink/10 bg-paper/60 py-20 sm:py-24">
+      {/* Questions before applying (part of the admissions pathway) */}
+      <section id="faq" className="scroll-mt-20 border-t border-ink/10 py-16 sm:py-20">
         <div className="mx-auto max-w-3xl px-5">
           <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD).replace(/</g, "\\u003c") }} />
-          <Reveal><SectionHead eyebrow="Questions" title="Frequently asked." /></Reveal>
-          <div className="mt-10">
+          <SectionHead eyebrow="Questions" title="Before you apply." />
+          <div className="mt-8">
             {FAQS.map(([qq, a]) => (
               <details key={qq} className="group border-t border-ink/10 py-5 last:border-b">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display font-semibold">{qq}<span className="text-xl font-light text-brand-red transition group-open:rotate-45" aria-hidden="true">+</span></summary>
-                <p className="mt-3 leading-relaxed text-ink/70">{a}</p>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display font-semibold">{qq}<span className="text-xl text-indigo transition group-open:rotate-45" aria-hidden="true">+</span></summary>
+                <p className="mt-3 leading-relaxed text-ink/75">{a}</p>
               </details>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Vision and partners */}
-      <section className="relative overflow-hidden bg-indigo pt-20 text-white sm:pt-24">
-        <div className="relative mx-auto grid max-w-6xl items-end gap-10 px-5 lg:grid-cols-[1.2fr_.8fr]">
-          <Reveal className="pb-20 sm:pb-24">
-            <Eyebrow light>Our ambition</Eyebrow>
-            <h2 className={`${SERIF} mt-4 text-4xl leading-tight sm:text-5xl`}>A globally respected institution for professional digital skills.</h2>
-            <p className="mt-5 max-w-2xl text-lg text-white/75">We are building, carefully, an institution that combines exceptional human instruction with intelligent learning support, for students wherever they are. If you represent an organisation that shares this ambition, we would welcome a conversation.</p>
-            <div className="mt-8 flex flex-wrap gap-4">
-              <a href={partnerHref} target="_blank" rel="noopener noreferrer" className={btnLight}>Institutional partnerships</a>
-              <Link href="/about/" className={btnOutlineLight}>About the Academy</Link>
-            </div>
-          </Reveal>
-          <div className="hidden justify-center lg:flex">
-            <Image src={SMA_PHOTO} alt="A learner wearing a Skill Mountain Academy t-shirt" className="h-auto max-h-[25rem] w-auto" />
           </div>
         </div>
       </section>
@@ -340,12 +357,13 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-5 pt-12 md:flex-row md:items-end md:justify-between">
           <div>
             <p className={`${SERIF} text-2xl text-white`}>Correspondence from the Academy</p>
-            <p className="mt-1 text-sm text-white/60">Admission periods, new programmes and institutional news. Occasional, never noisy.</p>
+            <p className="mt-1 text-sm text-white/70">Admission periods, new programmes and institutional news. Occasional, never noisy.</p>
+            <a href={partnerHref} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm font-semibold text-white underline decoration-white/40 underline-offset-4">Institutional partnerships</a>
           </div>
           <div className="w-full max-w-md">
             {subbed ? <p className="font-semibold text-brand-orange">Thank you. You&apos;re subscribed.</p> : (
               <form onSubmit={subscribe}>
-                <div className="flex overflow-hidden rounded-full bg-white text-ink">
+                <div className="flex overflow-hidden rounded-lg bg-white text-ink">
                   <input name="email" type="email" required maxLength={120} placeholder="Your email address" aria-label="Email address" className="min-w-0 flex-1 bg-transparent px-5 py-3.5 text-left outline-none" />
                   <button className="bg-indigo px-6 font-display text-sm font-semibold text-cream">Subscribe</button>
                 </div>

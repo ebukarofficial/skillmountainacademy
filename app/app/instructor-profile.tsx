@@ -43,15 +43,15 @@ export function InstructorProfileForm({ me, onboarding }: { me: Me; onboarding: 
     }}>
       {onboarding && list.data && (
         <Card title="Your onboarding checklist">
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid gap-2 [&>*]:min-w-0 sm:grid-cols-2">
             {list.data.items.map((i) => (
-              <li key={i.key} className="flex items-start gap-2 text-sm"><span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-[0.7rem] font-bold ${i.done ? "bg-indigo text-white" : "border border-ink/20 text-transparent"}`}>✓</span><span className={i.done ? "text-ink/55 line-through decoration-ink/20" : ""}>{i.label}</span><span className="sr-only">{i.done ? "(done)" : "(to do)"}</span></li>
+              <li key={i.key} className="flex items-start gap-2 text-sm"><span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs font-bold ${i.done ? "bg-indigo text-white" : "border border-ink/20 text-transparent"}`}>✓</span><span className={i.done ? "text-ink/65 line-through decoration-ink/20" : ""}>{i.label}</span><span className="sr-only">{i.done ? "(done)" : "(to do)"}</span></li>
             ))}
           </ul>
         </Card>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_1.6fr]">
+      <div className="grid gap-5 [&>*]:min-w-0 lg:grid-cols-[1fr_1.6fr]">
         <Card title="Profile photo">
           <div className="flex flex-col items-center text-center">
             <Avatar src={photo} name={me.fullName} size={132} />
@@ -63,7 +63,7 @@ export function InstructorProfileForm({ me, onboarding }: { me: Me; onboarding: 
           </div>
         </Card>
         <Card title="About you">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 [&>*]:min-w-0 sm:grid-cols-2">
             <Field label="Full name"><input name="fullName" required defaultValue={me.fullName} className={inputCls} /></Field>
             <Field label="Phone or WhatsApp"><input name="phone" defaultValue={me.phone ?? ""} className={inputCls} /></Field>
             <div className="sm:col-span-2"><Field label="Professional citation (one line shown under your name)"><input name="headline" maxLength={160} defaultValue={me.headline ?? ""} placeholder="e.g. Cloud architect, 12 years in banking and fintech" className={inputCls} /></Field></div>
@@ -76,7 +76,7 @@ export function InstructorProfileForm({ me, onboarding }: { me: Me; onboarding: 
         </Card>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 [&>*]:min-w-0 lg:grid-cols-2">
         <Card title="Online presence">
           <div className="space-y-4">{SOCIAL.map(([k, label, ph]) => <Field key={k} label={label}><input name={`link-${k}`} type="url" defaultValue={me.links[k] ?? ""} placeholder={ph} className={inputCls} /></Field>)}</div>
         </Card>

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PROGRAMMES, duration } from "@/lib/config";
 import { CloudBadges } from "../components";
-import { Arrow, PageHero, ProgrammeGrid, SERIF, btnOutline } from "../brand";
+import { Arrow, PageHero, SERIF, btnOutline } from "../brand";
+import { Catalogue } from "./catalogue";
 import { SiteFooter, SiteHeader } from "../site-parts";
 
 export const metadata: Metadata = {
@@ -11,23 +12,16 @@ export const metadata: Metadata = {
   alternates: { canonical: "/programmes/" },
 };
 
-const GROUPS = Array.from(new Set(PROGRAMMES.map((p) => p.tag)));
-
 export default function ProgrammesPage() {
   return (
     <>
       <SiteHeader />
       <main id="main" className="overflow-x-clip">
-        <PageHero eyebrow="Programmes" title="Disciplines of professional consequence."
-          lede="Choose a discipline to see what you will study, what you will be able to do, how the programme is structured and what it costs." />
-        {GROUPS.map((g) => (
-          <section key={g} aria-labelledby={`g-${g}`} className="mx-auto max-w-6xl px-5 py-14 first-of-type:pt-16">
-            <h2 id={`g-${g}`} className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">{g}</h2>
-            <div className="mt-6"><ProgrammeGrid list={PROGRAMMES.filter((p) => p.tag === g)} /></div>
-          </section>
-        ))}
+        <PageHero eyebrow="Programme catalogue" title="Programmes"
+          lede="Eight programmes in design, engineering, security, cloud and marketing. Filter by discipline or search, then open a programme for its curriculum, duration, internship and investment." />
+        <Catalogue />
         <section aria-labelledby="cloud-track" className="mx-auto max-w-6xl px-5 py-14">
-          <div className="rounded-lg border border-ink/10 bg-paper p-6 sm:p-10">
+          <div className="rounded-xl border border-ink/10 bg-paper p-6 sm:p-10">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h2 id="cloud-track" className={`${SERIF} text-3xl sm:text-4xl`}>Choosing within the Cloud track</h2>

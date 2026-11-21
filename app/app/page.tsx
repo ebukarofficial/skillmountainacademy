@@ -19,7 +19,7 @@ export default function AppHome() {
     <div className="grid min-h-screen place-items-center bg-paper px-6">
       <div className="text-center">
         <Image src={logo} alt="Skill Mountain Academy" unoptimized className="mx-auto h-10 w-auto" />
-        {error ? <p role="alert" className="mt-6 text-sm text-brand-red">{error}</p> : <p className="mt-6 text-sm text-ink/55" role="status">Opening your workspace…</p>}
+        {error ? <p role="alert" className="mt-6 text-sm text-brand-red">{error}</p> : <p className="mt-6 text-sm text-ink/65" role="status">Opening your workspace…</p>}
       </div>
     </div>
   );

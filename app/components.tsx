@@ -90,8 +90,8 @@ export function Intro() {
     let seen = false;
     try { seen = sessionStorage.getItem("sma-intro") === "1"; sessionStorage.setItem("sma-intro", "1"); } catch { /* ignore */ }
     const skipNow = seen || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const t1 = skipNow ? undefined : setTimeout(() => setOut(true), 4200);
-    const t2 = setTimeout(() => setShow(false), skipNow ? 0 : 4900);
+    const t1 = skipNow ? undefined : setTimeout(() => setOut(true), 1200);
+    const t2 = setTimeout(() => setShow(false), skipNow ? 0 : 1800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
   if (!show) return null;

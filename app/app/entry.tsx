@@ -82,7 +82,7 @@ export function EntryPage({ kind }: { kind: Portal }) {
         <div aria-hidden="true" className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-plum/50 blur-3xl" />
         <Link href="/" aria-label="Skill Mountain Academy home" className="relative"><Image src={logoWhite} alt="Skill Mountain Academy" unoptimized className="h-11 w-auto" /></Link>
         <figure className={`relative mt-auto max-w-xl transition-opacity duration-700 ${quote === null ? "opacity-0" : "opacity-100"}`} aria-live="polite">
-          <span aria-hidden="true" className="block font-display text-5xl leading-none text-brand-orange">“</span>
+          <span aria-hidden="true" className="block font-display text-4xl leading-none text-brand-orange">“</span>
           <blockquote className="mt-2 font-display text-3xl font-medium leading-snug tracking-tight">{quote !== null ? QUOTES[quote].text : ""}</blockquote>
           <figcaption className="mt-6 flex items-center gap-3 text-sm text-white/70"><span aria-hidden="true" className="h-px w-8 bg-brand-orange" />{quote !== null ? QUOTES[quote].by : ""}</figcaption>
         </figure>
@@ -90,7 +90,7 @@ export function EntryPage({ kind }: { kind: Portal }) {
       <section className="flex flex-col justify-center bg-paper px-5 py-12 sm:px-12">
         <div className="mx-auto w-full max-w-sm">
           <Link href="/" aria-label="Skill Mountain Academy home" className="lg:hidden"><Image src={logo} alt="Skill Mountain Academy" unoptimized className="h-10 w-auto" /></Link>
-          <p className="mt-8 text-xs font-semibold uppercase tracking-[0.2em] text-brand-red lg:mt-0">{c.eyebrow}</p>
+          <p className="mt-8 text-sm font-semibold text-brand-red lg:mt-0">{c.eyebrow}</p>
           <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">{H1[kind]}</h1>
           <p className="mt-3 text-sm text-ink/65">{c.form}</p>
           {sent ? (
