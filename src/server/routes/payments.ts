@@ -7,7 +7,7 @@ import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
 import { ApiError, clientIp, json, nowIso, randomCode, sha256 } from "../http";
 import { Repo, type InstalmentRow, type OrderRow } from "../repo";
-import { button, esc, layout, sendEmail, table } from "../email";
+import { button, esc, layout, letter, notice, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
 import { ensureStudentAccount } from "../lms/accounts";
 import { sendSignInLink } from "../lms/routes/auth";
@@ -94,20 +94,20 @@ export async function afterPayment(env: AppEnv, repo: Repo, inst: InstalmentRow,
   await sendEmail(env, {
     to: reg.email,
     subject: welcome ? `Admission confirmed: ${name}` : `Payment received: ${name} (part ${inst.seq})`,
-    html: layout(welcome ? `Dear ${esc(reg.first_name)}` : `Dear ${esc(reg.first_name)}`,
+    html: layout(`Dear ${esc(reg.first_name)}`,
       `${welcome ? `<p>We are pleased to confirm your admission to <b>${esc(name)}</b> at Skill Mountain Academy. Your payment has been received and your place is secured.</p>` : "<p>Thank you. We have received your payment.</p>"}
        ${table([...(regNo ? [["Registration No", regNo] as [string, string]] : []), ...rows])}${rest}
-       ${welcome ? `<p>Please keep your registration number for all correspondence with the Academy.</p><h3 style="font-weight:normal">Your curriculum</h3>${button(`${site}${p?.curriculum ?? "/"}`, "Open the curriculum")}<h3 style="font-weight:normal">Your weekly class time</h3>${booking}<p>A separate email brings your private link to your learning space.</p>` : ""}`),
+       ${welcome ? `<p>Please keep your registration number for all correspondence with the Academy.</p><h3 style="margin:26px 0 4px;font-family:Montserrat,Arial,sans-serif;font-size:17px">Your curriculum</h3>${button(`${site}${p?.curriculum ?? "/"}`, "Open the curriculum")}<h3 style="margin:26px 0 4px;font-family:Montserrat,Arial,sans-serif;font-size:17px">Your weekly class time</h3>${booking}<p>A separate email brings your private link to your learning space.</p>` : ""}`, { headline: welcome ? "Admission confirmed" : "Payment received", kind: welcome ? "admission" : "payment" }),
   });
   // 2. Access to the learning space: a fresh single-use sign-in link.
   if (welcome && student && student.status === "active" && env.DB) await sendSignInLink(env, env.DB, student, true);
   // Group members get their own welcome when the lead's first payment arrives.
   if (welcome && order.group_size > 1) {
     for (const m of await repo.groupMembers(reg.id)) {
-      await sendEmail(env, { to: m.email, subject: `You're in: ${name} with ${reg.first_name}`, html: layout(`Welcome, ${m.first_name}`, `<p>${reg.first_name} registered you for <b>${name}</b> as a group class. You will share one live class, with your own record, grades and attendance.</p>${booking}`) });
+      await sendEmail(env, { to: m.email, subject: `You're in: ${name} with ${reg.first_name}`, html: letter("You are in", `Welcome, ${m.first_name}`, `<p>${reg.first_name} registered you for <b>${name}</b> as a group class. You will share one live class, with your own record, grades and attendance.</p>${booking}`) });
     }
   }
-  await sendEmail(env, { to: env.ADMIN_EMAIL || "admission@skillmountainacademy.com", subject: `Payment confirmed: ${name} (part ${inst.seq} of ${all.length})`, html: layout("Payment confirmed", table([["Learner", `${reg.first_name} ${reg.surname ?? ""}`], ["Email", reg.email], ["Phone", reg.phone ?? ""], ...rows])) });
+  await sendEmail(env, { to: env.ADMIN_EMAIL || "admission@skillmountainacademy.com", subject: `Payment confirmed: ${name} (part ${inst.seq} of ${all.length})`, html: notice("Payment confirmed", table([["Learner", `${reg.first_name} ${reg.surname ?? ""}`], ["Email", reg.email], ["Phone", reg.phone ?? ""], ...rows]), "payment") });
   await mirrorToSheet(env, { action: "payment", reference: order.reference, paystackReference: ref, part: inst.seq, parts: all.length, amountNaira: amountKobo / 100, programme: name, email: reg.email, status: left.length ? "PART PAID" : "PAID" });
 }
 

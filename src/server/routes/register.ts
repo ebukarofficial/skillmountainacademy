@@ -8,7 +8,7 @@ import { ApiError, clientIp, json, nowIso, randomCode, readJson, sameOrigin, sha
 import { Repo, type InstalmentRow, type OrderRow, type RegistrationRow } from "../repo";
 import { verifyTurnstile } from "../turnstile";
 import { Checker } from "../validate";
-import { button, esc, layout, sendEmail, table } from "../email";
+import { button, esc, letter, notice, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
 import { activeHoldFor } from "./hold";
 import { readRates } from "./geo";
@@ -134,13 +134,13 @@ async function afterRegister(env: AppEnv, d: { prog: Programme; learner: ReturnT
   const emailed = await sendEmail(env, {
     to: learner.email,
     subject: `We received your registration: ${prog.name}`,
-    html: layout(`Thank you, ${learner.first_name}`, `<p>Your registration for <b>${esc(prog.name)}</b> is saved.</p>${table(rows)}${schedule}${bank}
-      ${button(`${siteUrl(env)}/programmes/${prog.slug}/`, "View your programme")}<p>Questions? Just reply to this email.</p>`),
+    html: letter("Application received", `Dear ${learner.first_name}`, `<p>Your registration for <b>${esc(prog.name)}</b> is saved.</p>${table(rows)}${schedule}${bank}
+      ${button(`${siteUrl(env)}/programmes/${prog.slug}/`, "View your programme")}<p>Questions? Just reply to this email.</p>`, "admission"),
   });
   await sendEmail(env, {
     to: env.ADMIN_EMAIL || "admission@skillmountainacademy.com",
     subject: `New registration (${order.method === "bank" ? "bank transfer" : "Paystack"}): ${prog.name}`,
-    html: layout("New registration", table([["Name", fullName], ["Email", learner.email], ["Phone", learner.phone ?? ""], ...rows, ["Plan", order.plan === "parts" ? "3 parts" : "Full"], ["Group size", String(order.group_size)]])),
+    html: notice("New registration", table([["Name", fullName], ["Email", learner.email], ["Phone", learner.phone ?? ""], ...rows, ["Plan", order.plan === "parts" ? "3 parts" : "Full"], ["Group size", String(order.group_size)]]), "enquiry"),
   });
   // Same fields as the old website flow, so the existing "Applications" tab keeps working.
   // notify=false tells the updated Apps Script not to send its own email when Resend already did.

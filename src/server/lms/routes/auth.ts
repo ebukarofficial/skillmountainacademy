@@ -44,7 +44,8 @@ export async function sendSignInLink(env: Parameters<typeof sendEmail>[0], db: D
     html: layout(`Dear ${esc(user.full_name.split(" ")[0])}`, `<p>${invite ? `Your access to ${place} is ready.` : `Here is your link to ${place}.`} It works once and expires in ${TOKEN_MINUTES} minutes.</p>
       ${number ? `<p style="opacity:.8">${staff ? "Staff number" : "Registration No"}: <b>${esc(number)}</b></p>` : ""}
       ${button(link, staff ? "Enter the staff workspace" : "Enter my learning space")}
-      <p style="opacity:.7;font-size:14px">If you did not ask for this, ignore this email; nobody can use your account without it. Next time, request a new link at ${entry}</p>`),
+      <p style="opacity:.7;font-size:14px">If you did not ask for this, ignore this email; nobody can use your account without it. Next time, request a new link at <a href="${entry}">${entry.replace("https://", "")}</a></p>`,
+      { headline: invite ? (staff ? "Your staff access is ready" : "Your learning space is ready") : "Your secure sign-in link", kind: user.role === "admin" ? "admin" : user.role === "instructor" ? "instructor" : "login" }),
   });
 }
 

@@ -6,11 +6,11 @@
 //   everything else (assignments, grades, messages, timetable, instructor assigned) is always emailed.
 import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
-import { button, esc, layout, sendEmail } from "../email";
+import { button, esc, letter, sendEmail } from "../email";
 import { addNotificationStmt, runBatch } from "./data/teaching";
 import { emailPrefsFor } from "./data/users";
 import { parseJsonCol } from "./api";
-import { categoryOf, priorityOf } from "../../../lib/notify-rules.ts";
+import { categoryOf, designOf, priorityOf } from "../../../lib/notify-rules.ts";
 
 export type Recipient = { id: string; email: string; name: string };
 export type Notice = { kind: string; title: string; body: string; link?: string };
@@ -28,7 +28,7 @@ export async function notify(env: AppEnv, db: D1Database, to: Recipient[], n: No
       const pref = parseJsonCol<{ reminders?: boolean; updates?: boolean }>(prefs.find((p) => p.id === r.id)?.email_prefs ?? null, {});
       if (cat !== "essential" && pref[cat] === false) { emailed[r.id] = null; continue; }
       const link = n.link ? (n.link.startsWith("http") ? n.link : `${siteUrl(env)}${n.link}`) : null;
-      const ok = await sendEmail(env, { to: r.email, subject: n.title, html: layout(`Dear ${esc(r.name.split(" ")[0] || "student")}`, `<p>${esc(n.body).replace(/\n/g, "<br>")}</p>${link ? button(link, link.includes("meet.google.com") ? "Join on Google Meet" : "Open in your learning space") : ""}`) });
+      const ok = await sendEmail(env, { to: r.email, subject: n.title, html: letter(n.title, `Dear ${esc(r.name.split(" ")[0] || "student")}`, `<p>${esc(n.body).replace(/\n/g, "<br>")}</p>${link ? button(link, link.includes("meet.google.com") ? "Join on Google Meet" : "Open in your learning space") : ""}`, designOf(n.kind)) });
       emailed[r.id] = ok ? now : null;
       if (ok) sent++;
     }

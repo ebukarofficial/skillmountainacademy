@@ -117,6 +117,11 @@ route("PATCH", "/api/app/admin/enrolments/:id", ["admin"], async (c) => {
       c.exec.waitUntil(notify(c.env, c.db, [rcp(ins)], { kind: "student.assigned", title: `New student: ${st.full_name}`, body: `${st.full_name} (${progName(e.programme_slug)}) has been assigned to you.`, link: "/app/" }));
     }
   }
+  if (patch.status === "completed" && e.status !== "completed") {
+    const st = await getUser(c.db, e.student_id);
+    if (st) c.exec.waitUntil(notify(c.env, c.db, [rcp(st)], { kind: "programme.completed", title: `Congratulations: you have completed ${progName(e.programme_slug)}`,
+      body: `The Academy has recorded that you completed ${progName(e.programme_slug)}. Your learning space stays open, with your work, feedback and progress record.`, link: "/app/?tab=progress" }));
+  }
   await c.audit("enrolment.update", "enrolment", e.id, patch);
   return ok({ enrolment: await getEnrolment(c.db, e.id) });
 });

@@ -5,7 +5,7 @@ import { ApiError, clientIp, json, nowIso, readJson, sameOrigin } from "../http"
 import { Repo } from "../repo";
 import { verifyTurnstile } from "../turnstile";
 import { Checker } from "../validate";
-import { esc, layout, sendEmail, table } from "../email";
+import { esc, letter, notice, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
 import { ipHash } from "./register";
 
@@ -34,8 +34,8 @@ export async function handleChildrenEnquiry(req: Request, env: AppEnv, ctx: Exec
   await repo.createEnquiry(row);
   ctx.waitUntil((async () => {
     const rows: [string, string][] = [["Parent", e.parent_name], ["Email", e.email], ["Phone", e.phone], ["Child's age", String(e.child_age)], ["Interest", e.programme_interest], ["Message", e.message ?? ""]];
-    await sendEmail(env, { to: env.ADMIN_EMAIL || "admission@skillmountainacademy.com", replyTo: e.email, subject: `Children's package enquiry: ${e.parent_name}`, html: layout("New children's package enquiry", table(rows)) });
-    await sendEmail(env, { to: e.email, subject: "We received your enquiry", html: layout(`Thank you, ${esc(e.parent_name.split(" ")[0])}`, "<p>We received your enquiry about the Skill Mountain Academy children's package. We will contact you within two working days to talk about your child's goals and a customised plan.</p>") });
+    await sendEmail(env, { to: env.ADMIN_EMAIL || "admission@skillmountainacademy.com", replyTo: e.email, subject: `Children's package enquiry: ${e.parent_name}`, html: notice("New children's package enquiry", table(rows), "enquiry") });
+    await sendEmail(env, { to: e.email, subject: "We received your enquiry", html: letter("Enquiry received", `Dear ${esc(e.parent_name.split(" ")[0])}`, "<p>We received your enquiry about the Skill Mountain Academy children's package. We will contact you within two working days to talk about your child's goals and a customised plan.</p>", "enquiry") });
     await mirrorToSheet(env, { action: "children", ...e });
   })());
   return json({ ok: true });

@@ -6,7 +6,7 @@
 import { PROGRAMMES } from "../../lib/config.ts";
 import { lagosDate, money } from "../../lib/pricing.ts";
 import type { AppEnv } from "./env";
-import { button, layout, sendEmail, table } from "./email";
+import { button, letter, notice, sendEmail, table } from "./email";
 import { Repo } from "./repo";
 import { refreshRates } from "./routes/geo";
 import { payLink } from "./routes/payments";
@@ -38,9 +38,9 @@ export async function runSchedule(env: AppEnv, now = new Date(), _cron = "*/5 * 
       const sent = await sendEmail(env, {
         to: i.email,
         subject: isLink ? `Payment link: ${name}, part ${i.seq}` : `Reminder: ${name}, part ${i.seq} is due in 3 days`,
-        html: layout(`Hi ${i.first_name}`, `<p>${isLink ? "Your next part is due. Pay securely with Paystack:" : "A friendly reminder that your next part is due in 3 days."}</p>${facts}
+        html: letter(isLink ? "Your next payment is due" : "Payment reminder", `Dear ${i.first_name}`, `<p>${isLink ? "Your next part is due. Pay securely with Paystack:" : "A friendly reminder that your next part is due in 3 days."}</p>${facts}
           ${link ? button(link, `Pay part ${i.seq} now`) : "<p>Reply to this email and we will send your payment details.</p>"}
-          <p>Live-session access is paused if a payment is more than 2 weeks late.</p>`),
+          <p>Live-session access is paused if a payment is more than 2 weeks late.</p>`, "payment"),
       });
       if (!sent) continue; // try again on the next run
       await repo.setInstalmentSent(i.id, isLink ? "link_sent_at" : "reminder_sent_at", at);
@@ -51,7 +51,7 @@ export async function runSchedule(env: AppEnv, now = new Date(), _cron = "*/5 * 
       await sendEmail(env, {
         to: env.ADMIN_EMAIL || "admission@skillmountainacademy.com",
         subject: `${late.length} instalment(s) more than 2 weeks late`,
-        html: layout("Payments more than 2 weeks late", `<p>Live-session access should be paused for these learners until they pay.</p>${table(late.map((l) => [`${l.first_name} <${l.email}>`, `${l.programme_slug} · ${money(l.amount_kobo / 100, "NGN")} · due ${l.due_date} · ${l.reference}`]))}`),
+        html: notice("Payments more than 2 weeks late", `<p>Live-session access should be paused for these learners until they pay.</p>${table(late.map((l) => [`${l.first_name} <${l.email}>`, `${l.programme_slug} · ${money(l.amount_kobo / 100, "NGN")} · due ${l.due_date} · ${l.reference}`]))}`, "payment"),
       });
     }
   } catch (e) {
