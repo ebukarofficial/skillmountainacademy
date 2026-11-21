@@ -219,3 +219,15 @@ mailbox's own spam scanning (Northwest webmail). Gmail and Outlook addresses usu
    - "Resend refused the email (HTTP 401/403)": the API key is wrong or the domain is not verified in Resend.
    - "Accepted by Resend": the problem is the receiving mailbox. Check spam, and compare with a Gmail address.
 2. Every failed email is also listed under Admin > Platform > Recent errors, with the reason.
+
+## J. Instructor onboarding and sign-in pages (21 Nov 2026)
+1. Run `npm run db:migrate` once after pushing (adds migration 0006: instructor profile fields; nothing existing changes).
+2. Add an instructor: Admin > Recruitment > Add a candidate (or People). They get a congratulations email with their faculty
+   entrance and a sign-in button that lasts 24 hours. After signing in they see only "My faculty profile": photo, citation,
+   biography, languages, countries, LinkedIn / X / Facebook / portfolio, achievements and certifications with verification links.
+3. When they submit, you get an email and a notification. Open Recruitment, check the profile (each certificate has a
+   "Verify" link), tick the required checks and press Approved. They are emailed, the verified badge shows next to their name
+   everywhere (their workspace, their students' dashboards, the public Faculty page if you list them) and their full workspace opens.
+4. Sign-in pages show a different famous quotation on each visit over a faint photo (different for students, faculty and admins).
+5. Abuja and Nigeria were removed from the site, sign-in pages and emails. They remain only in the Privacy Policy and Terms
+   (data-protection regulator, governing law and the business address), which the law expects there. Ask your lawyer before changing those.

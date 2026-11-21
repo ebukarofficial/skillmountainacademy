@@ -5,5 +5,5 @@ export const categoryOf = (kind: string): "reminders" | "updates" | "essential" 
   kind.startsWith("reminder.") ? "reminders" : /^(resource\.|announcement)/.test(kind) ? "updates" : "essential";
 
 // Which email card a notice uses (see src/server/email.ts).
-export const designOf = (kind: string): "reminder" | "payment" | "graduation" | "notification" =>
-  /^(reminder\.|session\.)/.test(kind) ? "reminder" : kind.startsWith("payment.") ? "payment" : kind === "programme.completed" ? "graduation" : "notification";
+export const designOf = (kind: string): "reminder" | "payment" | "graduation" | "notification" | "instructor" | "admin" =>
+  kind.startsWith("verification.") ? "instructor" : kind.startsWith("recruitment.") ? "admin" : /^(reminder\.|session\.)/.test(kind) ? "reminder" : kind.startsWith("payment.") ? "payment" : kind === "programme.completed" ? "graduation" : "notification";

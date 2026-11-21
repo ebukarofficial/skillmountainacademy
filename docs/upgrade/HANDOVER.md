@@ -449,3 +449,11 @@ notification, reminder, payment, graduation. Each has its own label, hero colour
 the student photo for admissions). Notifications choose a card through `designOf` in `lib/notify-rules.ts`. Completing an
 enrolment (Admin > Enrolments > status Completed) now sends a graduation notice. Images load from the live site, so emails
 sent before the new code is deployed show the old images. Bump `V` in email.ts when a picture changes.
+
+### Instructor onboarding (21 Nov 2026)
+Migration 0006 adds headline, achievements, certifications, languages, country_origin, country_residence, profile_submitted_at,
+verified_at. Unverified instructors can sign in, but `api.ts` (ONBOARDING_PATHS) allows them only /api/me, photo upload,
+notifications, logout and `/api/app/instructor/onboarding(/submit)` (`routes/onboarding.ts`). Approval in Recruitment sends the
+"verified" notice; `verified` is in selfView, instructorPublic and /api/faculty, and `VerifiedBadge` (app/app/ui.tsx) shows it.
+Sign-in pages: quotes in `lib/quotes.ts` (documented attributions only), background photos per portal in `app/app/entry.tsx`.
+Confirm links carry `&p=<portal>` so /app/confirm/ greets each role correctly.
