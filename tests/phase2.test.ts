@@ -20,8 +20,8 @@ test("acceptance 5: the hero headline is the message and the largest text on the
   const text = h1[2].replace(/<[^>]+>|\{" "\}/g, " ").replace(/\s+/g, " ").trim();
   assert.equal(text, MESSAGE.headline);
   assert.equal(MESSAGE.headline, "For those made for more.");
-  assert.match(h1[2], /<em className="[^"]*text-brand-red[^"]*">made for more\.<\/em>/, "made for more. is the brand red token");
-  assert.match(h1[1], /--font-serif/);
+  assert.match(h1[2], /<em className="[^"]*text-brand-red[^"]*">made for more\.<\/em>/, "made for more. is the brand red token, in the italic serif");
+  assert.match(h1[1], /--font-serif/, "the hero keeps the stylish serif face (owner instruction)");
   // The smallest the hero ever gets (clamp minimums) must beat the biggest fixed size anywhere else.
   const heroMin = Math.min(...[...h1[1].matchAll(/clamp\(([\d.]+)rem/g)].map((m) => Number(m[1])));
   let biggest = 0, where = "";
@@ -77,8 +77,9 @@ test("no job placement, job guarantee or income claims anywhere", () => {
 test("programme pages: one per programme, with Course data, price, curriculum, career package, trust lines and built-in enrolment", () => {
   const page = read("app/programmes/[slug]/page.tsx");
   for (const s of ["generateStaticParams", "dynamicParams = false", '"@type": "Course"', "<HoldPrice", "<CurriculumActions", "<CareerLaunch", "<TrustLines", 'href="#enrol"', "Apply for Admission", "<EnrolSection p={p} />", "duration(p)"]) assert.ok(page.includes(s), `missing ${s}`);
-  // Each section has one editorial purpose, in this order (the institutional brief removed the repeated ones).
-  const order = ["The discipline", "Who it suits", "What you will be able to do", "Curriculum", "Programme structure", "Faculty"].map((t) => page.indexOf(`title="${t}"`)).concat(page.indexOf("Admission and investment</h2>"));
+  // The academic brief's order: introduction, outcomes, audience, curriculum, duration, practical work, internship,
+  // then investment, the admission form and payment.
+  const order = ["Programme introduction", "Learning outcomes", "Intended audience", "Curriculum", "Programme duration", "Practical work", "Internship", "Faculty"].map((t) => page.indexOf(`title="${t}"`)).concat(page.indexOf("Admission and investment</h2>"));
   assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `sections out of order: ${order}`);
   for (const p of PROGRAMMES) {
     const html = built(`programmes/${p.slug}/index.html`);

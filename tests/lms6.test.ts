@@ -26,14 +26,18 @@ test("each role gets its own workspace in the shared shell, with the brief's sec
   for (const r of ["StudentDashboard", "InstructorDashboard", "AdminDashboard"]) assert.ok(page.includes(`<${r}`));
   for (const f of ["student", "instructor", "admin"]) assert.match(read(`app/app/${f}.tsx`), /<AppShell me=\{me\} nav=\{nav\}/, f);
   const stu = read("app/app/student.tsx");
-  for (const s of ["Welcome to your learning space.", "Registration No", "<NextClass", "Your responsibilities", "Classes and calendar", "Coursework", "Learning materials", "Learning assistant", "Messages", "Progress", "Academic record", "Admitted", "Payments", "Email preferences", "Join the live session", "has not added the"]) assert.ok(stu.includes(s), s);
+  for (const s of ["Welcome, {firstName(me.fullName)}.", "Registration No", "<NextClass", "Your Academic Tasks", "Announcements and messages", "My Programme", "Current module", "Continue learning", "topics completed",
+    "Learning Materials", "Assignments", "Assessments", "Calendar", "Messages", "Notifications", "Profile", "Academic progress", "Academic record", "Admitted", "Payments", "Email preferences", "Join the live session", "has not added the"]) assert.ok(stu.includes(s), s);
   const ins = read("app/app/instructor.tsx");
-  for (const s of ["Attendance to record", "My schedule", "Next 7 days", "Add link", "Completed", "Student missed", "Waiting to be marked", "Set work", "My performance", "Faculty No"]) assert.ok(ins.includes(s), s);
+  for (const s of ["Overview", "My Students", "My Programmes", "Teaching Calendar", "Class Sessions", "Assignments", "Assessments", "Attendance", "Messages", "Academic Resources", "Instructor Profile",
+    "Today's classes", "Upcoming classes", "Assignments awaiting grading", "New student messages", "Recent academic activity", "Attendance to record", "My schedule", "Next 7 days", "Add link", "Completed", "Student missed", "Faculty No"]) assert.ok(ins.includes(s), s);
   const adm = read("app/app/admin.tsx");
-  for (const s of ["Overview", "Admit a student", "/api/app/admin/admit", "People", "Enrolments", "Orders", "Academics", "Finance", "Instructors", "Materials", "Platform", "Fixed weekly class time", "Confirm bank payment"]) assert.ok(adm.includes(s), s);
+  for (const s of ["Institutional overview", "Students", "Instructors", "Programmes", "Admissions", "Payments", "Academic records", "Instructor allocation", "Attendance", "Assessments", "Learning materials", "Notifications", "Security and audit",
+    "Admit a student", "/api/app/admin/admit", "/api/app/admin/coursework", "Fixed weekly class time", "Confirm bank payment"]) assert.ok(adm.includes(s), s);
   const shell = read("app/app/shell.tsx");
-  for (const s of ["Notifications", "Sign out", "My account", "aria-current"]) assert.ok(shell.includes(s), s);
-  assert.doesNotMatch([stu, ins, adm, shell].join("\n"), /--font-serif|bg-cream/, "dashboards use the modern sans and white cards");
+  for (const s of ["Notifications", "Sign out", "My profile", "aria-current", "View all notifications", "Skip to content", 'quick("calendar"', 'quick("messages"']) assert.ok(shell.includes(s), s);
+  assert.doesNotMatch([stu, ins, adm, shell].join("\n"), /--font-serif|bg-cream|bg-paper|uppercase/, "dashboards: modern sans, white surfaces, no decorative capitals");
+  assert.match(shell, /<div className="min-h-screen overflow-x-clip bg-ink\/\[0\.03\]">/, "a soft neutral page under white cards (owner: white should be subtle)");
 });
 
 test("dashboards use only existing colour tokens (no hex values) and never show a made-up Meet link", () => {
@@ -53,4 +57,28 @@ test("the public site has no sign-in links; students and staff have their own pr
   const entry = read("app/app/entry.tsx");
   for (const s of ["QUOTES", "pickQuote", "localStorage", "next", "Turnstile"]) assert.ok(entry.includes(s), s);
   for (const f of ["app/app/login/page.tsx", "app/app/student/login/page.tsx", "app/app/instructor/login/page.tsx"]) assert.match(read(f), /index: false/, `${f} is not indexed`);
+});
+
+test("academic calendar: upcoming and month views, built only from real sessions and deadlines", () => {
+  const cal = read("app/app/calendar.tsx");
+  for (const s of ["Upcoming events", "Month", "Previous month", "Next month", "Africa/Lagos", 'role="grid"']) assert.ok(cal.includes(s), s);
+  const stu = read("app/app/student.tsx");
+  assert.match(stu, /sessions\.data\?\.sessions[\s\S]*assignments\.map[\s\S]*allQuizzes\.map/, "events come from sessions, assignments and quizzes");
+  assert.match(read("src/server/lms/routes/teaching.ts"), /completedLessons\(c\.db, c\.user\.id\)/, "a student's lesson completion comes from their own record");
+});
+
+test("public site: catalogue search and discipline filter, academic homepage order, sample certificate labelled", () => {
+  const cat = read("app/programmes/catalogue.tsx");
+  for (const s of ["Search programmes", 'aria-label="Disciplines"', "All levels"]) assert.ok(cat.includes(s), s);
+  const home = read("app/page.tsx");
+  const order = ['id="why"', 'id="programmes"', 'id="certificate"', 'id="model"', 'id="faculty"', 'id="book"'].map((s) => home.indexOf(s));
+  assert.ok(order.every((i, k) => i > 0 && (k === 0 || i > order[k - 1])), `homepage order ${order}`);
+  assert.match(home, /SAMPLE/);
+  assert.match(home, /Illustration only/);
+  assert.match(home, /not a university degree/);
+  assert.doesNotMatch(home, /globally respected/, "no unverifiable claims");
+  // Owner: the public website keeps its colours and the stylish serif (italic) hero; only the dashboards changed.
+  assert.match(read("app/layout.tsx"), /cormorant-garamond/);
+  assert.match(read("app/page.tsx"), /data-hero-headline className="[^"]*font-\(family-name:--font-serif\)[\s\S]*?<em className="font-medium text-brand-red">made for more\.<\/em>/);
+  assert.doesNotMatch(read("app/layout.tsx"), /<body[^>]*bg-white/, "public pages keep the cream background");
 });
