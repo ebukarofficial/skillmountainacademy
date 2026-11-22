@@ -1,6 +1,8 @@
 // Generates SQL that copies the programmes in lib/config.ts into the D1 "programmes" table.
 //   npm run db:seed-sql        (rewrites db/seed-programmes.sql)
-//   npx wrangler d1 execute skillmountainacademy-db --remote --file db/seed-programmes.sql
+//   (Stage 3A.1) Do NOT run this file against production by hand: it UPSERTS programme rows, which overwrites prices and
+//   durations. A production change to the programme table goes through the gated migration procedure
+//   (docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md) with the owner's approval of the prices.
 // The Worker always prices from lib/config.ts; this table is a record for reports and the future admin dashboard.
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
