@@ -338,7 +338,7 @@ function EmailCheck() {
 }
 
 function Platform() {
-  const { data } = useLoad<{ platform: Record<string, number>; errors: { at: string; route: string; message: string }[]; website: { note: string } }>("/api/app/admin/platform");
+  const { data } = useLoad<{ platform: Record<string, number>; errors: { at: string; route: string; message: string }[]; website: { note: string }; schema?: { expected: string; applied: string | null; status: string } }>("/api/app/admin/platform");
   const audit = useLoad<{ entries: { at: string; action: string; actor_name: string | null; target_type: string | null }[] }>("/api/app/admin/audit?limit=50");
   const p = data?.platform;
   return (
@@ -351,6 +351,7 @@ function Platform() {
         <Stat label="Suspended accounts" value={p.suspended_accounts} />
       </div>}
       {data && <p className="rounded-2xl bg-ink/[0.03] p-3 text-sm">{data.website.note}</p>}
+      {data?.schema && <p className={`rounded-2xl p-3 text-sm ${data.schema.status === "compatible" ? "bg-ink/[0.03]" : "bg-brand-orange/10"}`}>Database schema: {data.schema.applied ?? "unknown"} · this version of the platform expects {data.schema.expected}{data.schema.status === "compatible" ? " (matches)." : data.schema.status === "database_older" ? ". The database is behind: migrations are pending." : data.schema.status === "database_newer" ? ". The database is ahead of this version." : ". The migration history could not be read."}</p>}
       <Card title="Recent errors"><ul className="text-sm">{data?.errors.map((e, i) => <li key={i} className="border-b border-ink/10 py-1">{when(e.at)} · {e.route} · {e.message.slice(0, 160)}</li>)}</ul>{data && !data.errors.length && <Empty>No errors.</Empty>}</Card>
       <Card title="Audit log"><ul className="text-sm">{audit.data?.entries.map((e, i) => <li key={i} className="border-b border-ink/10 py-1">{when(e.at)} · <b>{e.action}</b> · {e.actor_name ?? "system"}{e.target_type ? ` · ${e.target_type}` : ""}</li>)}</ul></Card>
     </div>
