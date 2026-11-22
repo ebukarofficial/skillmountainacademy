@@ -1,5 +1,6 @@
 // Messaging, instructor ratings and performance, admin overview, academic monitoring, finance and platform health,
 // and the student's own payment view.
+import { schemaStatus } from "../../schema-version";
 import { findProgramme, PROGRAMMES } from "../../../../lib/config.ts";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
@@ -176,8 +177,10 @@ route("POST", "/api/app/admin/orders/:reference/payments", ["admin"], async (c) 
 
 route("GET", "/api/app/admin/platform", ["admin"], async (c) => {
   const s = (await platformStats(c.db, days(7), days(1)))!;
+  // Stage 3A: does the database's migration history match what this Worker build expects?
+  const applied = await c.db.prepare("SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1").first<{ name: string }>().then((r) => r?.name ?? null).catch(() => null);
   return ok({
-    platform: s, errors: await recentErrors(c.db, 20),
+    platform: s, errors: await recentErrors(c.db, 20), schema: schemaStatus(applied),
     // Traffic and search rankings come from outside this system.
     website: { available: false, note: "Turn on Cloudflare Web Analytics for traffic, and use Google Search Console for search rankings. Registrations and conversion are shown in the overview." },
   });
