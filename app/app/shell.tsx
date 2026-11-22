@@ -117,6 +117,7 @@ export function AppShell<T extends string>({ me, nav, tab, setTab, children, con
   const [menu, setMenu] = useState(false);
   const [more, setMore] = useState(false);
   async function signOut() { await api("/api/auth/logout", { method: "POST" }).catch(() => undefined); goTo(me.role === "admin" ? PORTALS.admin : me.role === "instructor" ? PORTALS.instructor : PORTALS.student); }
+  async function signOutAll() { if (!confirm("Sign out of every device, including this one?")) return; await api("/api/auth/logout-all", { method: "POST" }).catch(() => undefined); goTo(me.role === "admin" ? PORTALS.admin : me.role === "instructor" ? PORTALS.instructor : PORTALS.student); }
   const ids = nav.map((n) => n.id as string);
   const has = (id: string) => ids.includes(id);
   const go = (t: T) => { setTab(t); setDrawer(false); setMore(false); setMenu(false); window.scrollTo({ top: 0 }); };
@@ -172,6 +173,7 @@ export function AppShell<T extends string>({ me, nav, tab, setTab, children, con
                   <div className="border-b border-ink/10 px-4 py-3 text-sm"><p className="font-semibold">{me.fullName}</p><p className="truncate text-ink/65">{me.email}</p>{number && <p className="mt-1 text-ink/65">{number}</p>}</div>
                   {has("profile") && <button onClick={() => go("profile" as T)} className="flex w-full items-center gap-2 px-4 py-3 text-sm hover:bg-ink/[0.04]"><Icon name="user" /> My profile</button>}
                   <button onClick={signOut} className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-brand-red hover:bg-brand-red/[0.05]"><Icon name="logout" /> Sign out</button>
+                  <button onClick={signOutAll} className="flex w-full items-center gap-2 px-4 py-3 text-sm text-ink/75 hover:bg-ink/[0.04]"><Icon name="logout" /> Sign out of all devices</button>
                 </div>
               )}
             </div>

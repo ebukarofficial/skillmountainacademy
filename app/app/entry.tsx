@@ -50,6 +50,7 @@ export function EntryPage({ kind }: { kind: Portal }) {
   const [err, setErr] = useState("");
   const [sent, setSent] = useState("");
   const [next, setNext] = useState<string | null>(null);
+  const [expired, setExpired] = useState<string | null>(null);
   const [quote, setQuote] = useState<number | null>(null);
   useEffect(() => {
     const t = setTimeout(() => {
@@ -61,6 +62,7 @@ export function EntryPage({ kind }: { kind: Portal }) {
       try { localStorage.setItem(QUOTE_KEY, String(q)); } catch { /* private mode */ }
       try { setEmail(localStorage.getItem(KEY) ?? ""); } catch { /* private mode */ }
       setNext(safeNext(new URLSearchParams(window.location.search).get("next")));
+      setExpired(new URLSearchParams(window.location.search).get("expired"));
     }, 0);
     return () => clearTimeout(t);
   }, []);
@@ -93,6 +95,11 @@ export function EntryPage({ kind }: { kind: Portal }) {
           <p className="mt-8 text-sm font-semibold text-brand-red lg:mt-0">{c.eyebrow}</p>
           <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">{H1[kind]}</h1>
           <p className="mt-3 text-sm text-ink/65">{c.form}</p>
+          {expired && !sent && (
+            <p role="status" className="mt-6 rounded-xl border border-brand-orange/40 bg-white px-4 py-3 text-sm text-ink/85">
+              {expired === "idle" ? "You were signed out because there was no activity for a while. Request a new sign-in link to continue." : "Your session has ended. Request a new sign-in link to continue."}
+            </p>
+          )}
           {sent ? (
             <div role="status" className="mt-8 rounded-2xl border border-ink/[0.07] bg-white p-5 shadow-sm shadow-ink/5">
               <p className="font-semibold text-ink">Check your email</p>

@@ -1,6 +1,6 @@
 "use client";
 // Admin dashboard: the academy's command centre, in tabs.
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { Me } from "./page";
 import { AppShell, NotificationsPage, type NavItem } from "./shell";
 import { PROGRAMMES } from "@/lib/config";
@@ -10,11 +10,13 @@ import { MaterialsManager } from "./shared";
 import { AdmissionsAdmin, RecruitmentAdmin } from "./admissions-admin";
 import { AssistantEnquiries, CallRequests } from "./desk-admin";
 import { CurrencySettings, Monitoring } from "./monitoring-admin";
+import { MfaSettings } from "./mfa";
+import { RetentionSettings } from "./security-admin";
 
 const TABS = ["overview", "students", "instructors", "programmes", "admissions", "payments", "records", "allocation", "attendance", "assessments", "materials", "content", "reports", "notifications", "security"] as const;
 type Tab = (typeof TABS)[number];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-type U = { id: string; email: string; role: string; status: string; fullName: string; studentNo: string | null; lastLoginAt: string | null };
+type U = { id: string; email: string; role: string; status: string; fullName: string; studentNo: string | null; lastLoginAt: string | null; adminRole?: string | null };
 
 
 // Institutional overview: the figures in one dense table, and the items that need an administrator's action.
@@ -101,6 +103,10 @@ function Segments<T extends string>({ value, onChange, items }: { value: T; onCh
   return <div role="tablist" className="mb-5 inline-flex flex-wrap rounded-lg border border-ink/15 p-0.5">{items.map(([v, l]) => <button key={v} role="tab" aria-selected={value === v} onClick={() => onChange(v)} className={`rounded-md px-4 py-2 text-sm font-semibold ${value === v ? "bg-indigo text-white" : "text-ink/75 hover:text-ink"}`}>{l}</button>)}</div>;
 }
 
+// Administrator groups (server: src/server/lms/permissions.ts). Only a Super Administrator can change them.
+const ADMIN_GROUPS: [string, string][] = [["super", "Super Administrator"], ["admissions", "Admissions"], ["finance", "Finance"], ["academic", "Academic Administration"],
+  ["faculty", "Faculty Management"], ["support", "Student Support"], ["reporting", "Read-only Reporting"]];
+
 function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", "student"] }: { fixedRole?: string; title?: string; addRoles?: string[] }) {
   const [role, setRole] = useState(fixedRole ?? "");
   const [status, setStatus] = useState("");
@@ -116,13 +122,23 @@ function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", 
         <input aria-label="Search by name, email or number" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, email, number" className={`${inputCls} mt-0 w-56`} />
       </div>}>
         <div className="relative -mx-2 overflow-x-auto"><table className="w-full min-w-[44rem] text-left text-[0.95rem]"><thead><tr className="border-b border-ink/10 text-sm text-ink/70"><th className="px-2 py-2 font-semibold">Name</th>{!fixedRole && <th className="px-2 py-2 font-semibold">Role</th>}<th className="px-2 py-2 font-semibold">Status</th><th className="px-2 py-2 font-semibold">Last sign-in</th><th className="px-2 py-2"><span className="sr-only">Actions</span></th></tr></thead>
-          <tbody>{users.map((u) => (
-            <tr key={u.id} className="border-b border-ink/[0.06] last:border-0"><td className="px-2 py-2.5"><b>{u.fullName}</b><span className="block text-sm text-ink/70">{u.email}{u.studentNo ? ` · ${u.studentNo}` : ""}</span></td>{!fixedRole && <td className="px-2 py-2.5"><Badge s={u.role} /></td>}<td className="px-2 py-2.5"><Badge s={u.status} /></td>
+          <tbody>{users.map((u) => (<Fragment key={u.id}>
+            <tr className="border-b border-ink/[0.06] last:border-0"><td className="px-2 py-2.5"><b>{u.fullName}</b><span className="block text-sm text-ink/70">{u.email}{u.studentNo ? ` · ${u.studentNo}` : ""}</span></td>{!fixedRole && <td className="px-2 py-2.5"><Badge s={u.role} /></td>}<td className="px-2 py-2.5"><Badge s={u.status} /></td>
               <td className="px-2 py-2.5 text-sm">{u.lastLoginAt ? when(u.lastLoginAt) : "Never"}</td>
               <td className="space-x-1 whitespace-nowrap px-2 py-2.5 text-right">
                 <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/admin/users/${u.id}/invite`, { method: "POST" }), `Sign-in link sent to ${u.email}.`)}>Send link</Btn>
                 <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/admin/users/${u.id}`, { method: "PATCH", body: { status: u.status === "active" ? "suspended" : "active" } }), "Updated.", reload)}>{u.status === "active" ? "Suspend" : "Reactivate"}</Btn>
               </td></tr>
+            {u.role === "admin" && <tr className="border-b border-ink/[0.06]"><td colSpan={9} className="px-2 pb-3 text-sm">
+              <span className="mr-2 text-ink/70">Administrator group:</span>
+              <select aria-label={`Administrator group for ${u.fullName}`} value={u.adminRole ?? ""} disabled={busy}
+                onChange={(e) => { if (e.target.value) run(() => api(`/api/app/admin/users/${u.id}`, { method: "PATCH", body: { adminRole: e.target.value } }), "Group saved. That person was signed out so the change applies at once.", reload); }}
+                className={`${inputCls} mt-0 inline-block w-auto py-1`}>
+                {!u.adminRole && <option value="">Not assigned (full access, as before)</option>}
+                {ADMIN_GROUPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <Btn small kind="ghost" disabled={busy} onClick={() => { if (confirm(`Remove two-step sign-in from ${u.fullName}? They will be signed out everywhere and must set it up again.`)) run(() => api(`/api/app/admin/users/${u.id}/mfa-reset`, { method: "POST" }), "Two-step sign-in reset.", reload); }}>Reset two-step sign-in</Btn>
+            </td></tr>}</Fragment>
           ))}</tbody></table></div>
         {data && !users.length && <Empty>No one matches.</Empty>}
         <Msg text={msg.text} kind={msg.kind} />
@@ -134,6 +150,7 @@ function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", 
           <Field label="Email"><input name="email" type="email" required className={inputCls} /></Field>
           <Field label="Role"><select name="role" className={inputCls}>{addRoles.map((r) => <option key={r} value={r}>{r === "instructor" ? "Instructor (candidate)" : r === "admin" ? "Administrator" : "Student (account only)"}</option>)}</select></Field>
           <Field label="Phone (optional)"><input name="phone" className={inputCls} /></Field>
+          {addRoles.includes("admin") && <Field label="Administrator group (administrators only)"><select name="adminRole" defaultValue="reporting" className={inputCls}>{ADMIN_GROUPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>}
           <Btn type="submit" disabled={busy}>Create and invite</Btn>
         </form>
       </Card>
@@ -489,14 +506,23 @@ const TITLES: Record<Tab, [string, string?]> = {
   security: ["Security and audit", "Accounts, sign-in access, email delivery, errors and the audit log."],
 };
 
-export function AdminDashboard({ me }: { me: Me }) {
+// Which dashboard sections an administrator group sees. DISPLAY ONLY: the server checks every request (permissions.ts).
+type Access = { role: string | null; areas: { read: string[]; write: string[] } } | null;
+const TAB_AREAS: Partial<Record<Tab, string[]>> = {
+  overview: ["overview"], students: ["records", "support", "academic"], instructors: ["faculty"], programmes: ["academic", "finance"],
+  admissions: ["admissions"], payments: ["finance", "orders"], records: ["academic", "records"], allocation: ["academic"], attendance: ["academic"],
+  assessments: ["academic"], materials: ["academic"], content: ["academic", "admissions"], reports: ["overview"],
+};
+const mayRead = (access: Access, areas: string[]) => !access || areas.some((a) => access.areas.read.includes(a));
+
+export function AdminDashboard({ me, access = null }: { me: Me; access?: Access }) {
   const [tab, setTab] = useTab(TABS, "overview");
   const [admSeg, setAdmSeg] = useState<"admit" | "intake" | "calls" | "enquiries">("admit");
   const [paySeg, setPaySeg] = useState<"summary" | "orders">("summary");
   const [insSeg, setInsSeg] = useState<"verification" | "activity" | "accounts">("verification");
   const [stuSeg, setStuSeg] = useState<"monitoring" | "accounts">("monitoring");
   const [progSeg, setProgSeg] = useState<"content" | "investment">("content");
-  const nav: NavItem<Tab>[] = [
+  const allNav: NavItem<Tab>[] = [
     { id: "overview", label: "Overview", icon: "home" },
     { id: "students", label: "Students", icon: "users" },
     { id: "instructors", label: "Instructors", icon: "check" },
@@ -513,6 +539,7 @@ export function AdminDashboard({ me }: { me: Me }) {
     { id: "notifications", label: "Notifications", icon: "bell" },
     { id: "security", label: "Security and audit", icon: "shield" },
   ];
+  const nav = allNav.filter((n) => !TAB_AREAS[n.id] || mayRead(access, TAB_AREAS[n.id]!));
   const [title, sub] = TITLES[tab];
   return (
     <AppShell me={me} nav={nav} tab={tab} setTab={setTab} primary={8}>
@@ -545,7 +572,7 @@ export function AdminDashboard({ me }: { me: Me }) {
       {tab === "materials" && <Materials />}
       {tab === "content" && <WebsiteContent go={setTab} />}
       {tab === "reports" && <Reports />}
-      {tab === "security" && <div className="space-y-6"><Users title="All accounts" /><Platform /></div>}
+      {tab === "security" && <div className="space-y-6"><MfaSettings />{mayRead(access, ["people"]) && <Users title="All accounts" />}{mayRead(access, ["security"]) && <><RetentionSettings /><Platform /></>}</div>}
     </AppShell>
   );
 }

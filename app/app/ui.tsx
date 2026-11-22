@@ -11,11 +11,15 @@ export async function api<T = Record<string, unknown>>(path: string, init: { met
   const r = await fetch(path, { method: init.method ?? "GET", credentials: "same-origin", headers: init.body !== undefined ? { "content-type": "application/json" } : undefined, body: init.body === undefined ? undefined : JSON.stringify(init.body) });
   const j = await r.json().catch(() => ({ ok: false, message: "Something went wrong. Please try again." }));
   if (r.status === 401 && !path.startsWith("/api/auth/")) {
+    // Signed out by the server for inactivity (or the session's lifetime): back to the entrance with an explanation.
+    if (j.error === "session_expired") { goTo(`${lastPortal()}?expired=${r.headers.get("x-session-expired") === "idle" ? "idle" : "ended"}`); throw new ApiFail(401, j.message || "Please sign in."); }
     // Back to the entry page, remembering where the person was going (bookmarked pages work after signing in).
     const here = window.location.pathname + window.location.search;
     goTo(`${lastPortal()}${here.startsWith("/app/") && here !== "/app/" ? `?next=${encodeURIComponent(here)}` : ""}`);
     throw new ApiFail(401, "Please sign in.");
   }
+  // A session that still needs the authenticator code: the dashboard root shows that step.
+  if (r.status === 403 && (j.error === "mfa_required" || j.error === "mfa_setup_required") && window.location.pathname !== "/app/") { goTo("/app/"); throw new ApiFail(403, j.message); }
   if (!r.ok || j.ok === false) throw new ApiFail(r.status, j.message || "Something went wrong. Please try again.");
   return j as T;
 }
