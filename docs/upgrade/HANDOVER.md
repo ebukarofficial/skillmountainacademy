@@ -529,3 +529,9 @@ Migration **0007_refinement.sql** (additive only): AI Automation programme row; 
   only when authorised, call and attempt log). Programmes > Investment and currency (rates with time and source,
   refresh, every programme's price in NGN/USD/GBP/EUR, payment terms).
 - **Tests:** `tests/refinement.test.ts` (11 tests) plus updated earlier tests. 162 tests pass.
+
+## Stage 2B (22 Nov 2026)
+
+Owner model (`OWNER_EMAIL`, one-time bootstrap, owner console, permanent removal with approval), closed the Stage 2 unassigned-admin
+privilege escalation, MFA re-enrolment after reset, owner break-glass, D1-backed IP key with strict mode, retention backlog
+monitoring, live-class expiry messaging. Report: `docs/SMA_STAGE_2B_SECURITY_VERIFICATION.md`. Migration 0009. Tests: `tests/stage2b.test.ts`.

@@ -255,3 +255,18 @@ Read `docs/SMA_SECURITY_REMEDIATION.md` first. Section 15 lists every step in or
 with approval, set `IP_HASH_SALT` and `MFA_ENCRYPTION_KEY`, deploy (CSP report-only), enrol in two-step sign-in, assign
 administrator groups, then switch on `MFA_ENFORCE_ADMINS` and the enforced CSP. Students are signed out after 10 minutes
 without activity from this release.
+
+## M. Stage 2B: owner console and set-up (22 Nov 2026)
+
+Full detail: `docs/SMA_STAGE_2B_SECURITY_VERIFICATION.md` (sections 4, 7 and 15).
+
+1. Back up D1, then apply migrations (0008 and 0009 are additive): `npx wrangler d1 migrations apply skillmountainacademy-db --remote`.
+2. Set three secrets yourself (generate random values; never share them):
+   `npx wrangler secret put IP_HASH_SALT`, `npx wrangler secret put MFA_ENCRYPTION_KEY`, `npx wrangler secret put OWNER_RECOVERY_TOKEN`.
+   Keep the recovery token offline (paper or password manager). It works once; set a new one after any use.
+3. Deploy. Sign in at `/app/login/` as bookebukar@gmail.com, open **Owner console**, press **Complete set-up** (once), then turn on
+   two-step sign-in under **Security**.
+4. Assign each existing administrator a group (Users or Owner console). Only you can appoint Super Administrators.
+5. In Admin > Security confirm "IP key: secret", then add the var `IP_HASH_STRICT` = `"true"` and deploy again.
+6. Lost your authenticator and recovery codes: sign in by email, open "Platform owner: break-glass recovery" and enter the
+   token; or use the D1 command in section 7 of the Stage 2B document.

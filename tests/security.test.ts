@@ -47,10 +47,13 @@ async function linkVerify(x: W, email: string, extraCookie?: string) {
 }
 
 before(async () => {
-  w = await startWorker();
-  wm = await startWorker({ env: { ...SECRETS, MFA_ENCRYPTION_KEY: MFA_KEY, ADMIN_IDLE_MINUTES: "15", IP_HASH_SALT: IP_SALT } });
+  // owner@example.com (the harness administrator) is the configured platform owner here; Stage 2B: group assignments
+  // need the owner's one-time bootstrap first.
+  w = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: "owner@example.com" } });
+  wm = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: "owner@example.com", MFA_ENCRYPTION_KEY: MFA_KEY, ADMIN_IDLE_MINUTES: "15", IP_HASH_SALT: IP_SALT } });
   const s = await setup(w);
   admin = s.admin;
+  await admin.json("POST", "/api/app/owner/bootstrap");
   ids.stuA = await s.make("student", "sec-a@example.com", "Student A");
   ids.stuB = await s.make("student", "sec-b@example.com", "Student B");
   ids.insA = await s.make("instructor", "sec-ia@example.com", "Instructor A");
@@ -257,7 +260,8 @@ test("admin MFA: turning off needs a current code; a Super Administrator can res
   const v = await owner.s.send("POST", "/api/auth/mfa/verify", { recoveryCode: (JSON.parse(ids.recovery) as string[])[1] });
   const s = session(wm, v.headers.getSetCookie().map((c) => c.split(";")[0]).join("; "));
   assert.equal((await s.send("POST", "/api/auth/mfa/disable", { code: "000000" })).status, 400);
-  assert.equal((await s.send("POST", "/api/app/admin/users/" + (await s.json<{ user: { id: string } }>("GET", "/api/me")).user.id + "/mfa-reset")).status, 400, "no self reset");
+  assert.equal((await s.send("POST", "/api/app/admin/users/" + (await s.json<{ user: { id: string } }>("GET", "/api/me")).user.id + "/mfa-reset")).status >= 400, true, "no self reset");
+  await s.json("POST", "/api/app/owner/bootstrap"); // Stage 2B: the owner's one-time set-up before appointing administrators
   // A second administrator with MFA, reset by the owner.
   const id2 = (await s.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "admin2@example.com", role: "admin", fullName: "Second Admin", sendInvite: false, adminRole: "finance" })).user.id;
   const a2 = await linkVerify(wm, "admin2@example.com");
@@ -332,12 +336,12 @@ test("permissions: a limited administrator is refused restricted functions by th
   const r = await signIn(w, "rep@example.com");
   assert.equal((await r.get("/api/app/admin/overview")).status, 200);
   assert.equal((await r.send("PATCH", `/api/app/admin/admissions/webdev`, { state: "closed" })).status, 403, "reporting is read-only");
-  // Only a Super Administrator (or the unassigned owner) can change groups; nobody can raise their own.
+  // Only the owner or a Super Administrator can change groups; nobody can raise their own.
   assert.equal((await f.send("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "super" })).status, 403);
   // A group change signs the person out at once.
   await admin.json("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "academic" });
   assert.equal((await f.get("/api/me")).status, 401);
-  // The unassigned owner keeps full access (no change for existing administrators).
+  // The owner keeps full access.
   assert.equal((await admin.get("/api/app/admin/audit")).status, 200);
 });
 

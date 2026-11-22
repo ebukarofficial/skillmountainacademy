@@ -53,6 +53,12 @@
     "CLASS_BOOKING_URL": "",
     // These addresses become admins the first time they sign in at /app/login/ (comma-separated).
     "ADMIN_EMAILS": "admission@skillmountainacademy.com",
+    // Stage 2B: the platform owner. Only this account can complete the owner set-up, appoint Super Administrators and
+    // approve permanent removals. Not a secret; changing it is a deliberate, reviewed configuration change.
+    "OWNER_EMAIL": "bookebukar@gmail.com",
+    // Stage 2B staff session settings, PREPARED FOR OWNER APPROVAL and NOT active. To activate, move them out of this
+    // comment (see docs/SMA_STAGE_2B_SECURITY_VERIFICATION.md section 11):
+    //   "ADMIN_IDLE_MINUTES": "15", "ADMIN_SESSION_HOURS": "12", "INSTRUCTOR_IDLE_MINUTES": "60", "INSTRUCTOR_SESSION_HOURS": "24",
     // Workers AI model for the learning assistant.
     "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast"
   },
