@@ -264,9 +264,23 @@ Full detail: `docs/SMA_STAGE_2B_SECURITY_VERIFICATION.md` (sections 4, 7 and 15)
 2. Set three secrets yourself (generate random values; never share them):
    `npx wrangler secret put IP_HASH_SALT`, `npx wrangler secret put MFA_ENCRYPTION_KEY`, `npx wrangler secret put OWNER_RECOVERY_TOKEN`.
    Keep the recovery token offline (paper or password manager). It works once; set a new one after any use.
-3. Deploy. Sign in at `/app/login/` as bookebukar@gmail.com, open **Owner console**, press **Complete set-up** (once), then turn on
-   two-step sign-in under **Security**.
+3. Deploy. Sign in at `/app/login/` as bookebukar@gmail.com, turn on two-step sign-in under **Security** FIRST (Stage 2C: the owner
+   console only opens with the authenticator code), then open **Owner console** and press **Complete set-up** (once).
 4. Assign each existing administrator a group (Users or Owner console). Only you can appoint Super Administrators.
 5. In Admin > Security confirm "IP key: secret", then add the var `IP_HASH_STRICT` = `"true"` and deploy again.
 6. Lost your authenticator and recovery codes: sign in by email, open "Platform owner: break-glass recovery" and enter the
    token; or use the D1 command in section 7 of the Stage 2B document.
+
+## N. Stage 2C: final security gate (22 Nov 2026)
+
+Full detail: `docs/SMA_STAGE_2C_FINAL_SECURITY_GATE.md`.
+
+1. `MFA_ENCRYPTION_KEY` must be set before anything in the owner console works. An email link alone never authorises owner or
+   administrator-management actions (groups, new administrators, MFA resets, removals, audit search).
+2. Apply migrations up to 0010 (owner record and audit-log protection). Check afterwards:
+   `npx wrangler d1 execute skillmountainacademy-db --remote --command "SELECT name FROM sqlite_master WHERE type='trigger'"` (4 names).
+3. After set-up: Owner console > **Review needed** lists administrators without a group. Assign each one a group, then tick
+   "Make administrators without a group read-only".
+4. "Revoke access permanently" never deletes records. If an instructor is removed, reassign the listed enrolments in
+   Academics > Enrolments.
+5. Ownership can only move to another account through the documented D1 owner-transfer procedure (section 4 of the report).

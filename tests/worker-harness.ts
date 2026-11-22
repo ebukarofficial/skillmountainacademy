@@ -79,7 +79,15 @@ export async function startWorker(opts: { env?: Record<string, string>; db?: boo
     const db = await mf.getD1Database("DB");
     for (const f of readdirSync(join(ROOT, "migrations")).filter((n) => n.endsWith(".sql")).sort()) {
       const sql = readFileSync(join(ROOT, "migrations", f), "utf8").replace(/^\s*--.*$/gm, "");
-      const stmts = sql.split(/;\s*\n/).map((s) => s.trim()).filter(Boolean);
+      const parts = sql.split(/;\s*\n/).map((s) => s.trim()).filter(Boolean);
+      // Keep CREATE TRIGGER ... BEGIN ...; END together (their bodies contain semicolons), as wrangler does.
+      const stmts: string[] = [];
+      let trig: string | null = null;
+      for (const p of parts) {
+        if (trig !== null) { trig += `;\n${p}`; if (/\bEND$/i.test(p)) { stmts.push(trig); trig = null; } continue; }
+        if (/^CREATE\s+TRIGGER/i.test(p) && !/\bEND$/i.test(p)) { trig = p; continue; }
+        stmts.push(p);
+      }
       await db.batch(stmts.map((s) => db.prepare(s)));
     }
   }

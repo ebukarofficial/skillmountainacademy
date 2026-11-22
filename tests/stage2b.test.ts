@@ -38,13 +38,27 @@ async function verifyRaw(x: W, email: string) {
   return { r, s: session(x, r.headers.getSetCookie().map((c) => c.split(";")[0]).join("; "), "10.66.1.1") };
 }
 
+// A session that passed the authenticator code (required since Stage 2C for owner and administrator-management actions):
+// signs in by email, enrols an authenticator on first use, and reuses the session afterwards.
+const strongCache = new Map<string, Session>();
+async function strong(x: W, email: string): Promise<Session> {
+  const k = `${x === w ? "w" : x === wk ? "wk" : "o"}:${email}`;
+  const hit = strongCache.get(k);
+  if (hit && (await hit.get("/api/me")).status === 200) return hit;
+  const s = await signIn(x, email);
+  const secret = (await s.json<{ secret: string }>("POST", "/api/auth/mfa/setup")).secret;
+  await s.json("POST", "/api/auth/mfa/enable", { code: await totpAt(secret, stepOf(Date.now())) });
+  strongCache.set(k, s);
+  return s;
+}
+
 before(async () => {
-  w = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: OWNER } });
+  w = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: OWNER, MFA_ENCRYPTION_KEY: MFA_KEY } });
   wk = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: OWNER, MFA_ENCRYPTION_KEY: MFA_KEY, OWNER_RECOVERY_TOKEN: BREAK_GLASS } });
   ws = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: "owner@example.com", INSTRUCTOR_IDLE_MINUTES: "60", INSTRUCTOR_SESSION_HOURS: "24", ADMIN_IDLE_MINUTES: "15", ADMIN_SESSION_HOURS: "12" } });
   legacy = await signIn(w, "owner@example.com");            // existing unassigned administrator, NOT the owner
   ids.legacy = (await legacy.json<{ user: { id: string } }>("GET", "/api/me")).user.id;
-  owner = await signIn(w, OWNER);                            // the configured owner (account created on first sign-in)
+  owner = await strong(w, OWNER);                            // the configured owner, signed in with the authenticator code (Stage 2C)
   ids.owner = (await owner.json<{ user: { id: string } }>("GET", "/api/me")).user.id;
 });
 after(async () => { await w.dispose(); await wk.dispose(); await ws.dispose(); });
@@ -84,7 +98,7 @@ test("before set-up nobody can assign groups; the owner's one-time bootstrap ena
 test("Super Administrators: only the owner appoints them; they assign other groups but never their own, the owner's or a Super's", async () => {
   assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "super" })).status, 200);
   assert.ok(await audited(w, "admin.group_assigned", ids.a2));
-  const a2 = await signIn(w, "a2@example.com");
+  const a2 = await strong(w, "a2@example.com");
   ids.a3 = (await owner.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "a3@example.com", role: "admin", fullName: "Admin Three", sendInvite: false })).user.id;
   assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.a3}`, { adminRole: "finance" })).status, 200, "a Super assigns an authorised group");
   assert.equal(await groupOf(w, ids.a3), "finance");
@@ -107,7 +121,7 @@ test("profile updates cannot set groups, roles, owner status or email", async ()
   const me = await a3.json<{ user: { email: string }; admin: { role: string; owner: boolean } }>("GET", "/api/me");
   assert.deepEqual([me.user.email, me.admin.role, me.admin.owner], ["a3@example.com", "finance", false]);
   // Owner-only routes refuse everyone else, whatever their group.
-  const a2 = await signIn(w, "a2@example.com");
+  const a2 = await strong(w, "a2@example.com");
   for (const p of ["/api/app/owner/staff", "/api/app/owner/audit", "/api/app/owner/removal-requests"]) {
     assert.equal((await a2.get(p)).status, 403, p);
     assert.equal((await legacy.get(p)).status, 403, p);
@@ -115,7 +129,7 @@ test("profile updates cannot set groups, roles, owner status or email", async ()
 });
 
 test("owner removals: Supers request, the owner approves; removed accounts cannot sign in; records are kept", async () => {
-  const a2 = await signIn(w, "a2@example.com");
+  const a2 = await strong(w, "a2@example.com");
   const a3 = await signIn(w, "a3@example.com");
   assert.equal((await a2.send("POST", `/api/app/admin/users/${ids.owner}/removal-requests`, { reason: "x" })).status, 403, "the owner cannot be targeted");
   assert.equal((await a3.send("POST", `/api/app/admin/users/${ids.a2}/removal-requests`, { reason: "x" })).status, 403, "only Supers can request");

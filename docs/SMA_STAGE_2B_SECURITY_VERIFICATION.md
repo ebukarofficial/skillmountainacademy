@@ -4,6 +4,8 @@ Date: 22 November 2026. Scope: Stage 2B brief §1–§11 plus the owner's reques
 
 Nothing was deployed. No production migration was run, no production data was touched, Paystack and R2 stay inactive, MFA enforcement, CSP enforcement and new retention categories stay off, staff idle policies are unchanged, and no secret was generated or revealed. Stage 3 has not been started.
 
+
+> **Superseded in part by Stage 2C** (`docs/SMA_STAGE_2C_FINAL_SECURITY_GATE.md`): the owner is now bound to one account at bootstrap (`owner_record`), and the owner console and every administrator-management action always require an authenticator-verified session (no exception when `MFA_ENCRYPTION_KEY` is unset).
 ---
 
 ## 1. Executive summary

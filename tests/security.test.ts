@@ -47,13 +47,12 @@ async function linkVerify(x: W, email: string, extraCookie?: string) {
 }
 
 before(async () => {
-  // owner@example.com (the harness administrator) is the configured platform owner here; Stage 2B: group assignments
-  // need the owner's one-time bootstrap first.
+  // owner@example.com (the harness administrator) is the configured platform owner here. Since Stage 2C, owner-console
+  // routes and administrator management need a session that passed the authenticator code (see the permissions test).
   w = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: "owner@example.com" } });
   wm = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: "owner@example.com", MFA_ENCRYPTION_KEY: MFA_KEY, ADMIN_IDLE_MINUTES: "15", IP_HASH_SALT: IP_SALT } });
   const s = await setup(w);
   admin = s.admin;
-  await admin.json("POST", "/api/app/owner/bootstrap");
   ids.stuA = await s.make("student", "sec-a@example.com", "Student A");
   ids.stuB = await s.make("student", "sec-b@example.com", "Student B");
   ids.insA = await s.make("instructor", "sec-ia@example.com", "Instructor A");
@@ -320,29 +319,42 @@ test("permissions: every route an administrator can call has a permission entry 
 });
 
 test("permissions: a limited administrator is refused restricted functions by the server", async () => {
-  const fin = (await admin.json<{ user: { id: string; adminRole: string } }>("POST", "/api/app/admin/users", { email: "fin@example.com", role: "admin", fullName: "Finance Admin", sendInvite: false, adminRole: "finance" })).user;
-  assert.equal(fin.adminRole, "finance");
-  const f = await signIn(w, "fin@example.com");
-  assert.equal((await f.get("/api/app/admin/payments")).status, 200);
-  assert.equal((await f.get("/api/app/admin/orders")).status, 200);
-  for (const [m, p, b] of [["GET", "/api/app/admin/recruitment"], ["GET", "/api/app/admin/audit"], ["POST", "/api/app/admin/admit", {}], ["PATCH", `/api/app/admin/users/${ids.stuA}`, { status: "suspended" }],
-    ["GET", `/api/app/students/${ids.stuA}/grades`], ["POST", "/api/app/admin/users", { email: "x@example.com", role: "admin", fullName: "X" }]] as [string, string, unknown?][]) {
-    const r = await f.send(m, p, b);
-    assert.equal(r.status, 403, `${m} ${p}`);
-  }
-  // A new administrator without a group gets read-only reporting, not full access.
-  const rep = (await admin.json<{ user: { id: string; adminRole: string } }>("POST", "/api/app/admin/users", { email: "rep@example.com", role: "admin", fullName: "Reporter", sendInvite: false })).user;
-  assert.equal(rep.adminRole, "reporting");
-  const r = await signIn(w, "rep@example.com");
-  assert.equal((await r.get("/api/app/admin/overview")).status, 200);
-  assert.equal((await r.send("PATCH", `/api/app/admin/admissions/webdev`, { state: "closed" })).status, 403, "reporting is read-only");
-  // Only the owner or a Super Administrator can change groups; nobody can raise their own.
-  assert.equal((await f.send("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "super" })).status, 403);
-  // A group change signs the person out at once.
-  await admin.json("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "academic" });
-  assert.equal((await f.get("/api/me")).status, 401);
-  // The owner keeps full access.
-  assert.equal((await admin.get("/api/app/admin/audit")).status, 200);
+  // Administrator management needs an owner session that passed the authenticator code (Stage 2C), so this test runs on a
+  // worker with two-step sign-in configured.
+  const x = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: "owner@example.com", MFA_ENCRYPTION_KEY: MFA_KEY } });
+  try {
+    const st = await setup(x);
+    const stu = await st.make("student", "perm-s@example.com", "Perm Student");
+    const own = st.admin;
+    const osec = (await own.json<{ secret: string }>("POST", "/api/auth/mfa/setup")).secret;
+    await own.json("POST", "/api/auth/mfa/enable", { code: await code(osec) });
+    await own.json("POST", "/api/app/owner/bootstrap");
+    const fin = (await own.json<{ user: { id: string; adminRole: string } }>("POST", "/api/app/admin/users", { email: "fin@example.com", role: "admin", fullName: "Finance Admin", sendInvite: false, adminRole: "finance" })).user;
+    assert.equal(fin.adminRole, "finance");
+    await resetLimits(x);
+    const f = await signIn(x, "fin@example.com");
+    assert.equal((await f.get("/api/app/admin/payments")).status, 200);
+    assert.equal((await f.get("/api/app/admin/orders")).status, 200);
+    for (const [m, p, b] of [["GET", "/api/app/admin/recruitment"], ["GET", "/api/app/admin/audit"], ["POST", "/api/app/admin/admit", {}], ["PATCH", `/api/app/admin/users/${stu}`, { status: "suspended" }],
+      ["GET", `/api/app/students/${stu}/grades`], ["POST", "/api/app/admin/users", { email: "x@example.com", role: "admin", fullName: "X" }]] as [string, string, unknown?][]) {
+      const r = await f.send(m, p, b);
+      assert.equal(r.status, 403, `${m} ${p}`);
+    }
+    // A new administrator without a group gets read-only reporting, not full access.
+    const rep = (await own.json<{ user: { id: string; adminRole: string } }>("POST", "/api/app/admin/users", { email: "rep@example.com", role: "admin", fullName: "Reporter", sendInvite: false })).user;
+    assert.equal(rep.adminRole, "reporting");
+    await resetLimits(x);
+    const r = await signIn(x, "rep@example.com");
+    assert.equal((await r.get("/api/app/admin/overview")).status, 200);
+    assert.equal((await r.send("PATCH", `/api/app/admin/admissions/webdev`, { state: "closed" })).status, 403, "reporting is read-only");
+    // Only the owner or a Super Administrator can change groups; nobody can raise their own.
+    assert.equal((await f.send("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "super" })).status, 403);
+    // A group change signs the person out at once.
+    await own.json("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "academic" });
+    assert.equal((await f.get("/api/me")).status, 401);
+    // The owner keeps full access.
+    assert.equal((await own.get("/api/app/admin/audit")).status, 200);
+  } finally { await x.dispose(); }
 });
 
 test("isolation: students cannot reach another student's profile, work, grades or messages", async () => {
@@ -515,6 +527,9 @@ test("retention: only allow-listed, old, enabled records are deleted, in batches
   assert.equal((await m.runRetention(db, new Date(), 2)).error_log, 1);
   assert.deepEqual(await m.runRetention(db, new Date(), 2), {}, "idempotent: nothing left to delete");
   // The settings are refused for administrators outside the Security area.
+  const repId = (await admin.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "rep@example.com", role: "student", fullName: "Reporter", sendInvite: false })).user.id;
+  await db.prepare("UPDATE users SET role = 'admin', admin_role = 'reporting' WHERE id = ?1").bind(repId).run(); // a Reporting administrator
+  await resetLimits(w);
   const rep = await signIn(w, "rep@example.com");
   assert.equal((await rep.get("/api/app/admin/settings/retention")).status, 403);
 });

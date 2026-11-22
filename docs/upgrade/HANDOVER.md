@@ -535,3 +535,10 @@ Migration **0007_refinement.sql** (additive only): AI Automation programme row; 
 Owner model (`OWNER_EMAIL`, one-time bootstrap, owner console, permanent removal with approval), closed the Stage 2 unassigned-admin
 privilege escalation, MFA re-enrolment after reset, owner break-glass, D1-backed IP key with strict mode, retention backlog
 monitoring, live-class expiry messaging. Report: `docs/SMA_STAGE_2B_SECURITY_VERIFICATION.md`. Migration 0009. Tests: `tests/stage2b.test.ts`.
+
+## Stage 2C (22 Nov 2026)
+
+Owner bound to one account at bootstrap (`owner_record`, migration 0010, immutable by triggers); owner and administrator-management
+actions require an authenticator-verified session (fail closed); atomic bootstrap; legacy administrator review and optional
+read-only policy; removal returns teaching to reassign and removed accounts get no email; append-only audit log in the database;
+audit-log retention owner-only. Report and Stage 3 handover: `docs/SMA_STAGE_2C_FINAL_SECURITY_GATE.md`. Tests: `tests/stage2c.test.ts`.
