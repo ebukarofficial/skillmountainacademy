@@ -100,6 +100,7 @@ const TABLE: [string, string, Area][] = [
   ["POST", "/api/app/owner/bootstrap", "owner"], ["GET", "/api/app/owner/staff", "owner"], ["GET", "/api/app/owner/audit", "owner"],
   ["POST", "/api/app/owner/users/:id/remove", "owner"], ["GET", "/api/app/owner/removal-requests", "owner"],
   ["POST", "/api/app/owner/removal-requests/:id", "owner"],
+  ["GET", "/api/app/owner/legacy-admins", "owner"], ["PUT", "/api/app/owner/policy", "owner"],
 ];
 
 const MAP = new Map(TABLE.map(([m, p, a]) => [`${m} ${p}`, a]));
@@ -132,38 +133,38 @@ export function areasFor(role: string | null | undefined, owner = false): { read
 }
 
 // ---- the owner ----
+// Stage 2C: who the owner is is resolved once per request by resolveOwner (data/owner.ts) from OWNER_EMAIL plus the
+// bootstrap record, and passed around as an OwnerRef. Nothing a user sends can change it.
 type Who = { id: string; email: string; role: string; status: string; admin_role?: string | null; removed_at?: string | null };
+export type OwnerRef = { ownerId: string | null };
 export const ownerEmail = (env: { OWNER_EMAIL?: string }) => (env.OWNER_EMAIL || "").trim().toLowerCase();
-export function isOwner(u: Who | null | undefined, env: { OWNER_EMAIL?: string }): boolean {
-  const o = ownerEmail(env);
-  return !!u && !!o && u.email.toLowerCase() === o && u.role === "admin" && u.status === "active" && !u.removed_at;
-}
+export const isOwner = (u: { id: string } | null | undefined, o: OwnerRef): boolean => !!u && !!o.ownerId && u.id === o.ownerId;
 export const isSuper = (u: Who) => u.role === "admin" && u.admin_role === "super";
 // Can this person manage administrator accounts at all (create, suspend, change role, groups)? Owner, or a Super
 // Administrator once the owner has completed the bootstrap.
-export const canManageAdmins = (actor: Who, env: { OWNER_EMAIL?: string }, bootstrapped: boolean) =>
-  isOwner(actor, env) || (bootstrapped && isSuper(actor));
+export const canManageAdmins = (actor: Who, o: OwnerRef, bootstrapped: boolean) =>
+  isOwner(actor, o) || (bootstrapped && isSuper(actor));
 
 // Every administrator-group change goes through here. Returns a refusal message, or null when allowed.
-export function groupChangeRefusal(actor: Who, target: Who, next: string, env: { OWNER_EMAIL?: string }, bootstrapped: boolean): string | null {
-  const owner = isOwner(actor, env);
+export function groupChangeRefusal(actor: Who, target: Who, next: string, o: OwnerRef, bootstrapped: boolean): string | null {
+  const owner = isOwner(actor, o);
   if (!isAdminRole(next)) return "Unknown administrator group.";
   if (!bootstrapped) return owner ? "Complete the owner set-up first (Owner console)." : "Administrator groups can be assigned once the owner has completed set-up.";
   if (!owner && !isSuper(actor)) return "Only the owner or a Super Administrator can change administrator groups.";
   if (target.role !== "admin") return "Administrator groups apply to administrators only.";
   if (target.removed_at) return "This account has been removed.";
-  if (isOwner(target, env)) return "The owner's access cannot be changed.";
+  if (isOwner(target, o)) return "The owner's access cannot be changed.";
   if (actor.id === target.id) return "Nobody can change their own administrator group.";
   if ((next === "super" || target.admin_role === "super") && !owner) return "Only the owner can appoint or change a Super Administrator.";
   return null;
 }
 // May the actor suspend, reactivate, change the role of, or request removal of this account?
-export function accountChangeRefusal(actor: Who, target: Who, env: { OWNER_EMAIL?: string }, bootstrapped: boolean): string | null {
-  if (isOwner(target, env) && actor.id !== target.id) return "The owner's account cannot be changed by anyone else.";
+export function accountChangeRefusal(actor: Who, target: Who, o: OwnerRef, bootstrapped: boolean): string | null {
+  if (isOwner(target, o) && actor.id !== target.id) return "The owner's account cannot be changed by anyone else.";
   if (target.removed_at) return "This account has been permanently removed.";
   if (target.role === "admin" && actor.id !== target.id) {
-    if (!canManageAdmins(actor, env, bootstrapped)) return "Only the owner or a Super Administrator can change administrator accounts.";
-    if (target.admin_role === "super" && !isOwner(actor, env)) return "Only the owner can change a Super Administrator.";
+    if (!canManageAdmins(actor, o, bootstrapped)) return "Only the owner or a Super Administrator can change administrator accounts.";
+    if (target.admin_role === "super" && !isOwner(actor, o)) return "Only the owner can change a Super Administrator.";
   }
   return null;
 }

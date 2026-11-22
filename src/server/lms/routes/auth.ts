@@ -20,7 +20,7 @@ import { Repo } from "../../repo";
 import { ALL, clearCookie, ok, publicRoute, route, SESSION_COOKIE } from "../api";
 import { audit, canSignIn, isApproved, logError, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, deleteUserSessions, getUser, getUserByEmail, recordActivity, updateUser, type User } from "../data/users";
 import { activeFactor } from "../data/mfa";
-import { areasFor, isOwner, ownerEmail } from "../permissions";
+import { areasFor, ownerEmail } from "../permissions";
 import { ACTIVITY_THROTTLE_SECONDS, policyFor } from "../session-policy";
 import { selfView } from "../views";
 import { newStaffNo } from "../ids";
@@ -199,6 +199,6 @@ route("GET", "/api/me", ALL, async (c) => {
       enabled: !!mfa, pending: !!s?.mfa_pending, enforced: c.env.MFA_ENFORCE_ADMINS === "true",
       setupRequired: c.env.MFA_ENFORCE_ADMINS === "true" && !s?.mfa_verified_at && !s?.legacy,
     } : null,
-    admin: c.user.role === "admin" ? { role: c.user.admin_role ?? null, owner: isOwner(c.user, c.env), areas: areasFor(c.user.admin_role, isOwner(c.user, c.env)) } : null,
+    admin: c.user.role === "admin" ? { role: c.user.admin_role ?? null, applied: c.effectiveAdminRole, owner: c.isOwner, areas: areasFor(c.effectiveAdminRole, c.isOwner) } : null,
   });
 });

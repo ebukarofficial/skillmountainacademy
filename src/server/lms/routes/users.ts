@@ -4,7 +4,7 @@ import { setAdminRole } from "../data/users";
 import { isBootstrapped } from "../data/owner";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
-import { ALL, notFound, ok, page, route } from "../api";
+import { ALL, notFound, ok, page, route, requireStrongAuth } from "../api";
 import { canSignIn, createUser, deleteUserSessions, getUser, getUserByEmail, listAudit, listUsers, updateUser, type Role, type User } from "../data/users";
 import { adminView, selfView } from "../views";
 import { sendSignInLink } from "./auth";
@@ -109,9 +109,10 @@ route("POST", "/api/app/admin/users", ["admin"], async (c) => {
   if (ownerEmail(c.env) && email === ownerEmail(c.env)) throw new ApiError(400, "reserved", "This email address is reserved for the platform owner.");
   // Creating an administrator, and choosing their group, is for the owner or a Super Administrator (Stage 2B).
   const booted = await isBootstrapped(c.db);
-  if (role === "admin" && !canManageAdmins(c.user, c.env, booted)) throw new ApiError(403, "forbidden", "Only the owner or a Super Administrator can create administrators.");
+  if (role === "admin" && !canManageAdmins(c.user, c.owner, booted)) throw new ApiError(403, "forbidden", "Only the owner or a Super Administrator can create administrators.");
   const wantGroup = role === "admin" ? (isAdminRole(b.adminRole) ? b.adminRole : "reporting") : null;
-  if (wantGroup === "super" && !isOwner(c.user, c.env)) throw new ApiError(403, "forbidden", "Only the owner can appoint a Super Administrator.");
+  if (wantGroup === "super" && !isOwner(c.user, c.owner)) throw new ApiError(403, "forbidden", "Only the owner can appoint a Super Administrator.");
+  if (role === "admin") await requireStrongAuth(c, "admin.create");
   const u: User = { id: crypto.randomUUID(), email, role, status: "active", full_name: fields.full_name!, phone: fields.phone ?? null, bio: fields.bio ?? null,
     photo_key: null, student_no: role === "student" ? await newStudentNo(c.db) : null, specialization: fields.specialization ?? null, qualifications: fields.qualifications ?? null,
     links: fields.links ?? null, registration_id: null, created_at: nowIso(), last_login_at: null };
@@ -146,15 +147,19 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   //    or changes a Super Administrator; nothing before the owner's one-time bootstrap).
   const booted = await isBootstrapped(c.db);
   const touchesAccount = patch.status !== undefined || patch.role !== undefined;
-  if (touchesAccount || isOwner(u, c.env) || u.removed_at) {
-    const why = accountChangeRefusal(c.user, u, c.env, booted);
+  if (touchesAccount || isOwner(u, c.owner) || u.removed_at) {
+    const why = accountChangeRefusal(c.user, u, c.owner, booted);
     if (why) { await c.audit("admin.change_refused", "user", u.id, { why, patch: { status: patch.status, role: patch.role } }); throw new ApiError(403, "forbidden", why); }
   }
-  if (patch.role === "admin" && u.role !== "admin" && !canManageAdmins(c.user, c.env, booted)) throw new ApiError(403, "forbidden", "Only the owner or a Super Administrator can make someone an administrator.");
+  if (patch.role === "admin" && u.role !== "admin" && !canManageAdmins(c.user, c.owner, booted)) throw new ApiError(403, "forbidden", "Only the owner or a Super Administrator can make someone an administrator.");
   if (adminRole !== undefined) {
-    const why = groupChangeRefusal(c.user, { ...u, role: patch.role ?? u.role }, adminRole, c.env, booted);
+    const why = groupChangeRefusal(c.user, { ...u, role: patch.role ?? u.role }, adminRole, c.owner, booted);
     if (why) { await c.audit("admin.group_refused", "user", u.id, { why, to: adminRole }); throw new ApiError(403, "forbidden", why); }
   }
+  // Stage 2C: anything that changes an administrator's account or access needs a session that passed the authenticator
+  // code (never an email link alone). Ordinary student and instructor edits are unaffected.
+  if (adminRole !== undefined || (patch.role === "admin" && u.role !== "admin") || (u.role === "admin" && touchesAccount && u.id !== c.user.id))
+    await requireStrongAuth(c, "admin.account_change", u.id);
   if (patch.role === "student" && !u.student_no) patch.student_no = await newStudentNo(c.db);
   if (patch.role === "admin" && !u.staff_no) patch.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
   // Becoming an instructor means going through verification first (unless they were approved before).

@@ -8,7 +8,7 @@ import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
 import { button, esc, letter, sendEmail } from "../email";
 import { addNotificationStmt, runBatch } from "./data/teaching";
-import { emailPrefsFor } from "./data/users";
+import { emailPrefsFor, removedAmong } from "./data/users";
 import { parseJsonCol } from "./api";
 import { categoryOf, designOf, priorityOf } from "../../../lib/notify-rules.ts";
 
@@ -24,7 +24,9 @@ export async function notify(env: AppEnv, db: D1Database, to: Recipient[], n: No
   const emailed: Record<string, string | null> = {};
   if (email) {
     const prefs = cat === "essential" ? [] : await emailPrefsFor(db, to.map((r) => r.id));
+    const removed = await removedAmong(db, to.map((r) => r.id));
     for (const r of to) {
+      if (removed.has(r.id)) { emailed[r.id] = null; continue; }
       const pref = parseJsonCol<{ reminders?: boolean; updates?: boolean }>(prefs.find((p) => p.id === r.id)?.email_prefs ?? null, {});
       if (cat !== "essential" && pref[cat] === false) { emailed[r.id] = null; continue; }
       const link = n.link ? (n.link.startsWith("http") ? n.link : `${siteUrl(env)}${n.link}`) : null;

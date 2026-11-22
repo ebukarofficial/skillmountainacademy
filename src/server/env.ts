@@ -19,17 +19,18 @@ export interface AppEnv {
   PAYSTACK_SECRET_KEY?: string;
   RESEND_API_KEY?: string;
   HOLD_SIGNING_KEY?: string;
-  OWNER_EMAIL?: string;           // Stage 2B: the platform owner (plain var). Only this account can appoint Super Administrators
-  IP_HASH_SALT?: string;
-  IP_HASH_STRICT?: string;
-  OWNER_RECOVERY_TOKEN?: string;  // Stage 2B: one-time break-glass secret for the owner's two-step sign-in; set only when needed, then delete        // Stage 2B: "true" = refuse to run without IP_HASH_SALT (recommended once the secret is set)
-  INSTRUCTOR_SESSION_HOURS?: string; // Stage 2B: absolute instructor session lifetime, e.g. "24"          // Stage 2: secret used ONLY to pseudonymise client IP addresses (HMAC-SHA256)
+  IP_HASH_SALT?: string;          // Stage 2: secret used ONLY to pseudonymise client IP addresses (HMAC-SHA256)
   MFA_ENCRYPTION_KEY?: string;    // Stage 2: base64 of 32 random bytes; encrypts administrator authenticator secrets
-  // Stage 2 session and MFA switches (plain vars). Unset = today's behaviour for staff; see docs/SMA_SECURITY_REMEDIATION.md.
+  OWNER_RECOVERY_TOKEN?: string;  // Stage 2B: one-time break-glass secret for the owner's two-step sign-in; set only when needed, then delete
+  // Plain vars (wrangler.jsonc "vars")
+  OWNER_EMAIL?: string;           // Stage 2B/2C: the platform owner; bound to one account at the owner's one-time set-up
+  IP_HASH_STRICT?: string;        // Stage 2B: "true" = refuse to run without IP_HASH_SALT (recommended once the secret is set)
+  // Stage 2 session and MFA switches (plain vars). Unset = today's behaviour for staff; see docs/SMA_STAGE_2C_FINAL_SECURITY_GATE.md.
   MFA_ENFORCE_ADMINS?: string;    // "true" = every administrator must set up an authenticator app before using the dashboard
   ADMIN_IDLE_MINUTES?: string;    // e.g. "15"
-  INSTRUCTOR_IDLE_MINUTES?: string; // e.g. "30"
   ADMIN_SESSION_HOURS?: string;   // absolute administrator session lifetime, e.g. "12"
+  INSTRUCTOR_IDLE_MINUTES?: string; // e.g. "60"
+  INSTRUCTOR_SESSION_HOURS?: string; // absolute instructor session lifetime, e.g. "24"
   SHEET_WEBHOOK_URL?: string;
 }
 

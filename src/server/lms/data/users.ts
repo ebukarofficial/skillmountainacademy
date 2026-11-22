@@ -119,6 +119,13 @@ export const nextSeq = async (db: DB, name: string) =>
   (await one<{ last: number }>(db, "INSERT INTO id_sequences (name, last) VALUES (?1, 1) ON CONFLICT(name) DO UPDATE SET last = last + 1 RETURNING last", name))!.last;
 
 // Email preferences of several users at once (null when the column does not exist yet or nothing was chosen).
+// Accounts permanently removed by the owner (Stage 2C): they receive no further email from the platform (no class
+// reminders, Meet links or student details) even while teaching is still being reassigned.
+export const removedAmong = async (db: DB, ids: string[]): Promise<Set<string>> => {
+  try {
+    return new Set((await all<{ id: string }>(db, "SELECT id FROM users WHERE removed_at IS NOT NULL AND id IN (SELECT value FROM json_each(?1))", JSON.stringify(ids))).map((r) => r.id));
+  } catch { return new Set(); } // before migration 0009
+};
 export const emailPrefsFor = async (db: DB, ids: string[]) => {
   try {
     return await all<{ id: string; email_prefs: string | null }>(db, "SELECT id, email_prefs FROM users WHERE id IN (SELECT value FROM json_each(?1))", JSON.stringify(ids));

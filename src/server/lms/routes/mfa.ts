@@ -14,7 +14,7 @@
 import { button, layout, sendEmail } from "../../email";
 import { ApiError, nowIso, sha256 } from "../../http";
 import { Repo } from "../../repo";
-import { clearCookie, ok, route, publicRoute, type Ctx } from "../api";
+import { clearCookie, ok, requireStrongAuth, route, publicRoute, type Ctx } from "../api";
 import { getSetting, putSetting } from "../data/engagement";
 import { activateFactor, activeFactor, claimStep, deleteFactor, getFactor, recoveryLeft, replaceRecoveryCodes, savePendingFactor, useRecoveryCode } from "../data/mfa";
 import { createSession, deleteOtherSessions, deleteSession, deleteUserSessions, getUser, markSessionMfaVerified, setMfaRequired } from "../data/users";
@@ -155,8 +155,10 @@ route("POST", "/api/app/admin/users/:id/mfa-reset", ["admin"], async (c) => {
   const u = await getUser(c.db, c.params.id);
   if (!u || u.role !== "admin") throw new ApiError(404, "not_found", "Administrator not found.");
   if (u.id === c.user.id) throw new ApiError(400, "self", "You cannot reset your own two-step sign-in. Another Super Administrator must do it, or the owner's break-glass procedure.");
-  const why = accountChangeRefusal(c.user, u, c.env, await isBootstrapped(c.db));
-  if (why || !canManageAdmins(c.user, c.env, await isBootstrapped(c.db))) { await c.audit("mfa.reset_refused", "user", u.id, { why }); throw new ApiError(403, "forbidden", why ?? "Only the owner or a Super Administrator can reset two-step sign-in."); }
+  const booted = await isBootstrapped(c.db);
+  const why = accountChangeRefusal(c.user, u, c.owner, booted);
+  if (why || !canManageAdmins(c.user, c.owner, booted)) { await c.audit("mfa.reset_refused", "user", u.id, { why }); throw new ApiError(403, "forbidden", why ?? "Only the owner or a Super Administrator can reset two-step sign-in."); }
+  await requireStrongAuth(c, "mfa.reset", u.id);
   await deleteFactor(c.db, u.id);
   await deleteUserSessions(c.db, u.id);
   await setMfaRequired(c.db, u.id, true); // they must enrol again before using administration

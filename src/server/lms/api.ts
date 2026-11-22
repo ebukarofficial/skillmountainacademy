@@ -4,14 +4,17 @@ import type { AppEnv } from "../env";
 import { ApiError, clientIp, getCookie, json, readJson, sameOrigin, sha256 } from "../http";
 import { ipPseudonym } from "../privacy";
 import { audit, canSignIn, deleteSession, isApproved, logError, sessionWithUser, touchSession, type Role, type SessionRow, type User } from "./data/users";
-import { adminMay, areaFor, isOwner } from "./permissions";
-import { mfaKeyUsable } from "./mfa-crypto";
+import { adminMay, areaFor, isOwner, type OwnerRef } from "./permissions";
+import { getOwnerPolicy, resolveOwner, type OwnerState } from "./data/owner";
 import { MFA_PENDING_MINUTES, policyFor, type SessionPolicy } from "./session-policy";
 
 export type Ctx = {
   req: Request; env: AppEnv; exec: ExecutionContext; url: URL; params: Record<string, string>;
   user: User; db: D1Database; ipHash: string; body: <T = Record<string, unknown>>() => Promise<T>;
   session: SessionRow | null; sessionHash: string | null; policy: SessionPolicy | null; routePath: string; isOwner: boolean;
+  // Stage 2C: the verified owner (resolved on the server for administrators; null for everyone else) and the group
+  // actually applied to this administrator (a legacy unassigned administrator is "reporting" when the owner restricts them).
+  owner: OwnerRef; ownerState: OwnerState | null; effectiveAdminRole: string | null;
   audit: (action: string, target_type?: string, target_id?: string, detail?: unknown) => Promise<unknown>;
 };
 type PublicCtx = Omit<Ctx, "user" | "audit"> & { user: User | null };
@@ -107,6 +110,12 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
   const ipHash = await ipPseudonym(env, clientIp(req));
   const auth = await resolveSession(req, env, db);
   const user = auth.user;
+  // Who the owner is (Stage 2C): resolved for administrators only, from OWNER_EMAIL plus the bootstrap record.
+  const ownerState = user?.role === "admin" ? await resolveOwner(db, env) : null;
+  const ownerRef: OwnerRef = { ownerId: ownerState?.ownerId ?? null };
+  // Legacy administrators without a group keep today's access unless the owner has restricted them to read-only.
+  const effectiveAdminRole = user?.role !== "admin" ? null
+    : user.admin_role ?? (!isOwner(user, ownerRef) && (await getOwnerPolicy(db)).restrictUnassigned ? "reporting" : null);
   if (found.r.roles !== "public") {
     if (!user) {
       if (auth.expired) throw new ApiError(401, "session_expired", EXPIRED_MESSAGE[auth.expired], { "set-cookie": clearCookie, "x-session-expired": auth.expired });
@@ -122,16 +131,20 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
     if (mustEnrol && !MFA_SETUP_PATHS.test(url.pathname))
       throw new ApiError(403, "mfa_setup_required", "Set up two-step sign-in with an authenticator app to use administration.");
     // Administrator permission groups (default deny for scoped groups). The owner may do everything.
-    const owner = isOwner(user, env);
-    if (user.role === "admin" && !adminMay(user.admin_role, req.method, found.r.path, owner)) {
+    const owner = isOwner(user, ownerRef);
+    if (user.role === "admin" && !adminMay(effectiveAdminRole, req.method, found.r.path, owner)) {
       // Refused administrator changes are recorded (the route, not the body), so attempts to reach powers a group lacks
       // (for example an unassigned administrator trying to assign groups) leave a trail. Refused reads are not logged.
-      if (req.method !== "GET") await audit(db, { actor_id: user.id, action: "admin.access_refused", target_type: "route", target_id: found.params.id, detail: { method: req.method, route: found.r.path, area: areaFor(req.method, found.r.path), group: user.admin_role }, ip_hash: ipHash }).catch(() => undefined);
+      if (req.method !== "GET") await audit(db, { actor_id: user.id, action: "admin.access_refused", target_type: "route", target_id: found.params.id, detail: { method: req.method, route: found.r.path, area: areaFor(req.method, found.r.path), group: user.admin_role, applied: effectiveAdminRole }, ip_hash: ipHash }).catch(() => undefined);
       throw new ApiError(403, "forbidden", "Your administrator role does not include this.");
     }
-    // The owner console needs a session that passed the authenticator code (when two-step sign-in is configured).
-    if (areaFor(req.method, found.r.path) === "owner" && !auth.session?.mfa_verified_at && !auth.session?.legacy && (await mfaKeyUsable(env.MFA_ENCRYPTION_KEY)))
-      throw new ApiError(403, "owner_mfa_required", "Turn on two-step sign-in (Security) before using the owner console.");
+    // Stage 2C: every owner-console route (all except /status) needs a session that passed the authenticator code. There
+    // is no exception when two-step sign-in is not configured: then the console stays closed (fail closed), so an email
+    // link alone can never authorise owner operations.
+    if (areaFor(req.method, found.r.path) === "owner" && !strongSession(auth.session)) {
+      await audit(db, { actor_id: user.id, action: "owner.mfa_refused", target_type: "route", target_id: found.params.id, detail: { method: req.method, route: found.r.path }, ip_hash: ipHash }).catch(() => undefined);
+      throw new ApiError(403, "owner_mfa_required", "Turn on two-step sign-in (Security) and sign in with your authenticator code to use the owner console.");
+    }
     // An instructor awaiting verification may only complete their profile, see notices and sign out.
     if (user.role === "instructor" && !isApproved(user) && !ONBOARDING_PATHS.test(url.pathname))
       throw new ApiError(403, "awaiting_verification", "Your profile is awaiting verification. You can use the faculty workspace once the Academy approves it.");
@@ -139,7 +152,7 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
   let cached: unknown;
   const c = {
     req, env, exec, url, params: found.params, user: user as User, db, ipHash,
-    session: auth.session, sessionHash: auth.hash, policy: auth.policy, routePath: found.r.path, isOwner: isOwner(user, env),
+    session: auth.session, sessionHash: auth.hash, policy: auth.policy, routePath: found.r.path, isOwner: isOwner(user, ownerRef), owner: ownerRef, ownerState, effectiveAdminRole,
     body: async <T,>() => (cached ??= await readJson(req, 160_000)) as T, // fits a 60,000-character material text
     audit: (action: string, target_type?: string, target_id?: string, detail?: unknown) => audit(db, { actor_id: user?.id ?? null, action, target_type, target_id, detail, ip_hash: ipHash }),
   } as Ctx;
@@ -152,6 +165,18 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
       throw new ApiError(503, "schema_outdated", "The database needs its latest update. Run npm run db:migrate, then try again.");
     throw e;
   }
+}
+
+// ---- strong authentication (Stage 2C) ----
+// A session that passed the authenticator code in this sign-in. Email-link-only sessions, sessions still waiting for the
+// code, and sessions from a database without the MFA columns (legacy) are NOT strong.
+export const strongSession = (s: SessionRow | null | undefined) => !!s && !!s.mfa_verified_at && !s.mfa_pending && !s.legacy;
+// Sensitive administrator-management actions (appointing a Super Administrator, assigning groups, creating, suspending or
+// reactivating an administrator, MFA resets, removal requests) require a strong session. Refusals are audited.
+export async function requireStrongAuth(c: Ctx, action: string, targetId?: string) {
+  if (strongSession(c.session)) return;
+  await c.audit("admin.mfa_step_refused", "user", targetId, { action });
+  throw new ApiError(403, "mfa_step_required", "This action needs two-step sign-in. Turn it on under Security, then sign in again with your authenticator code.");
 }
 
 // ---- small helpers for handlers ----
