@@ -3,6 +3,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +11,7 @@ import yaml from "js-yaml";
 import { deployGate, TAG_RE, type GateEnv, type StatusFetch } from "../scripts/deploy/gate.mts";
 import { pinText } from "../scripts/deploy/pin.mts";
 import { ciPassed, REQUIRED_CHECKS } from "../scripts/deploy/ci-status.mts";
-import { latestVersion, makeRecord, parseApprovals } from "../scripts/deploy/record.mts";
+import { deployedVersion, latestVersion, makeRecord, parseApprovals } from "../scripts/deploy/record.mts";
 import { inspectBackup, verifyUploaded } from "../scripts/backup/ship.mts";
 import { scan } from "../scripts/security/secret-scan.mts";
 import { checkCsp } from "../scripts/security/csp-check.mts";
@@ -51,9 +52,9 @@ test("deploy:pin pins the real wrangler.jsonc (comments kept), is idempotent, an
 });
 
 // ------------------------------------------------------------------ deployment gate ----
-const goodEnv: GateEnv = { APPROVED_ACCOUNT_ID: ACC, APPROVED_D1_UUID: UUID, APPROVED_KV_ID: KVID, RELEASE_TAG: "v2026.11.30-1", COMMIT_SHA: SHA, APPROVER: "Owner Name", SITE_URL: "https://skillmountainacademy.com" };
-function liveFakes(o: { identityOk?: boolean; member?: boolean; worker?: boolean; status?: { status: number; body: unknown } | Error } = {}) {
-  const urls: string[] = [];
+const goodEnv: GateEnv = { APPROVED_ACCOUNT_ID: ACC, APPROVED_D1_UUID: UUID, APPROVED_KV_ID: KVID, RELEASE_TAG: "v2026.11.30-1", COMMIT_SHA: SHA, APPROVER: "Owner Name", SITE_URL: "https://skillmountainacademy.com", CSP_MODE: "report" };
+function liveFakes(o: { identityOk?: boolean; member?: boolean; worker?: boolean; migration?: string | null | Error } = {}) {
+  const reads: Identity[] = [];
   const resolve = (i: Identity): ResolvedIdentity => ({ ok: o.identityOk ?? true, at: "", approved: i, byId: null, byName: null, accountAccessible: true, failures: o.identityOk === false ? ["database: in the approved account the name resolves to a DIFFERENT UUID"] : [] });
   const runner: CfRunner = (args, x) => {
     assert.equal(JSON.parse(readFileSync(x.config, "utf8")).account_id, ACC);
@@ -61,8 +62,9 @@ function liveFakes(o: { identityOk?: boolean; member?: boolean; worker?: boolean
     if (args[0] === "whoami") return { status: 0, stderr: "", stdout: JSON.stringify({ loggedIn: true, accounts: [{ id: (o.member ?? true) ? ACC : "f".repeat(32) }] }) };
     return (o.worker ?? true) ? { status: 0, stderr: "", stdout: "[]" } : { status: 1, stderr: "not found", stdout: "" };
   };
-  const fetchStatus: StatusFetch = async (u) => { urls.push(u); if (o.status instanceof Error) throw o.status; return o.status ?? { status: 200, body: { ok: true, schema: { expected: EXPECTED_MIGRATION, applied: EXPECTED_MIGRATION, status: "compatible" } } }; };
-  return { urls, deps: { resolve, runner, fetchStatus } };
+  // The approved database's own migration history (identity-bound read in production).
+  const latestMigration = (i: Identity) => { reads.push(i); if (o.migration instanceof Error) throw o.migration; return o.migration === undefined ? EXPECTED_MIGRATION : o.migration; };
+  return { reads, deps: { resolve, runner, latestMigration } };
 }
 const gateRefused = async (env: GateEnv, deps: object, re: RegExp) => { const g = await deployGate(env, deps); assert.equal(g.ok, false); assert.ok(g.failures.some((f) => re.test(f)), g.failures.join(" | ")); return g; };
 
@@ -70,7 +72,8 @@ test("deploy gate: passes only with a pinned, live-proven identity and a databas
   const f = liveFakes();
   const g = await deployGate(goodEnv, { ...f.deps, wranglerConfig: pinnedCfg() });
   assert.deepEqual([g.ok, g.failures, g.compatibility, g.databaseMigration], [true, [], "verified", EXPECTED_MIGRATION]);
-  assert.deepEqual(f.urls, ["https://skillmountainacademy.com/api/status"]);
+  assert.deepEqual(f.reads, [{ accountId: ACC, databaseUuid: UUID }], "compatibility read from the APPROVED account and UUID, not a public URL");
+  assert.equal(g.cspMode, "report");
   assert.deepEqual(g.identity, { accountId: ACC, databaseUuid: UUID, worker: "skillmountainacademy", database: "skillmountainacademy-db" });
   assert.ok(TAG_RE.test("v2026.11.30-1") && !TAG_RE.test("v2026.13.01-1") && !TAG_RE.test("main") && !TAG_RE.test("v1.2.3"));
 });
@@ -95,21 +98,20 @@ test("deploy gate rejects missing or mismatched account IDs and database UUIDs, 
   await gateRefused(goodEnv, { ...liveFakes({ worker: false }).deps, wranglerConfig: pinnedCfg() }, /Worker skillmountainacademy was not found/);
 });
 
-test("deploy gate: database compatibility from /api/status; older or newer refused; legacy Worker only with an owner attestation", async () => {
-  const at = (body: unknown, status = 200) => liveFakes({ status: { status, body } }).deps;
+test("deploy gate: database compatibility read from the approved D1 UUID itself; older, newer, empty or unreadable refused; no attestation path", async () => {
+  const at = (migration: string | null | Error) => liveFakes({ migration }).deps;
   const cfg = pinnedCfg();
-  await gateRefused(goodEnv, { ...at({ ok: true, schema: { applied: "0009_owner.sql" } }), wranglerConfig: cfg }, /Migrate first/);
-  await gateRefused(goodEnv, { ...at({ ok: true, schema: { applied: "0011_future.sql" } }), wranglerConfig: cfg }, /newer than this build .* rollback procedure/);
-  await gateRefused(goodEnv, { ...at({ ok: true, schema: { applied: null } }), wranglerConfig: cfg }, /could not read the migration history/);
-  await gateRefused(goodEnv, { ...at(null, 503), wranglerConfig: cfg }, /answered 503/);
-  await gateRefused(goodEnv, { ...liveFakes({ status: new Error("ECONNRESET") }).deps, wranglerConfig: cfg }, /could not be read \(ECONNRESET\)/);
-  await gateRefused(goodEnv, { ...at({ ok: true, ready: {} }), wranglerConfig: cfg }, /does not report its database migration/);
-  await gateRefused({ ...goodEnv, CONFIRMED_DB_MIGRATION: "0009_owner.sql" }, { ...at({ ok: true }), wranglerConfig: cfg }, /CONFIRMED_DB_MIGRATION is 0009_owner\.sql/);
-  const g = await deployGate({ ...goodEnv, CONFIRMED_DB_MIGRATION: EXPECTED_MIGRATION }, { ...at({ ok: true }), wranglerConfig: cfg });
-  assert.deepEqual([g.ok, g.compatibility], [true, "attested"]);
-  assert.ok(g.notes.some((n) => /ATTESTED by Owner Name/.test(n)));
-  // An attestation is ignored when the Worker DOES report the state.
-  await gateRefused({ ...goodEnv, CONFIRMED_DB_MIGRATION: EXPECTED_MIGRATION }, { ...at({ ok: true, schema: { applied: "0009_owner.sql" } }), wranglerConfig: cfg }, /Migrate first/);
+  await gateRefused(goodEnv, { ...at("0009_owner.sql"), wranglerConfig: cfg }, /Migrate first/);
+  await gateRefused(goodEnv, { ...at("0011_future.sql"), wranglerConfig: cfg }, /newer than this build .* rollback procedure/);
+  await gateRefused(goodEnv, { ...at(null), wranglerConfig: cfg }, /no migration history/);
+  await gateRefused(goodEnv, { ...at(new Error("D1 query refused: permission")), wranglerConfig: cfg }, /could not be read \(D1 query refused: permission\)/);
+  await gateRefused(goodEnv, { ...at("garbage.sql"), wranglerConfig: cfg }, /unrecognised latest migration/);
+  // The former owner attestation no longer exists: an env value cannot stand in for the database's real state.
+  await gateRefused({ ...goodEnv, CONFIRMED_DB_MIGRATION: EXPECTED_MIGRATION } as GateEnv, { ...at("0009_owner.sql"), wranglerConfig: cfg }, /Migrate first/);
+  // The database is not read at all when the identity is not proven first.
+  const f = liveFakes({ identityOk: false });
+  await gateRefused(goodEnv, { ...f.deps, wranglerConfig: cfg }, /identity \(live\)/);
+  assert.deepEqual(f.reads, []);
 });
 
 test("deploy gate: release, approver and scope (no Paystack or R2 activation through a deployment)", async () => {
@@ -121,30 +123,50 @@ test("deploy gate: release, approver and scope (no Paystack or R2 activation thr
   assert.equal((await deployGate({ ...goodEnv, NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "pk_test_123", PAYSTACK_APPROVED: "true" }, d)).ok, true);
   const r2 = cfgFile(pin3().replace(/\n\}\s*$/, ',\n  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "x" }]\n}\n'));
   await gateRefused(goodEnv, { ...d, wranglerConfig: r2 }, /binds R2 but R2 activation is not approved/);
+  // Stage 3B.1: a Paystack key placed in wrangler.jsonc "define" is refused too; CSP_MODE must be stated.
+  const defined = cfgFile(pin3().replace('"process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "\\"\\""', '"process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "\\"pk_live_abc\\""'));
+  assert.notEqual(readFileSync(defined, "utf8"), pin3(), "fixture really changed the define");
+  await gateRefused(goodEnv, { ...d, wranglerConfig: defined }, /"define" sets a Paystack public key/);
+  await gateRefused({ ...goodEnv, CSP_MODE: "" }, d, /CSP_MODE must be stated/);
+  await gateRefused({ ...goodEnv, CSP_MODE: "off" }, d, /CSP_MODE must be stated/);
+  assert.equal((await deployGate({ ...goodEnv, CSP_MODE: "enforce" }, d)).cspMode, "enforce");
 });
 
 // ------------------------------------------------------------------ CI status, record ----
 test("CI status: every required check must have succeeded on the exact commit (latest run counts)", () => {
-  const run = (name: string, conclusion: string, started = "2026-11-22T10:00:00Z", sha = SHA) => ({ name, head_sha: sha, status: "completed", conclusion, started_at: started });
+  const run = (name: string, conclusion: string, started = "2026-11-22T10:00:00Z", sha = SHA, app = "github-actions") => ({ name, head_sha: sha, status: "completed", conclusion, started_at: started, app: { slug: app } });
   assert.equal(ciPassed({ check_runs: REQUIRED_CHECKS.map((n) => run(n, "success")) }, SHA).ok, true);
   assert.ok(ciPassed({ check_runs: REQUIRED_CHECKS.slice(1).map((n) => run(n, "success")) }, SHA).failures.some((f) => /CI static checks: no run/.test(f)));
   assert.equal(ciPassed({ check_runs: REQUIRED_CHECKS.map((n) => run(n, n === "CI tests" ? "failure" : "success")) }, SHA).ok, false);
   assert.equal(ciPassed({ check_runs: REQUIRED_CHECKS.map((n) => run(n, "success", undefined, "b".repeat(40))) }, SHA).ok, false, "another commit's success does not count");
   const rerun = [...REQUIRED_CHECKS.map((n) => run(n, "success", "2026-11-22T11:00:00Z")), run("CI tests", "failure", "2026-11-22T10:00:00Z")];
   assert.equal(ciPassed({ check_runs: rerun }, SHA).ok, true, "a later successful re-run counts");
+  // Stage 3B.1: a check run with a required name from any other app does not count.
+  const spoof = REQUIRED_CHECKS.map((n) => run(n, "success", "2026-11-22T12:00:00Z", SHA, "some-other-app"));
+  assert.equal(ciPassed({ check_runs: spoof }, SHA).ok, false);
+  assert.equal(ciPassed({ check_runs: [...REQUIRED_CHECKS.map((n) => run(n, n === "CI tests" ? "failure" : "success")), ...spoof] }, SHA).ok, false, "a spoofed success cannot override a real failure");
 });
 
 test("deployment record: not-deployed / deploy-failed / deployed-unverified / success; version and approvals captured; never a rollback", async () => {
   const gate = { ...(await deployGate(goodEnv, { ...liveFakes().deps, wranglerConfig: pinnedCfg() })) };
   assert.equal(gate.ok, true);
-  const runner: CfRunner = () => ({ status: 0, stderr: "", stdout: JSON.stringify([{ created_on: "2026-11-30T10:00:00Z", versions: [{ version_id: "v-new", percentage: 100 }] }, { created_on: "2026-11-01T10:00:00Z", versions: [{ version_id: "v-old", percentage: 100 }] }]) });
   const ok: StatusFetch = async () => ({ status: 200, body: { ok: true, schema: { expected: EXPECTED_MIGRATION, status: "compatible" } } });
   const approvals = JSON.stringify([{ user: { login: "owner-login" }, state: "approved", comment: "go" }]);
-  const s = await makeRecord({ gate, deployOutcome: "success", approvalsText: approvals, siteUrl: "https://x.example", workflowRun: "run-1" }, { runner, fetchStatus: ok, attempts: 1, waitMs: 0 });
-  assert.deepEqual([s.outcome, s.versionId, s.commit, s.tag, s.approver, s.environmentApprovals[0].user], ["success", "v-new", SHA, "v2026.11.30-1", "Owner Name", "owner-login"]);
+  const V_NEW = "11111111-2222-4333-8444-555555555555", V_OTHER = "99999999-2222-4333-8444-555555555555";
+  const runner: CfRunner = () => ({ status: 0, stderr: "", stdout: JSON.stringify([{ created_on: "2026-11-30T10:00:00Z", versions: [{ version_id: V_NEW, percentage: 100 }] }, { created_on: "2026-11-01T10:00:00Z", versions: [{ version_id: "v-old", percentage: 100 }] }]) });
+  const log = `Uploaded skillmountainacademy\nDeployed skillmountainacademy triggers\nCurrent Version ID: ${V_NEW}\n`;
+  const s = await makeRecord({ gate, deployOutcome: "success", approvalsText: approvals, siteUrl: "https://x.example", workflowRun: "run-1", deployLog: log }, { runner, fetchStatus: ok, attempts: 1, waitMs: 0 });
+  assert.deepEqual([s.outcome, s.versionId, s.deployedVersionId, s.cspMode, s.commit, s.tag, s.approver, s.environmentApprovals[0].user], ["success", V_NEW, V_NEW, "report", SHA, "v2026.11.30-1", "Owner Name", "owner-login"]);
+  assert.equal(deployedVersion(log), V_NEW);
+  // Stage 3B.1: another deployment path published after ours, or our version is unknown: never "success".
+  const other = await makeRecord({ gate, deployOutcome: "success", siteUrl: "https://x.example", deployLog: `Current Version ID: ${V_OTHER}` }, { runner, fetchStatus: ok, attempts: 1, waitMs: 0 });
+  assert.equal(other.outcome, "deployed-unverified");
+  assert.match(other.verification.detail, /not the version this run deployed/);
+  const nolog = await makeRecord({ gate, deployOutcome: "success", siteUrl: "https://x.example" }, { runner, fetchStatus: ok, attempts: 1, waitMs: 0 });
+  assert.equal(nolog.outcome, "deployed-unverified");
   assert.equal(s.rollbackGuidance, undefined);
   const stale: StatusFetch = async () => ({ status: 200, body: { ok: true, schema: { expected: "0009_owner.sql", status: "database_newer" } } });
-  const u = await makeRecord({ gate, deployOutcome: "success", siteUrl: "https://x.example" }, { runner, fetchStatus: stale, attempts: 2, waitMs: 0 });
+  const u = await makeRecord({ gate, deployOutcome: "success", siteUrl: "https://x.example", deployLog: log }, { runner, fetchStatus: stale, attempts: 2, waitMs: 0 });
   assert.deepEqual([u.outcome, u.verification.attempts], ["deployed-unverified", 2]);
   assert.match(u.rollbackGuidance!, /No automatic rollback/);
   const f = await makeRecord({ gate, deployOutcome: "failure", siteUrl: "https://x.example" }, { runner, fetchStatus: ok });
@@ -311,4 +333,58 @@ test("staging configuration: separate Worker, database (by UUID), cache and sett
   bad({ define: { "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "\"pk_test_1\"" } }, /Paystack/);
   assert.equal(prod.name, "skillmountainacademy");
   assert.equal(prod.account_id, undefined, "production wrangler.jsonc not pinned or changed by this stage");
+});
+
+// ------------------------------------------------------------------ Stage 3B.1 corrections ----
+test("3B.1: no npm script reaches production without a gate (bare wrangler deploy, remote D1 writes, migrations apply)", () => {
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts as Record<string, string>;
+  for (const [name, cmd] of Object.entries(scripts)) {
+    if (/\bwrangler\s+deploy\b/.test(cmd)) assert.match(cmd, /scripts\/deploy\/gate\.mts\s*&&\s*wrangler deploy/, `${name} deploys only after the gate`);
+    assert.doesNotMatch(cmd, /wrangler\s+d1\s+(execute|migrations\s+apply|create|time-travel)|wrangler\s+rollback/, `${name} must not call remote D1 or rollback directly`);
+  }
+  assert.equal(scripts.preview, "wrangler dev", "preview stays local");
+});
+
+test("3B.1: deployment workflow states the CSP mode, checks main ancestry via the API, and binds the record to its own version", () => {
+  const w = wf("deploy-worker.yml");
+  assert.deepEqual(Object.keys((w.on.workflow_dispatch as { inputs: object }).inputs).sort(), ["approver", "tag"], "no attestation input");
+  const text = readFileSync(".github/workflows/deploy-worker.yml", "utf8");
+  assert.doesNotMatch(text, /CSP_MODE:\s*report/, "CSP mode is not hard-coded");
+  assert.match(text, /CSP_MODE: \$\{\{ vars\.CSP_MODE \}\}/);
+  assert.match(text, /npm run security:csp -- --expect-mode "\$CSP_MODE"/);
+  assert.ok(!allSteps(w).some((st) => /git fetch/.test(st.run ?? "")), "no credential-less git fetch in any step");
+  assert.match(text, /compare\/main\.\.\.\$\{sha\}/);
+  assert.match(text, /wrangler deploy[^\n]*\| tee deploy\.log/);
+  assert.match(text, /set -o pipefail/);
+  assert.match(text, /deploy:record -- --gate gate\.json --deploy-log deploy\.log/);
+});
+
+test("3B.1: backup workflow refuses before reading production when storage is not configured, and storage errors are fatal", () => {
+  const steps = wf("backup.yml").jobs.backup.steps;
+  const cfgAt = steps.findIndex((s) => s.name === "Storage and identity configuration"), backupAt = steps.findIndex((s) => (s.run ?? "").includes("npm run db:backup"));
+  assert.ok(cfgAt >= 0 && cfgAt < backupAt, "configuration check before the production backup");
+  const cfg = steps[cfgAt].run!;
+  for (const v of ["APPROVED_ACCOUNT_ID", "APPROVED_D1_UUID", "BACKUP_S3_BUCKET", "BACKUP_S3_REGION", "CLOUDFLARE_BACKUP_TOKEN"]) assert.ok(cfg.includes(v), v);
+  assert.match(cfg, /head-bucket/);
+  const fetchPrev = steps.find((s) => s.name === "Fetch the previous manifest for comparison")!.run!;
+  assert.doesNotMatch(fetchPrev, /list-objects-v2[^\n]*\|\|\s*true/, "a listing error is not swallowed");
+});
+
+test("3B.1: CSP check refuses a build whose mode differs from the stated one", { skip: !existsSync("out/_headers") }, () => {
+  const run = (mode: string) => spawnSync(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", "scripts/security/csp-check.mts", "--expect-mode", mode], { encoding: "utf8" });
+  const built = checkCsp("out").mode!;
+  assert.equal(run(built).status, 0);
+  assert.equal(run(built === "report" ? "enforce" : "report").status, 1);
+  assert.equal(run("").status, 1);
+});
+
+test("3B.1: staging check requires the production KV id when production does not pin one", async () => {
+  const { checkStaging } = await import("../scripts/deploy/staging-check.mts");
+  const { stripJsonc } = await import("../scripts/db/migrate-remote.mts");
+  const prod = JSON.parse(stripJsonc(REAL_CFG));
+  const staging = JSON.parse(stripJsonc(readFileSync("wrangler.staging.jsonc", "utf8")));
+  const filled = { ...staging, account_id: ACC, d1_databases: [{ ...staging.d1_databases[0], database_id: OTHER }], kv_namespaces: [{ binding: "KV", id: "stagingkv" }],
+    vars: { ...staging.vars, SITE_URL: "https://skillmountainacademy-staging.example.workers.dev", OWNER_EMAIL: "owner-staging@example.com" } };
+  assert.ok(checkStaging(filled, prod, { productionUuid: UUID }).some((f) => /production KV namespace id was not supplied/.test(f)));
+  assert.deepEqual(checkStaging(filled, prod, { productionUuid: UUID, productionKv: "prodkv" }), []);
 });

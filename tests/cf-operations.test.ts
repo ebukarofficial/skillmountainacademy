@@ -103,7 +103,10 @@ function rollbackRecord(over: Record<string, unknown> = {}) {
   return f;
 }
 test("worker-rollback: requires a fresh rollback-check record for this version and account; UNSAFE/PROHIBITED refused; CHECK_REQUIRED needs confirmed actions", () => {
-  const ok = { ...base, "version-id": VERSION, reason: "bad release" };
+  const ok = { ...base, "version-id": VERSION, reason: "bad release", "database-uuid": UUID };
+  // Stage 3B.1: the record must be for the production database UUID the Worker uses.
+  refused(cf("worker-rollback", { ...ok, "database-uuid": undefined, "rollback-record": rollbackRecord() }, fakes().deps), /--database-uuid \(the production D1 UUID/);
+  refused(cf("worker-rollback", { ...ok, "rollback-record": rollbackRecord({ identity: { accountId: ACC, databaseUuid: NEW_UUID } }) }, fakes().deps), /not run against the approved production database UUID/);
   refused(cf("worker-rollback", ok, fakes().deps), /--rollback-record is required/);
   refused(cf("worker-rollback", { ...ok, "rollback-record": rollbackRecord({ verdict: "UNSAFE" }) }, fakes().deps), /verdict is UNSAFE/);
   refused(cf("worker-rollback", { ...ok, "rollback-record": rollbackRecord({ verdict: "PROHIBITED" }) }, fakes().deps), /verdict is PROHIBITED/);
@@ -158,13 +161,24 @@ test("restore-import and restore-reset: never production; only the exact verifie
   const sql = join(D, "plain.sql");
   writeFileSync(sql, "-- sma-d1-logical-backup/1\nCREATE TABLE x (a);\n");
   const mf = join(D, "plain.manifest.json");
-  writeFileSync(mf, JSON.stringify({ file: { sha256: sha(readFileSync(sql)) } }));
-  const target = { ...base, database: "skillmountainacademy-db-restore-20261122", "database-uuid": NEW_UUID };
+  writeFileSync(mf, JSON.stringify({ file: { sha256: sha(readFileSync(sql)) }, source: { kind: "remote", identity: { accountId: ACC, databaseUuid: UUID } } }));
+  // The report written by npm run db:restore:verify, bound to this manifest (Stage 3B.1).
+  const report = (over: Record<string, unknown> = {}) => { const f = join(D, `rr-${Math.random().toString(36).slice(2)}.json`); writeFileSync(f, JSON.stringify({ ok: true, at: new Date().toISOString(), manifestSha256: sha(readFileSync(mf)), ...over })); return f; };
+  const target = { ...base, database: "skillmountainacademy-db-restore-20261122", "database-uuid": NEW_UUID, "restore-report": report() };
   refused(cf("restore-import", { ...base, database: "skillmountainacademy-db", "database-uuid": UUID, file: sql, manifest: mf }, fakes().deps), /never write to production/);
   refused(cf("restore-import", { ...base, "database-uuid": NEW_UUID, file: sql, manifest: mf }, fakes().deps), /never write to production/);
   const wrongMf = join(D, "wrong.manifest.json");
   writeFileSync(wrongMf, JSON.stringify({ file: { sha256: "0".repeat(64) } }));
   refused(cf("restore-import", { ...target, file: sql, manifest: wrongMf }, fakes().deps), /SHA-256 mismatch/);
+  // Stage 3B.1: a passed, fresh restore verification of THIS manifest, of a production backup of the approved account.
+  refused(cf("restore-import", { ...target, "restore-report": undefined, file: sql, manifest: mf }, fakes().deps), /--restore-report is required/);
+  refused(cf("restore-import", { ...target, file: sql, manifest: wrongMf }, fakes().deps), /not a production backup/, ); // malformed manifest: refused, never a crash
+  refused(cf("restore-import", { ...target, "restore-report": report({ ok: false }), file: sql, manifest: mf }, fakes().deps), /does not show a passed restore verification/);
+  refused(cf("restore-import", { ...target, "restore-report": report({ manifestSha256: "0".repeat(64) }), file: sql, manifest: mf }, fakes().deps), /different manifest/);
+  refused(cf("restore-import", { ...target, "restore-report": report({ at: new Date(Date.now() - 30 * 3600_000).toISOString() }), file: sql, manifest: mf }, fakes().deps), /30\.0 hours old/);
+  const otherAcc = join(D, "other.manifest.json");
+  writeFileSync(otherAcc, JSON.stringify({ file: { sha256: sha(readFileSync(sql)) }, source: { kind: "remote", identity: { accountId: "b".repeat(32), databaseUuid: UUID } } }));
+  refused(cf("restore-import", { ...target, "restore-report": report({ manifestSha256: sha(readFileSync(otherAcc)) }), file: sql, manifest: otherAcc }, fakes().deps), /not a production backup of the approved account/);
   const f = fakes();
   const imp = cf("restore-import", { ...target, file: sql, manifest: mf, execute: true, "approved-by": "Owner Name" }, f.deps);
   assert.equal(imp.ok, true, imp.failures.join(" | "));
