@@ -7,7 +7,7 @@ import { Repo } from "./server/repo";
 import { runSchedule } from "./server/cron";
 import { handleRegister } from "./server/routes/register";
 import { handleChildrenEnquiry } from "./server/routes/children";
-import { handleGeo } from "./server/routes/geo";
+import { handleGeo, handleQuote } from "./server/routes/geo";
 import { handleHold } from "./server/routes/hold";
 import { handleOrderStatus, handlePayLink, handleWebhook } from "./server/routes/payments";
 import { handleLms } from "./server/lms";
@@ -28,6 +28,7 @@ async function status(_req: Request, env: AppEnv): Promise<Response> {
 const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
   "/api/status": { GET: status },
   "/api/geo": { GET: handleGeo },
+  "/api/quote": { GET: handleQuote },
   "/api/hold": { GET: handleHold },
   "/api/register": { POST: handleRegister },
   "/api/children-enquiry": { POST: handleChildrenEnquiry },

@@ -27,6 +27,8 @@ route("POST", "/api/app/admin/admit", ["admin"], async (c) => {
   const country = ch.opt(b.country, 60);
   const plan = ch.oneOf(b.plan ?? "full", ["full", "parts"] as const, "the payment plan") as Plan;
   const paidParts = plan === "full" ? 1 : ch.int(b.paidParts ?? 1, 1, 3, "Parts already paid");
+  const progFor = findProgramme(String(b.programme ?? ""));
+  if (plan === "parts" && progFor?.fullPaymentOnly) ch.errors.push(`${progFor.name} is paid in full; it has no instalment plan.`);
   const reference = ch.opt(b.paymentReference, 100);
   const instructorId = b.instructorId ? String(b.instructorId) : null;
   ch.done();

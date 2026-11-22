@@ -10,6 +10,8 @@ export type User = {
   staff_no?: string | null; email_prefs?: string | null;
   headline?: string | null; achievements?: string | null; certifications?: string | null; languages?: string | null;
   country_origin?: string | null; country_residence?: string | null; profile_submitted_at?: string | null; verified_at?: string | null;
+  meet_link?: string | null; guardian_name?: string | null; guardian_relationship?: string | null; guardian_email?: string | null; guardian_phone?: string | null;
+  guardian_contact_ok?: number; guardian_contact_note?: string | null;
 };
 // Only approved instructors teach (see lib/admissions.ts). New instructors can sign in before approval, but only to
 // complete and submit their profile (the API allows them nothing else). Rejected or suspended candidates cannot sign

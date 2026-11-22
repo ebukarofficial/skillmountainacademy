@@ -49,6 +49,7 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   const c = new Checker();
   const learner = readLearner(c, (body.learner as Record<string, unknown>) ?? {});
   const plan = c.oneOf(body.plan ?? "full", ["full", "parts"] as const, "how to pay") as Plan;
+  if (plan === "parts" && prog.fullPaymentOnly) c.errors.push(`${prog.name} is paid in full; it has no instalment plan.`);
   const method = c.oneOf(body.method ?? "paystack", ["paystack", "bank"] as const, "a payment method");
   const currency = (CURRENCIES as readonly string[]).includes(String(body.currency)) ? (body.currency as Currency) : "NGN";
   if (body.termsAccepted !== true) c.errors.push("Please accept the Terms and Conditions.");

@@ -2,7 +2,8 @@
 // Rates come from ExchangeRate-API's free open endpoint (no key; attribution link shown on the site; data updates
 // daily, and we fetch only every 12 hours). If it fails, the CC0 currency-api feed on jsDelivr is tried. If both fail,
 // the last known rates stay in KV, so prices keep showing.
-import { CURRENCIES, currencyForCountry, type Currency, type Rates } from "../../../lib/pricing.ts";
+import { CURRENCIES, convertParts, currencyForCountry, planParts, priceNaira, type Currency, type Rates } from "../../../lib/pricing.ts";
+import { findProgramme } from "../../../lib/config.ts";
 import type { AppEnv } from "../env";
 import { json } from "../http";
 
@@ -68,4 +69,30 @@ export async function handleGeo(req: Request, env: AppEnv): Promise<Response> {
   }
   const currency: Currency = currencyForCountry(country);
   return json({ ok: true, country, currency, rates }, 200, { "cache-control": "private, max-age=600" });
+}
+
+// GET /api/quote?programme=<slug>&country=<ISO2>[&plan=full|parts]
+// The one place where a programme's amount is converted for display. The country of residence decides the
+// currency (NGN, GBP, EUR, USD: see currencyForCountry). Paystack always charges in naira, so the charge amount
+// and currency are returned separately and shown before payment.
+export async function handleQuote(req: Request, env: AppEnv): Promise<Response> {
+  const u = new URL(req.url);
+  const prog = findProgramme(u.searchParams.get("programme"));
+  if (!prog) return json({ ok: false, error: "invalid", message: "Unknown programme." }, 400);
+  const cc = (u.searchParams.get("country") || (req as Request & { cf?: { country?: string } }).cf?.country || "").toUpperCase();
+  const country = /^[A-Z]{2}$/.test(cc) ? cc : null;
+  const wantParts = u.searchParams.get("plan") === "parts" && !prog.fullPaymentOnly;
+  const totalNaira = priceNaira(prog);
+  const partsNaira = planParts(totalNaira, wantParts ? "parts" : "full");
+  let currency: Currency = currencyForCountry(country);
+  const rates = currency === "NGN" ? null : await readRates(env);
+  let shown = convertParts(partsNaira, currency, rates);
+  if (!shown) { currency = "NGN"; shown = partsNaira; } // no rates yet: show naira rather than a guess
+  return json({
+    ok: true, programme: prog.slug, country, currency,
+    display: { total: shown.reduce((a, b) => a + b, 0), parts: shown, approximate: currency !== "NGN" },
+    charge: { currency: "NGN", total: totalNaira, parts: partsNaira, provider: "Paystack" },
+    plan: wantParts ? "parts" : "full", fullPaymentOnly: !!prog.fullPaymentOnly,
+    rate: currency === "NGN" ? 1 : rates!.rates[currency], ratesUpdatedAt: currency === "NGN" ? null : rates!.fetchedAt, source: currency === "NGN" ? null : rates!.source,
+  }, 200, { "cache-control": "private, max-age=300" });
 }

@@ -9,7 +9,7 @@ import { createEnrolment, findEnrolment, getEnrolment, instructorEnrolments, lis
 import {
   createCourse, createLesson, createSessionRow, currentTimetable, getCourse, getSession, listNotifications, listSessions, markRead, pendingOutcomes,
   programmeCourses, programmeLessons, reassignFutureSessions, replaceTimetable, runBatch, sessionsForDateStmt, timetableHistory, unreadCount, updateCourse,
-  updateLesson, updateSession, type SessionRow,
+  updateLesson, updateSession, type Session, type SessionRow,
 } from "../data/teaching";
 import { getUser, isApproved, type User } from "../data/users";
 import { notify, type Recipient } from "../notify";
@@ -33,6 +33,7 @@ export function sessionView(s: SessionRow, viewer: User) {
     student: viewer.role === "student" ? undefined : { id: s.student_id, fullName: s.student_name, photo: s.student_photo ? `/api/app/files/photo/${s.student_id}` : null },
     instructor: s.instructor_id ? { id: s.instructor_id, fullName: s.instructor_name } : null,
     needsOutcome: s.status === "scheduled" && Date.parse(s.ends_at) <= now,
+    attendanceDetail: viewer.role === "student" ? undefined : s.attendance_detail ?? null,
   };
 }
 
@@ -245,12 +246,16 @@ route("POST", "/api/app/instructor/sessions/:id/outcome", ["instructor"], async 
   const ch = new Checker();
   const status = ch.oneOf(b.status, ["completed", "missed", "cancelled"] as const, "completed, missed or cancelled");
   const notes = ch.opt(b.notes, 1000);
+  // Optional detail: a completed class was attended on time or late; a missed one may be excused.
+  const detail = b.detail === undefined || b.detail === null || b.detail === "" ? null : String(b.detail);
+  if (detail && !((status === "completed" && (detail === "on_time" || detail === "late")) || (status === "missed" && detail === "excused")))
+    ch.errors.push("Late applies to an attended class; excused applies to a missed class.");
   ch.done();
   if (s.status === "rescheduled") throw new ApiError(400, "rescheduled", "This class was moved; record the outcome on the new class.");
   if (s.status !== "scheduled" && (!s.outcome_at || Date.now() - Date.parse(s.outcome_at) > 48 * 3600_000)) throw new ApiError(400, "locked", "This outcome can no longer be changed. Ask an admin.");
   if (status !== "cancelled" && Date.parse(s.starts_at) > Date.now()) throw new ApiError(400, "not_started", "You can mark attendance once the class has started.");
-  await updateSession(c.db, s.id, { status, notes: notes ?? s.notes, outcome_at: nowIso(), outcome_by: c.user.id });
-  await c.audit("session.outcome", "session", s.id, { status });
+  await updateSession(c.db, s.id, { status, notes: notes ?? s.notes, outcome_at: nowIso(), outcome_by: c.user.id, ...(detail || s.attendance_detail ? { attendance_detail: detail as Session["attendance_detail"] } : {}) });
+  await c.audit("session.outcome", "session", s.id, { status, detail });
   if (status === "cancelled" || status === "missed") {
     const st = await getUser(c.db, s.student_id);
     if (st) c.exec.waitUntil(notify(c.env, c.db, [rcp(st)], { kind: `session.${status}`, title: status === "cancelled" ? "A class was cancelled" : "You missed a class",

@@ -59,7 +59,7 @@ export const completedLessons = (db: DB, studentId: string) => all<{ lesson_id: 
 // One query: the numbers behind a student's progress on one enrolment.
 export const progressStats = (db: DB, studentId: string, enrolmentId: string, slug: string, now: string) => one<{
   lessons_total: number; lessons_done: number; assignments_total: number; assignments_submitted: number; assignments_overdue: number; assignment_pct: number | null;
-  quizzes_total: number; quizzes_done: number; quiz_pct: number | null; assessment_pct: number | null; attended: number; missed: number; cancelled: number; last_class: string | null;
+  quizzes_total: number; quizzes_done: number; quiz_pct: number | null; assessment_pct: number | null; assessments_missed: number; attended: number; missed: number; cancelled: number; last_class: string | null;
 }>(db, `SELECT
   (SELECT COUNT(*) FROM lessons l JOIN courses c ON c.id = l.course_id WHERE c.programme_slug = ?3) AS lessons_total,
   (SELECT COUNT(*) FROM lesson_progress p JOIN lessons l ON l.id = p.lesson_id JOIN courses c ON c.id = l.course_id WHERE p.student_id = ?1 AND c.programme_slug = ?3) AS lessons_done,
@@ -71,6 +71,7 @@ export const progressStats = (db: DB, studentId: string, enrolmentId: string, sl
   (SELECT COUNT(*) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND t.submitted_at IS NOT NULL) AS quizzes_done,
   (SELECT AVG(100.0 * t.score / q.max_score) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND q.kind = 'quiz' AND t.graded_at IS NOT NULL) AS quiz_pct,
   (SELECT AVG(100.0 * t.score / q.max_score) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND q.kind = 'assessment' AND t.graded_at IS NOT NULL) AS assessment_pct,
+  (SELECT COUNT(*) FROM quizzes q LEFT JOIN quiz_attempts t ON t.quiz_id = q.id AND t.submitted_at IS NOT NULL WHERE q.enrolment_id = ?2 AND q.kind = 'assessment' AND q.due_at < ?4 AND t.id IS NULL) AS assessments_missed,
   (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'completed') AS attended,
   (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'missed') AS missed,
   (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'cancelled') AS cancelled,

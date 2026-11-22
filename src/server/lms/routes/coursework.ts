@@ -1,5 +1,6 @@
 // Learning materials, assignments and submissions (with file uploads to R2), quizzes and assessments, grades,
 // lesson progress and progress summaries.
+import { DEFAULT_RULES, type AlertRules } from "../rules";
 import { findProgramme, PROGRAMMES } from "../../../../lib/config.ts";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
@@ -365,19 +366,22 @@ route("POST", "/api/app/instructor/students/:studentId/lessons/:id/complete", ["
   return ok({});
 });
 
-export async function progressFor(db: D1Database, e: Enrolment) {
+export async function progressFor(db: D1Database, e: Enrolment, rules: AlertRules = DEFAULT_RULES) {
   const s = (await progressStats(db, e.student_id, e.id, e.programme_slug, nowIso()))!;
   const pct = (a: number, b: number) => (b ? Math.round((100 * a) / b) : null);
   const lessons = pct(s.lessons_done, s.lessons_total), assignments = pct(s.assignments_submitted, s.assignments_total), quizzes = pct(s.quizzes_done, s.quizzes_total);
   const parts = [lessons, assignments, quizzes].filter((x): x is number => x !== null);
   const attendance = pct(s.attended, s.attended + s.missed);
   const round = (v: number | null) => (v === null ? null : Math.round(v));
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  // Engagement alerts, in plain and respectful language; thresholds come from the Academy's settings.
   const attention: string[] = [];
-  if (s.assignments_overdue > 0) attention.push(`${s.assignments_overdue} overdue assignment${s.assignments_overdue === 1 ? "" : "s"}`);
-  if (s.missed >= 2) attention.push(`${s.missed} missed classes`);
-  if (s.assignment_pct !== null && s.assignment_pct < 50) attention.push("assignment scores below 50%");
-  if (s.assessment_pct !== null && s.assessment_pct < 50) attention.push("assessment scores below 50%");
-  if (e.status === "active" && s.last_class && Date.now() - Date.parse(s.last_class) > 21 * 86400_000) attention.push("no completed class in 3 weeks");
+  if (s.assignments_overdue >= rules.overdueAssignments) attention.push(`${plural(s.assignments_overdue, "overdue assignment")}`);
+  if (s.missed >= rules.missedClasses) attention.push(`${plural(s.missed, "missed class")}`.replace("classs", "classes"));
+  if ((s.assessments_missed ?? 0) >= rules.missedAssessments) attention.push(`${plural(s.assessments_missed, "assessment")} not attempted`);
+  if (s.assignment_pct !== null && s.assignment_pct < rules.averageBelow) attention.push(`assignment average below ${rules.averageBelow}%`);
+  if (s.assessment_pct !== null && s.assessment_pct < rules.averageBelow) attention.push(`assessment average below ${rules.averageBelow}%`);
+  if (e.status === "active" && s.last_class && Date.now() - Date.parse(s.last_class) > rules.inactiveDays * 86400_000) attention.push(`no completed class in ${rules.inactiveDays} days`);
   return {
     enrolmentId: e.id, programme: e.programme_slug, programmeName: progName(e.programme_slug), status: e.status,
     overall: parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : 0,

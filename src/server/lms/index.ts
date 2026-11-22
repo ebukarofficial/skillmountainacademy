@@ -8,4 +8,7 @@ import "./routes/assistant";
 import "./routes/admissions";
 import "./routes/admit";
 import "./routes/onboarding";
+import "./routes/desk";
+import "./routes/records";
+import "./routes/engagement";
 export { handleLms } from "./api";

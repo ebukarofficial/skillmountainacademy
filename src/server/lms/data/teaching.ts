@@ -49,6 +49,7 @@ export type Session = {
   meet_url: string | null; meet_updated_at: string | null; meet_notified_at: string | null; status: "scheduled" | "completed" | "missed" | "cancelled" | "rescheduled";
   outcome_at: string | null; outcome_by: string | null; notes: string | null; rescheduled_to: string | null; reminded_24h_at: string | null;
   reminded_1h_at: string | null; reminded_15m_at: string | null; link_missing_alert_at: string | null; created_at: string;
+  attendance_detail?: "on_time" | "late" | "excused" | null;
 };
 export type SessionRow = Session & { programme_slug: string; student_name: string; student_email: string; student_photo: string | null; instructor_name: string | null; instructor_email: string | null };
 const SESSION_SELECT = `SELECT cs.*, e.programme_slug, s.full_name AS student_name, s.email AS student_email, s.photo_key AS student_photo,
@@ -93,3 +94,52 @@ export const unreadCount = async (db: DB, userId: string) => (await one<{ n: num
 export const markRead = (db: DB, userId: string, ids: string[] | "all", at: string) => ids === "all"
   ? run(db, "UPDATE notifications SET read_at = ?2 WHERE user_id = ?1 AND read_at IS NULL", userId, at)
   : batch(db, ids.slice(0, 100).map((id) => stmt(db, "UPDATE notifications SET read_at = ?3 WHERE id = ?1 AND user_id = ?2 AND read_at IS NULL", id, userId, at)));
+
+// Session counts for one enrolment (instructor's student records). attendance_detail exists from migration 0007;
+// before it runs the late and excused counts are reported as null.
+export async function enrolmentSessionStats(db: DB, enrolmentId: string, nowIso: string) {
+  const base = await one<{ total: number; upcoming: number; attended: number; missed: number; cancelled: number; rescheduled: number }>(db, `SELECT
+    COUNT(*) AS total,
+    SUM(CASE WHEN status = 'scheduled' AND starts_at >= ?2 THEN 1 ELSE 0 END) AS upcoming,
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS attended,
+    SUM(CASE WHEN status = 'missed' THEN 1 ELSE 0 END) AS missed,
+    SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+    SUM(CASE WHEN status = 'rescheduled' THEN 1 ELSE 0 END) AS rescheduled
+    FROM class_sessions WHERE enrolment_id = ?1`, enrolmentId, nowIso);
+  let detail: { late: number; excused: number } | null = null;
+  try {
+    detail = await one<{ late: number; excused: number }>(db, `SELECT SUM(CASE WHEN attendance_detail = 'late' THEN 1 ELSE 0 END) AS late,
+      SUM(CASE WHEN attendance_detail = 'excused' THEN 1 ELSE 0 END) AS excused FROM class_sessions WHERE enrolment_id = ?1`, enrolmentId);
+  } catch { detail = null; }
+  const n = (v: number | null | undefined) => v ?? 0;
+  return { total: n(base?.total), upcoming: n(base?.upcoming), attended: n(base?.attended), missed: n(base?.missed), cancelled: n(base?.cancelled),
+    rescheduled: n(base?.rescheduled), late: detail ? n(detail.late) : null, excused: detail ? n(detail.excused) : null };
+}
+
+// Attendance across an instructor's classes between two instants (week, month).
+export async function attendanceBetween(db: DB, instructorId: string | null, fromIso: string, toIso: string) {
+  const r = await one<{ scheduled: number; attended: number; missed: number; cancelled: number; rescheduled: number; pending: number }>(db, `SELECT
+    COUNT(*) AS scheduled,
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS attended,
+    SUM(CASE WHEN status = 'missed' THEN 1 ELSE 0 END) AS missed,
+    SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+    SUM(CASE WHEN status = 'rescheduled' THEN 1 ELSE 0 END) AS rescheduled,
+    SUM(CASE WHEN status = 'scheduled' AND ends_at <= ?4 THEN 1 ELSE 0 END) AS pending
+    FROM class_sessions WHERE (?1 IS NULL OR instructor_id = ?1) AND starts_at >= ?2 AND starts_at < ?3`, instructorId, fromIso, toIso, new Date().toISOString());
+  let detail: { late: number; excused: number } | null = null;
+  try {
+    detail = await one<{ late: number; excused: number }>(db, `SELECT SUM(CASE WHEN attendance_detail = 'late' THEN 1 ELSE 0 END) AS late,
+      SUM(CASE WHEN attendance_detail = 'excused' THEN 1 ELSE 0 END) AS excused FROM class_sessions WHERE (?1 IS NULL OR instructor_id = ?1) AND starts_at >= ?2 AND starts_at < ?3`, instructorId, fromIso, toIso);
+  } catch { detail = null; }
+  const n = (v: number | null | undefined) => v ?? 0;
+  const attended = n(r?.attended), missed = n(r?.missed);
+  return { scheduled: n(r?.scheduled), attended, missed, cancelled: n(r?.cancelled), rescheduled: n(r?.rescheduled), pending: n(r?.pending),
+    late: detail ? n(detail.late) : null, excused: detail ? n(detail.excused) : null, attendancePct: attended + missed ? Math.round((100 * attended) / (attended + missed)) : null };
+}
+
+// Applies an instructor's own Meet room to their scheduled classes that have no link yet (or to all of them).
+export const applyMeetLink = (db: DB, instructorId: string, url: string, fromIso: string, overwrite: boolean, at: string) =>
+  run(db, `UPDATE class_sessions SET meet_url = ?2, meet_updated_at = ?5, meet_notified_at = NULL WHERE instructor_id = ?1 AND status = 'scheduled'
+    AND ends_at >= ?3 AND (?4 = 1 OR meet_url IS NULL)`, instructorId, url, fromIso, overwrite ? 1 : 0, at);
+export const sessionsUsingLink = (db: DB, instructorId: string, url: string, fromIso: string) =>
+  all<SessionRow>(db, `${SESSION_SELECT} WHERE cs.instructor_id = ?1 AND cs.meet_url = ?2 AND cs.status = 'scheduled' AND cs.ends_at >= ?3 ORDER BY cs.starts_at LIMIT 200`, instructorId, url, fromIso);
