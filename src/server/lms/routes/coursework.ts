@@ -18,22 +18,49 @@ import { notify } from "../notify";
 import { addDays, lagosDate, lagosText, lagosToIso, weekdayOf } from "../time";
 import { studentForInstructor } from "../views";
 import { indexResource, removeResourceIndex } from "../ai-index";
-import { checkUpload, DOC_TYPES, MAX_FILE_MB, MAX_PHOTO_MB, PHOTO_TYPES } from "../upload-rules";
+import { Repo } from "../../repo";
+import { checkContent, checkUpload, DOC_TYPES, MAX_FILE_MB, MAX_PHOTO_MB, PHOTO_TYPES } from "../upload-rules";
 
 const progName = (s: string) => findProgramme(s)?.name ?? s;
 
 // ---------- uploads ----------
 export { MAX_FILE_MB };
 
-// Streams the request body straight into R2 (no buffering, so large files cost almost no Worker CPU).
+// Stage 2 upload pipeline: (1) name checks and allowed extension, (2) declared size, (3) the body is read with a hard
+// byte cap (the declared length is not trusted), (4) the bytes must match the format (file signature; programs and
+// archives holding programs are refused), (5) the object key is generated (no part of the uploaded name, no user path),
+// (6) the content type comes from the server's own list, never from the browser. Uploads are also rate limited per user.
+// Malware scanning is NOT implemented; see docs/SMA_SECURITY_REMEDIATION.md before switching R2 on.
+export const UPLOADS_PER_HOUR = 30;
+async function readCapped(body: ReadableStream<Uint8Array>, max: number): Promise<Uint8Array | null> {
+  const reader = body.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) { await reader.cancel().catch(() => undefined); return null; }
+    parts.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.byteLength; }
+  return out;
+}
 export async function putUpload(c: Ctx, prefix: string, types: Record<string, string>, maxMb: number) {
   if (!c.env.BUCKET) throw new ApiError(503, "not_configured", "File uploads are not set up yet. You can type your answer instead, or send the file to your instructor by email.");
   const chk = checkUpload(c.url.searchParams.get("name") || "", Number(c.req.headers.get("content-length") || 0), types, maxMb);
   if (!chk.ok) { await c.req.body?.cancel().catch(() => undefined); throw new ApiError(chk.status, chk.code, chk.message); }
   const { name, type } = chk;
   if (!c.req.body) throw new ApiError(400, "empty", "The file is empty.");
-  const key = `${prefix}/${crypto.randomUUID()}-${name}`;
-  await c.env.BUCKET.put(key, c.req.body, { httpMetadata: { contentType: type }, customMetadata: { name, by: c.user.id } });
+  await new Repo(c.db).limitOrThrow(`upload:${c.user.id}`, UPLOADS_PER_HOUR, 3600);
+  const bytes = await readCapped(c.req.body, maxMb * 1024 * 1024);
+  if (!bytes) throw new ApiError(413, "too_large", `Files can be up to ${maxMb} MB.`);
+  const content = checkContent(name.split(".").pop()!.toLowerCase(), bytes);
+  if (!content.ok) { await c.audit("upload.rejected", "upload", prefix, { reason: content.message }); throw new ApiError(400, "file_content", content.message); }
+  const key = `${prefix}/${crypto.randomUUID()}`;
+  await c.env.BUCKET.put(key, bytes, { httpMetadata: { contentType: type }, customMetadata: { name, by: c.user.id } });
   return { key, name };
 }
 

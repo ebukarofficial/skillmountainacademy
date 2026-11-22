@@ -6,7 +6,6 @@
 // Capped per run to stay inside the Workers Free plan limits (50 external requests, 50 D1 queries).
 import type { AppEnv } from "../env";
 import { findProgramme } from "../../../lib/config.ts";
-import { purgeSessions, purgeTokens } from "./data/users";
 import { dueFor, markSent, missingLinks, pendingOutcomesByInstructor, type SessionRow } from "./data/teaching";
 import { notify, type Recipient } from "./notify";
 import { generateSessions } from "./routes/teaching";
@@ -30,8 +29,7 @@ export async function runLmsSchedule(env: AppEnv, now: Date, daily: boolean) {
       out.emails += await notify(env, db, [{ id: p.instructor_id, email: p.email, name: p.full_name }], { kind: "attendance.pending", title: `Attendance to record: ${p.n} class${p.n === 1 ? "" : "es"}`, body: `Please record the outcome (completed, missed or cancelled) of ${p.n} past class${p.n === 1 ? "" : "es"}.`, link: "/app/" });
       budget -= 1;
     }
-    await purgeTokens(db, iso(t - 86400_000));
-    await purgeSessions(db, iso(t));
+    // Expired sign-in links and sessions are removed by the retention pass in cron.ts (Stage 2).
   }
 
   const people = (s: SessionRow): Recipient[] => [

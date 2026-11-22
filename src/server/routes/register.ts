@@ -4,9 +4,10 @@ import { EDUCATION, ENGLISH, FLAGS, BANK, duration, findProgramme, type Programm
 import { dueDays, lagosDate, money, planParts, priceNaira, type Currency, type Plan, CURRENCIES } from "../../../lib/pricing.ts";
 import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
-import { ApiError, clientIp, json, nowIso, randomCode, readJson, sameOrigin, sha256 } from "../http";
+import { ApiError, clientIp, json, nowIso, randomCode, readJson, sameOrigin } from "../http";
 import { Repo, type InstalmentRow, type OrderRow, type RegistrationRow } from "../repo";
 import { verifyTurnstile } from "../turnstile";
+import { ipPseudonym } from "../privacy";
 import { Checker } from "../validate";
 import { button, esc, letter, notice, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
@@ -17,7 +18,8 @@ import { assertCanRegister } from "../lms/admissions";
 
 type Body = Record<string, unknown> & { learner?: Record<string, unknown>; members?: unknown };
 
-export const ipHash = (env: AppEnv, req: Request) => sha256(`${clientIp(req)}|${env.HOLD_SIGNING_KEY || "sma"}`);
+// Stage 2: one keyed pseudonym for every IP address (src/server/privacy.ts); no predictable fallback salt.
+export const ipHash = (env: AppEnv, req: Request) => ipPseudonym(env, clientIp(req));
 
 function readLearner(c: Checker, l: Record<string, unknown>) {
   const adult = c.oneOf(l.adult, ["Yes", "No"] as const, "whether the learner is 18 or older");

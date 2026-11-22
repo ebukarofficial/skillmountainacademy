@@ -3,7 +3,7 @@
 //  - 05:00 and 17:00 UTC (06:00 / 18:00 Lagos): exchange rates
 //  - 05:00 UTC: instalments, next 14 days of class sessions, clean-up
 // Work per run is capped so the job stays inside the Workers Free plan limits (50 external requests and 50 D1 queries per run).
-import { purgeEnquiries } from "./lms/data/desk";
+import { runRetention } from "./lms/retention";
 import { PROGRAMMES } from "../../lib/config.ts";
 import { lagosDate, money } from "../../lib/pricing.ts";
 import type { AppEnv } from "./env";
@@ -25,9 +25,9 @@ export async function runSchedule(env: AppEnv, now = new Date(), _cron = "*/5 * 
   if (!morning || !env.DB) return out;
   const repo = new Repo(env.DB);
   try {
-    await repo.cleanupRateLimits(Math.floor(now.getTime() / 1000) - 86400);
-    // Retention: admissions-assistant questions are kept for 180 days, then deleted.
-    await purgeEnquiries(env.DB, new Date(now.getTime() - 180 * 86400_000).toISOString()).catch(() => undefined);
+    // Retention (Stage 2): one audited, batch-limited pass over the allow-listed categories (src/server/lms/retention.ts).
+    // Rate-limit counters and assistant questions are purged as before; new categories stay off until approved.
+    await runRetention(env.DB, now).catch((e) => console.error("retention", e));
     const today = lagosDate(now);
     out.overdue = await repo.markOverdue(today);
     const canLink = !!env.PAYSTACK_SECRET_KEY;

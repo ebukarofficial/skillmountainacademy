@@ -7,6 +7,7 @@ import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
 import { ApiError, clientIp, json, nowIso, randomCode, sha256 } from "../http";
 import { Repo, type InstalmentRow, type OrderRow } from "../repo";
+import { ipPseudonym } from "../privacy";
 import { button, esc, layout, letter, notice, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
 import { ensureStudentAccount } from "../lms/accounts";
@@ -142,7 +143,7 @@ export async function handleOrderStatus(req: Request, env: AppEnv, ctx: Executio
   const ref = url.searchParams.get("ref") || "";
   if (!/^SMA-(BT-)?[A-Z0-9]{12}$/.test(ref)) throw new ApiError(400, "invalid", "Unknown reference.");
   const repo = new Repo(env.DB);
-  await repo.limitOrThrow(`order:${await sha256(clientIp(req))}`, 30, 600);
+  await repo.limitOrThrow(`order:${await ipPseudonym(env, clientIp(req))}`, 30, 600);
   let order = await repo.getOrderByReference(ref);
   if (!order) throw new ApiError(404, "not_found", "Unknown reference.");
   const trx = url.searchParams.get("trxref") || url.searchParams.get("reference") || "";

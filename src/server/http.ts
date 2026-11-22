@@ -2,10 +2,12 @@
 export class ApiError extends Error {
   status: number;
   code: string;
-  constructor(status: number, code: string, message: string) {
+  headers?: HeadersInit;
+  constructor(status: number, code: string, message: string, headers?: HeadersInit) {
     super(message);
     this.status = status;
     this.code = code;
+    this.headers = headers;
   }
 }
 
@@ -22,7 +24,7 @@ export function json(data: unknown, status = 200, extra: HeadersInit = {}): Resp
   return new Response(JSON.stringify(data), { status, headers: h });
 }
 
-export const fail = (e: ApiError) => json({ ok: false, error: e.code, message: e.message }, e.status);
+export const fail = (e: ApiError) => json({ ok: false, error: e.code, message: e.message }, e.status, e.headers ?? {});
 
 export const notConfigured = (what: string) =>
   new ApiError(503, "not_configured", `${what} is not set up yet. Please contact us on WhatsApp or email admission@skillmountainacademy.com and we will register you.`);

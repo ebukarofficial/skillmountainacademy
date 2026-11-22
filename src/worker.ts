@@ -13,6 +13,7 @@ import { handleOrderStatus, handlePayLink, handleWebhook } from "./server/routes
 import { handleLms } from "./server/lms";
 import { onEmailFailure } from "./server/email";
 import { logError } from "./server/lms/data/users";
+import { handleCspReport } from "./server/routes/csp";
 
 // Every email that fails is written to the error log (Admin > Platform > Recent errors) with Resend's reason.
 const recordEmailFailures = (env: AppEnv) => { if (env.DB) onEmailFailure((subject, reason) => logError(env.DB!, "email", `"${subject}" was not sent. ${reason}`)); };
@@ -35,6 +36,7 @@ const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
   "/api/order": { GET: handleOrderStatus },
   "/api/pay": { GET: handlePayLink },
   "/api/paystack/webhook": { POST: handleWebhook },
+  "/api/csp-report": { POST: handleCspReport },
 };
 
 export default {

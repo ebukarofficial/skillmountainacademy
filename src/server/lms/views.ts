@@ -30,4 +30,4 @@ export const instructorPublic = (u: User) => ({
 export const studentForInstructor = (u: User) => ({ id: u.id, fullName: u.full_name, email: u.email, phone: u.phone, bio: u.bio, photo: photo(u), studentNo: u.student_no });
 
 // Full record for admins.
-export const adminView = (u: User) => ({ ...selfView(u), status: u.status, verification: u.verification ?? null, registrationId: u.registration_id, createdAt: u.created_at, lastLoginAt: u.last_login_at });
+export const adminView = (u: User) => ({ ...selfView(u), status: u.status, adminRole: u.role === "admin" ? (u.admin_role ?? null) : undefined, verification: u.verification ?? null, registrationId: u.registration_id, createdAt: u.created_at, lastLoginAt: u.last_login_at });

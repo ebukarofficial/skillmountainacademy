@@ -1,4 +1,6 @@
 // Profiles (everyone edits their own) and user management (admins only).
+import { ADMIN_ROLES, canManageAdmins, isAdminRole } from "../permissions";
+import { setAdminRole } from "../data/users";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
 import { ALL, notFound, ok, page, route } from "../api";
@@ -109,9 +111,11 @@ route("POST", "/api/app/admin/users", ["admin"], async (c) => {
   if (role === "instructor") u.verification = "application_received";
   if (role === "admin") u.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
   await createUser(c.db, u);
-  await c.audit("user.create", "user", u.id, { email, role });
+  // Stage 2 least privilege: a NEW administrator gets the group asked for, or read-only Reporting until one is assigned.
+  if (role === "admin") await setAdminRole(c.db, u.id, isAdminRole(b.adminRole) ? b.adminRole : "reporting");
+  await c.audit("user.create", "user", u.id, { email, role, adminRole: role === "admin" ? (isAdminRole(b.adminRole) ? b.adminRole : "reporting") : undefined });
   if (b.sendInvite !== false && canSignIn(u)) c.exec.waitUntil(sendSignInLink(c.env, c.db, u, true));
-  return ok({ user: adminView(u) }, 201);
+  return ok({ user: adminView((await getUser(c.db, u.id)) ?? u) }, 201);
 });
 
 route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
@@ -122,15 +126,28 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   const patch = profilePatch(ch, b, (b.role as Role) ?? u.role);
   if (b.role !== undefined) patch.role = ch.oneOf(b.role, ROLES, "a role");
   if (b.status !== undefined) patch.status = ch.oneOf(b.status, ["active", "suspended"] as const, "a status");
+  const adminRole = b.adminRole === undefined ? undefined : ch.oneOf(b.adminRole, ADMIN_ROLES, "an administrator group");
   ch.done();
   if (u.id === c.user.id && (patch.status === "suspended" || (patch.role && patch.role !== "admin"))) throw new ApiError(400, "self", "You cannot suspend yourself or remove your own admin role.");
+  // Administrator groups: only a Super Administrator (or the unassigned owner) may set them; nobody can lower their own
+  // access by mistake, and the only group anyone may give themselves is Super Administrator.
+  if (adminRole !== undefined) {
+    if (!canManageAdmins(c.user.admin_role)) throw new ApiError(403, "forbidden", "Only a Super Administrator can change administrator groups.");
+    if ((patch.role ?? u.role) !== "admin") throw new ApiError(400, "invalid", "Administrator groups apply to administrators only.");
+    if (u.id === c.user.id && adminRole !== "super") throw new ApiError(400, "self", "You can only assign yourself Super Administrator. Ask another Super Administrator to change your group.");
+  }
   if (patch.role === "student" && !u.student_no) patch.student_no = await newStudentNo(c.db);
   if (patch.role === "admin" && !u.staff_no) patch.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
   // Becoming an instructor means going through verification first (unless they were approved before).
   if (patch.role === "instructor" && u.role !== "instructor" && u.verification !== "approved") patch.verification = "application_received";
   await updateUser(c.db, u.id, patch);
-  if (patch.status === "suspended" || (patch.role && patch.role !== u.role)) await deleteUserSessions(c.db, u.id); // takes effect at once
-  await c.audit("user.update", "user", u.id, patch);
+  const becameAdmin = patch.role === "admin" && u.role !== "admin";
+  if (adminRole !== undefined || becameAdmin) await setAdminRole(c.db, u.id, adminRole ?? "reporting");
+  const groupChanged = adminRole !== undefined && adminRole !== (u.admin_role ?? null);
+  // Suspension, a role change or a new administrator group takes effect at once: every session of that person ends
+  // (except the caller's own when they promote themselves to Super Administrator).
+  if (patch.status === "suspended" || (patch.role && patch.role !== u.role) || (groupChanged && u.id !== c.user.id)) await deleteUserSessions(c.db, u.id);
+  await c.audit("user.update", "user", u.id, { ...patch, ...(adminRole !== undefined ? { adminRole } : {}) });
   return ok({ user: adminView((await getUser(c.db, u.id))!) });
 });
 

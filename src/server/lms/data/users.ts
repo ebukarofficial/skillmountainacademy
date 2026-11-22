@@ -12,6 +12,7 @@ export type User = {
   country_origin?: string | null; country_residence?: string | null; profile_submitted_at?: string | null; verified_at?: string | null;
   meet_link?: string | null; guardian_name?: string | null; guardian_relationship?: string | null; guardian_email?: string | null; guardian_phone?: string | null;
   guardian_contact_ok?: number; guardian_contact_note?: string | null;
+  admin_role?: string | null;
 };
 // Only approved instructors teach (see lib/admissions.ts). New instructors can sign in before approval, but only to
 // complete and submit their profile (the API allows them nothing else). Rejected or suspended candidates cannot sign
@@ -45,13 +46,62 @@ export async function consumeToken(db: DB, hash: string, now: string): Promise<s
 export const purgeTokens = (db: DB, before: string) => run(db, "DELETE FROM auth_tokens WHERE expires_at < ?1", before);
 
 // ---- sessions ----
-export const createSession = (db: DB, s: { token_hash: string; user_id: string; created_at: string; expires_at: string; last_seen_at: string; user_agent: string | null }) => insert(db, "auth_sessions", s);
-export const sessionUser = (db: DB, hash: string, now: string) => one<User & { s_expires_at: string; s_last_seen_at: string }>(db,
-  `SELECT u.*, s.expires_at AS s_expires_at, s.last_seen_at AS s_last_seen_at FROM auth_sessions s JOIN users u ON u.id = s.user_id
-   WHERE s.token_hash = ?1 AND s.expires_at > ?2 AND u.status = 'active'`, hash, now);
+// Stage 2: sessions carry last_activity_at (genuine user activity) and the MFA state. Before migration 0008 those columns
+// do not exist; the legacy functions keep sign-in working in that window (idle and MFA checks then cannot apply).
+export type SessionRow = {
+  token_hash: string; user_id: string; created_at: string; expires_at: string; last_seen_at: string;
+  last_activity_at: string | null; mfa_pending: number; mfa_verified_at: string | null; legacy?: boolean;
+};
+const isSchemaGap = (e: unknown) => /no such column|has no column named/i.test(String((e as Error)?.message ?? e));
+
+export async function createSession(db: DB, s: { token_hash: string; user_id: string; created_at: string; expires_at: string; last_seen_at: string; user_agent: string | null; mfa_pending?: number }) {
+  try {
+    return await insert(db, "auth_sessions", { ...s, last_activity_at: s.created_at, mfa_pending: s.mfa_pending ?? 0 });
+  } catch (e) {
+    if (!isSchemaGap(e)) throw e;
+    const { mfa_pending: _m, ...legacy } = s; void _m;
+    return insert(db, "auth_sessions", legacy);
+  }
+}
+export async function sessionWithUser(db: DB, hash: string): Promise<{ user: User; session: SessionRow } | null> {
+  let row: (User & Record<string, unknown>) | null;
+  let legacy = false;
+  try {
+    row = await one<User & Record<string, unknown>>(db,
+      `SELECT u.*, s.created_at AS s_created_at, s.expires_at AS s_expires_at, s.last_seen_at AS s_last_seen_at,
+              s.last_activity_at AS s_last_activity_at, s.mfa_pending AS s_mfa_pending, s.mfa_verified_at AS s_mfa_verified_at
+       FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1`, hash);
+  } catch (e) {
+    if (!isSchemaGap(e)) throw e;
+    legacy = true;
+    row = await one<User & Record<string, unknown>>(db,
+      `SELECT u.*, s.created_at AS s_created_at, s.expires_at AS s_expires_at, s.last_seen_at AS s_last_seen_at
+       FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1`, hash);
+  }
+  if (!row) return null;
+  const session: SessionRow = {
+    token_hash: hash, user_id: row.id, created_at: String(row.s_created_at), expires_at: String(row.s_expires_at), last_seen_at: String(row.s_last_seen_at),
+    last_activity_at: (row.s_last_activity_at as string | null) ?? null, mfa_pending: Number(row.s_mfa_pending ?? 0), mfa_verified_at: (row.s_mfa_verified_at as string | null) ?? null, legacy,
+  };
+  const user = { ...row } as Record<string, unknown>;
+  for (const k of Object.keys(user)) if (k.startsWith("s_")) delete user[k];
+  return { user: user as User, session };
+}
+// Kept for callers that only need the user of a live session.
+export const sessionUser = async (db: DB, hash: string, now: string) => {
+  const r = await sessionWithUser(db, hash);
+  return r && r.session.expires_at > now && r.user.status === "active" ? { ...r.user, s_expires_at: r.session.expires_at, s_last_seen_at: r.session.last_seen_at } : null;
+};
 export const touchSession = (db: DB, hash: string, now: string, expires: string) => run(db, "UPDATE auth_sessions SET last_seen_at = ?2, expires_at = ?3 WHERE token_hash = ?1", hash, now, expires);
+// Genuine activity: moves last_activity_at forward only (never back), at most once per throttle window. The idle check
+// runs BEFORE this in the request pipeline, so an expired session can never be revived by it.
+export const recordActivity = (db: DB, hash: string, at: string, notAfter: string) =>
+  run(db, "UPDATE auth_sessions SET last_activity_at = ?2 WHERE token_hash = ?1 AND (last_activity_at IS NULL OR last_activity_at < ?3)", hash, at, notAfter);
+export const markSessionMfaVerified = (db: DB, hash: string, at: string) =>
+  run(db, "UPDATE auth_sessions SET mfa_pending = 0, mfa_verified_at = ?2 WHERE token_hash = ?1", hash, at);
 export const deleteSession = (db: DB, hash: string) => run(db, "DELETE FROM auth_sessions WHERE token_hash = ?1", hash);
 export const deleteUserSessions = (db: DB, userId: string) => run(db, "DELETE FROM auth_sessions WHERE user_id = ?1", userId);
+export const deleteOtherSessions = (db: DB, userId: string, keepHash: string) => run(db, "DELETE FROM auth_sessions WHERE user_id = ?1 AND token_hash != ?2", userId, keepHash);
 export const purgeSessions = (db: DB, before: string) => run(db, "DELETE FROM auth_sessions WHERE expires_at < ?1", before);
 
 // ---- audit log ----
@@ -76,3 +126,10 @@ export const emailPrefsFor = async (db: DB, ids: string[]) => {
 };
 // A new sign-in link replaces any earlier unused ones.
 export const revokeTokens = (db: DB, userId: string, at: string) => run(db, "UPDATE auth_tokens SET used_at = ?2 WHERE user_id = ?1 AND used_at IS NULL", userId, at);
+
+// Administrator group (migration 0008). Before the migration the column is missing: nothing is written and the
+// administrator keeps today's full access.
+export async function setAdminRole(db: DB, userId: string, role: string | null) {
+  try { await run(db, "UPDATE users SET admin_role = ?2 WHERE id = ?1", userId, role); }
+  catch (e) { if (!/no such column|has no column named/i.test(String((e as Error)?.message ?? e))) throw e; }
+}

@@ -3,8 +3,12 @@
 // Three private entrances, one per role: students /app/student/login/, instructors /app/instructor/login/, administrators
 // /app/login/. A link is only sent to the person whose role matches the entrance used; anyone else is emailed the right
 // entrance instead (no link), so the answer on screen never reveals whether an account exists.
-//   POST /api/auth/verify  {token}                  -> sets the HttpOnly session cookie (30 days, sliding)
+//   POST /api/auth/verify  {token}                  -> sets the HttpOnly session cookie (students: 12 h, ends after 10 min idle;
+//                                                      staff: 30 days sliding). Administrators with an authenticator app
+//                                                      get a session limited to /api/auth/mfa/verify until they enter a code.
 //   POST /api/auth/logout                           -> ends this session
+//   POST /api/auth/logout-all                       -> ends every session of this account, on every device
+//   POST /api/auth/activity {ago?}                  -> records GENUINE user activity (idle timeout); never revives a lapsed session
 //   GET  /api/me                                    -> who is signed in (or 401)
 // The confirm page needs a click (POST) on purpose: email security scanners open links, and a GET must not sign anyone in.
 import { siteUrl } from "../../env";
@@ -13,15 +17,19 @@ import { button, esc, layout, sendEmail, table } from "../../email";
 import { verifyTurnstile } from "../../turnstile";
 import { EMAIL_RE } from "../../validate";
 import { Repo } from "../../repo";
-import { ALL, ok, publicRoute, route, SESSION_COOKIE, SESSION_DAYS } from "../api";
-import { audit, canSignIn, isApproved, logError, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, getUser, getUserByEmail, updateUser, type User } from "../data/users";
+import { ALL, clearCookie, ok, publicRoute, route, SESSION_COOKIE } from "../api";
+import { audit, canSignIn, isApproved, logError, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, deleteUserSessions, getUser, getUserByEmail, recordActivity, updateUser, type User } from "../data/users";
+import { activeFactor } from "../data/mfa";
+import { areasFor } from "../permissions";
+import { ACTIVITY_THROTTLE_SECONDS, policyFor } from "../session-policy";
 import { selfView } from "../views";
 import { newStaffNo } from "../ids";
 
 const TOKEN_MINUTES = 15;
 const INVITE_MINUTES = 24 * 60;
 const b64u = (n: number) => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(n)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const cookie = (v: string, maxAge: number) => `${SESSION_COOKIE}=${v}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+export const sessionCookie = (v: string, maxAge: number) => `${SESSION_COOKIE}=${v}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+export const newSessionToken = () => b64u(32);
 const adminEmails = (v?: string) => (v || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
 // Only a path inside the learning platform may be used as the place to return to after signing in.
@@ -108,7 +116,8 @@ publicRoute("POST", "/api/auth/request", async (c) => {
   if (!EMAIL_RE.test(email)) throw new ApiError(400, "invalid", "Please enter a valid email address.");
   await verifyTurnstile(c.env, b.turnstileToken, clientIp(c.req));
   const repo = new Repo(c.db);
-  await repo.limitOrThrow(`login:${c.ipHash}`, 8, 600);
+  // 20 per address allows a classroom or office behind one shared address; 4 per email stops mailbox flooding.
+  await repo.limitOrThrow(`login:${c.ipHash}`, 20, 600);
   await repo.limitOrThrow(`login-email:${email}`, 4, 600);
   let user = await getUserByEmail(c.db, email);
   // First sign-in of an owner listed in ADMIN_EMAILS creates their admin account.
@@ -135,18 +144,60 @@ publicRoute("POST", "/api/auth/verify", async (c) => {
   const userId = await consumeToken(c.db, await sha256(`t|${token}`), now);
   const user = userId ? await getUser(c.db, userId) : null;
   if (!user || !canSignIn(user)) throw new ApiError(400, "invalid_link", "This sign-in link has expired or was already used. Please request a new one.");
-  const session = b64u(32);
-  await createSession(c.db, { token_hash: await sha256(`s|${session}`), user_id: user.id, created_at: now, expires_at: new Date(Date.now() + SESSION_DAYS * 86400_000).toISOString(),
-    last_seen_at: now, user_agent: (c.req.headers.get("user-agent") || "").slice(0, 200) });
+  // Session fixation: any session cookie the browser already had is discarded; the new token is generated here.
+  const old = getCookie(c.req, SESSION_COOKIE);
+  if (old && old.length <= 200) await deleteSession(c.db, await sha256(`s|${old}`));
+  const policy = policyFor(user.role, c.env);
+  const mfa = await activeFactor(c.db, user.id);
+  const session = newSessionToken();
+  await createSession(c.db, { token_hash: await sha256(`s|${session}`), user_id: user.id, created_at: now, expires_at: new Date(Date.now() + policy.absoluteHours * 3600_000).toISOString(),
+    last_seen_at: now, user_agent: (c.req.headers.get("user-agent") || "").slice(0, 200), mfa_pending: mfa ? 1 : 0 });
   await updateUser(c.db, user.id, { last_login_at: now });
-  await audit(c.db, { actor_id: user.id, action: "auth.login", target_type: "user", target_id: user.id, ip_hash: c.ipHash });
-  return ok({ role: user.role }, 200, { "set-cookie": cookie(session, SESSION_DAYS * 86400) });
+  await audit(c.db, { actor_id: user.id, action: mfa ? "auth.login.mfa_pending" : "auth.login", target_type: "user", target_id: user.id, ip_hash: c.ipHash });
+  return ok({ role: user.role, mfaRequired: !!mfa }, 200, { "set-cookie": sessionCookie(session, policy.absoluteHours * 3600) });
 });
 
 publicRoute("POST", "/api/auth/logout", async (c) => {
   const t = getCookie(c.req, SESSION_COOKIE);
   if (t && t.length <= 200) await deleteSession(c.db, await sha256(`s|${t}`));
-  return ok({}, 200, { "set-cookie": cookie("", 0) });
+  if (c.user) await audit(c.db, { actor_id: c.user.id, action: "auth.logout", target_type: "user", target_id: c.user.id, ip_hash: c.ipHash });
+  return ok({}, 200, { "set-cookie": clearCookie });
 });
 
-route("GET", "/api/me", ALL, async (c) => ok({ user: selfView(c.user) }));
+route("POST", "/api/auth/logout-all", ALL, async (c) => {
+  await deleteUserSessions(c.db, c.user.id);
+  await c.audit("auth.logout_all", "user", c.user.id);
+  return ok({}, 200, { "set-cookie": clearCookie });
+});
+
+// Called by the dashboard only after a real click, key press, touch or deliberate scroll (throttled in the browser too).
+// `ago` lets the browser report how long ago that action happened (0 to 30 s): the server can only move the timestamp
+// BACK by it, never forward, so a late report cannot lengthen the session.
+route("POST", "/api/auth/activity", ALL, async (c) => {
+  if (!c.sessionHash || c.session?.legacy) return ok({ recorded: false });
+  const b = await c.body<{ ago?: number }>().catch(() => ({} as { ago?: number }));
+  const ago = Math.min(30_000, Math.max(0, Math.floor(Number(b.ago) || 0)));
+  const at = new Date(Date.now() - ago).toISOString();
+  const notAfter = new Date(Date.now() - ACTIVITY_THROTTLE_SECONDS * 1000).toISOString();
+  await recordActivity(c.db, c.sessionHash, at, notAfter);
+  return ok({ recorded: true, idleMinutes: c.policy?.idleMinutes ?? null });
+});
+
+route("GET", "/api/me", ALL, async (c) => {
+  const s = c.session;
+  const p = c.policy;
+  const mfa = c.user.role === "admin" ? await activeFactor(c.db, c.user.id).catch(() => null) : null;
+  return ok({
+    user: selfView(c.user),
+    session: s && p ? {
+      idleMinutes: p.idleMinutes, now: new Date().toISOString(),
+      lastActivityAt: s.legacy ? null : (s.last_activity_at ?? s.created_at),
+      expiresAt: new Date(Math.min(Date.parse(s.expires_at), Date.parse(s.created_at) + p.absoluteHours * 3600_000)).toISOString(),
+    } : null,
+    mfa: c.user.role === "admin" ? {
+      enabled: !!mfa, pending: !!s?.mfa_pending, enforced: c.env.MFA_ENFORCE_ADMINS === "true",
+      setupRequired: c.env.MFA_ENFORCE_ADMINS === "true" && !s?.mfa_verified_at && !s?.legacy,
+    } : null,
+    admin: c.user.role === "admin" ? { role: c.user.admin_role ?? null, areas: areasFor(c.user.admin_role) } : null,
+  });
+});

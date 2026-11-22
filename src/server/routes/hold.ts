@@ -6,6 +6,7 @@ import { findProgramme, type Programme } from "../../../lib/config.ts";
 import type { AppEnv } from "../env";
 import { ApiError, clientIp, getCookie, json, sha256 } from "../http";
 import { Repo, type HoldRow } from "../repo";
+import { ipPseudonym } from "../privacy";
 
 export const HOLD_MINUTES = 48;
 export const COOLDOWN_DAYS = 7;
@@ -61,7 +62,7 @@ export async function handleHold(req: Request, env: AppEnv): Promise<Response> {
     headers.append("set-cookie", cookie(VID, await sign(key, vid), 60 * 60 * 24 * 400));
   }
   const visitorHash = await sha256(`v|${vid}`);
-  const ipHash = await sha256(`${clientIp(req)}|${key}`);
+  const ipHash = await ipPseudonym(env, clientIp(req)); // its own key: the hold signing key is not reused for IP hashing
   const now = Date.now();
   const respond = (h: HoldRow | null, ended: boolean) => {
     const active = !!h && Date.parse(h.expires_at) > now;

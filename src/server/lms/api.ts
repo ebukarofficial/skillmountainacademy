@@ -1,42 +1,81 @@
 // The learning platform's request framework: routes with :params, role checks on the SERVER for every
 // /api/app/* call, same-origin checks on every change, JSON helpers and the audit trail.
 import type { AppEnv } from "../env";
-import { ApiError, clientIp, getCookie, json, nowIso, readJson, sameOrigin, sha256 } from "../http";
-import { audit, canSignIn, isApproved, logError, sessionUser, touchSession, type Role, type User } from "./data/users";
+import { ApiError, clientIp, getCookie, json, readJson, sameOrigin, sha256 } from "../http";
+import { ipPseudonym } from "../privacy";
+import { audit, canSignIn, deleteSession, isApproved, logError, sessionWithUser, touchSession, type Role, type SessionRow, type User } from "./data/users";
+import { adminMay } from "./permissions";
+import { MFA_PENDING_MINUTES, policyFor, type SessionPolicy } from "./session-policy";
 
 export type Ctx = {
   req: Request; env: AppEnv; exec: ExecutionContext; url: URL; params: Record<string, string>;
   user: User; db: D1Database; ipHash: string; body: <T = Record<string, unknown>>() => Promise<T>;
+  session: SessionRow | null; sessionHash: string | null; policy: SessionPolicy | null; routePath: string;
   audit: (action: string, target_type?: string, target_id?: string, detail?: unknown) => Promise<unknown>;
 };
 type PublicCtx = Omit<Ctx, "user" | "audit"> & { user: User | null };
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-const ONBOARDING_PATHS = /^\/api\/(me(\/photo)?|auth\/logout|app\/instructor\/onboarding(\/submit)?|app\/notifications(\/read)?|app\/files\/photo\/[\w-]+)$/;
-type Route = { method: Method; parts: string[]; roles: Role[] | "public"; handler: (c: Ctx) => Promise<Response> };
+const ONBOARDING_PATHS = /^\/api\/(me(\/photo)?|auth\/(logout|logout-all|activity)|app\/instructor\/onboarding(\/submit)?|app\/notifications(\/read)?|app\/files\/photo\/[\w-]+)$/;
+type Route = { method: Method; path: string; parts: string[]; roles: Role[] | "public"; handler: (c: Ctx) => Promise<Response> };
 
 const routes: Route[] = [];
 export const ALL: Role[] = ["student", "instructor", "admin"];
 export function route(method: Method, path: string, roles: Role[] | "public", handler: (c: Ctx) => Promise<Response>) {
-  routes.push({ method, parts: path.split("/").filter(Boolean), roles, handler });
+  routes.push({ method, path, parts: path.split("/").filter(Boolean), roles, handler });
 }
+// Every registered route (method, path, roles), for the permission-completeness tests and the API docs.
+export const routeList = () => routes.map((r) => ({ method: r.method, path: r.path, roles: r.roles }));
 export const publicRoute = (method: Method, path: string, handler: (c: PublicCtx) => Promise<Response>) => route(method, path, "public", handler as (c: Ctx) => Promise<Response>);
 
 export const SESSION_COOKIE = "sma_session";
-export const SESSION_DAYS = 30;
+export const SESSION_DAYS = 30; // staff default; see session-policy.ts
+export const clearCookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 
-export async function currentUser(req: Request, db: D1Database): Promise<User | null> {
+// While a session waits for the administrator's authenticator code, only these routes answer.
+const MFA_PENDING_PATHS = /^\/api\/(me|auth\/logout|auth\/mfa\/verify)$/;
+// An administrator who must set up two-step sign-in (MFA_ENFORCE_ADMINS) can only reach the setup routes.
+const MFA_SETUP_PATHS = /^\/api\/(me|auth\/logout|auth\/logout-all|auth\/activity|auth\/mfa\/(status|setup|enable))$/;
+
+export type Expiry = "idle" | "lifetime" | "mfa_timeout";
+export type Resolved = { user: User | null; session: SessionRow | null; hash: string | null; policy: SessionPolicy | null; expired: Expiry | null; stale: boolean };
+
+// Reads the session cookie and applies every server-side rule: absolute lifetime, the idle limit for the role (students:
+// 10 minutes since the last GENUINE activity), and the time allowed to enter an authenticator code. An expired session
+// is deleted at once, so the same cookie can never work again (refresh, wake from sleep or a reopened browser included).
+export async function resolveSession(req: Request, env: AppEnv, db: D1Database, nowMs = Date.now()): Promise<Resolved> {
+  const none: Resolved = { user: null, session: null, hash: null, policy: null, expired: null, stale: false };
   const token = getCookie(req, SESSION_COOKIE);
-  if (!token || token.length > 200) return null;
+  if (!token || token.length > 200) return none;
   const hash = await sha256(`s|${token}`);
-  const now = nowIso();
-  const u = await sessionUser(db, hash, now);
-  if (!u || !canSignIn(u)) return null;
-  // Sliding expiry, written at most once a day per session to save database writes.
-  if (Date.now() - Date.parse(u.s_last_seen_at) > 86400_000) await touchSession(db, hash, now, new Date(Date.now() + SESSION_DAYS * 86400_000).toISOString());
-  const { s_expires_at: _e, s_last_seen_at: _l, ...user } = u;
-  void _e; void _l;
-  return user as User;
+  const r = await sessionWithUser(db, hash);
+  if (!r) return { ...none, stale: true };
+  const { user, session } = r;
+  if (!canSignIn(user)) { await deleteSession(db, hash); return { ...none, stale: true }; }
+  const policy = policyFor(user.role, env);
+  const created = Date.parse(session.created_at);
+  let expired: Expiry | null = null;
+  if (Date.parse(session.expires_at) <= nowMs || nowMs - created > policy.absoluteHours * 3600_000) expired = "lifetime";
+  else if (session.mfa_pending && nowMs - created > MFA_PENDING_MINUTES * 60_000) expired = "mfa_timeout";
+  else if (policy.idleMinutes !== null && !session.legacy) {
+    const last = Date.parse(session.last_activity_at ?? session.created_at);
+    if (nowMs - last > policy.idleMinutes * 60_000) expired = "idle";
+  }
+  if (expired) { await deleteSession(db, hash); return { ...none, expired, stale: true }; }
+  // Staff sessions keep their sliding 30-day window (written at most once a day). Student sessions never slide.
+  if (policy.sliding && nowMs - Date.parse(session.last_seen_at) > 86400_000)
+    await touchSession(db, hash, new Date(nowMs).toISOString(), new Date(nowMs + policy.absoluteHours * 3600_000).toISOString());
+  return { user, session, hash, policy, expired: null, stale: false };
 }
+
+export async function currentUser(req: Request, env: AppEnv, db: D1Database): Promise<User | null> {
+  return (await resolveSession(req, env, db)).user;
+}
+
+const EXPIRED_MESSAGE: Record<Expiry, string> = {
+  idle: "You were signed out because there was no activity for a while. Please request a new sign-in link.",
+  lifetime: "Your session has ended. Please request a new sign-in link.",
+  mfa_timeout: "The time to enter your authenticator code has passed. Please request a new sign-in link.",
+};
 
 function match(r: Route, method: string, parts: string[]): Record<string, string> | null {
   if (r.method !== method || r.parts.length !== parts.length) return null;
@@ -64,11 +103,23 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
   if (!env.DB) throw new ApiError(503, "not_configured", "The learning platform is not set up yet.");
   if (req.method !== "GET" && !sameOrigin(req)) throw new ApiError(403, "forbidden", "Please use skillmountainacademy.com.");
   const db = env.DB;
-  const ipHash = await sha256(`${clientIp(req)}|${env.HOLD_SIGNING_KEY || "sma"}`);
-  const user = await currentUser(req, db);
+  const ipHash = await ipPseudonym(env, clientIp(req));
+  const auth = await resolveSession(req, env, db);
+  const user = auth.user;
   if (found.r.roles !== "public") {
-    if (!user) throw new ApiError(401, "unauthenticated", "Please sign in.");
+    if (!user) {
+      if (auth.expired) throw new ApiError(401, "session_expired", EXPIRED_MESSAGE[auth.expired], { "set-cookie": clearCookie, "x-session-expired": auth.expired });
+      throw new ApiError(401, "unauthenticated", "Please sign in.", auth.stale ? { "set-cookie": clearCookie } : undefined);
+    }
     if (!found.r.roles.includes(user.role)) throw new ApiError(403, "forbidden", "You do not have access to this.");
+    // Administrator two-step sign-in: a session that has not passed the authenticator code can do nothing else.
+    if (auth.session?.mfa_pending && !MFA_PENDING_PATHS.test(url.pathname))
+      throw new ApiError(403, "mfa_required", "Enter the code from your authenticator app to finish signing in.");
+    if (user.role === "admin" && env.MFA_ENFORCE_ADMINS === "true" && !auth.session?.mfa_verified_at && !auth.session?.legacy && !MFA_SETUP_PATHS.test(url.pathname))
+      throw new ApiError(403, "mfa_setup_required", "Set up two-step sign-in with an authenticator app to use administration.");
+    // Administrator permission groups (default deny for scoped groups; unassigned administrators keep full access).
+    if (user.role === "admin" && !adminMay(user.admin_role, req.method, found.r.path))
+      throw new ApiError(403, "forbidden", "Your administrator role does not include this.");
     // An instructor awaiting verification may only complete their profile, see notices and sign out.
     if (user.role === "instructor" && !isApproved(user) && !ONBOARDING_PATHS.test(url.pathname))
       throw new ApiError(403, "awaiting_verification", "Your profile is awaiting verification. You can use the faculty workspace once the Academy approves it.");
@@ -76,6 +127,7 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
   let cached: unknown;
   const c = {
     req, env, exec, url, params: found.params, user: user as User, db, ipHash,
+    session: auth.session, sessionHash: auth.hash, policy: auth.policy, routePath: found.r.path,
     body: async <T,>() => (cached ??= await readJson(req, 160_000)) as T, // fits a 60,000-character material text
     audit: (action: string, target_type?: string, target_id?: string, detail?: unknown) => audit(db, { actor_id: user?.id ?? null, action, target_type, target_id, detail, ip_hash: ipHash }),
   } as Ctx;
