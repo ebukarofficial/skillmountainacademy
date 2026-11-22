@@ -125,7 +125,7 @@ Tested by:
 **D1 fallback** (if the Worker or email is unavailable). This was executed against migrations 0001–0010 locally: 5 statements; the factor, codes and sessions all 0; `mfa_required` = 1; audit row present.
 
 ```sh
-npx wrangler d1 export skillmountainacademy-db --remote --output backup-before-breakglass.sql
+npm run db:backup -- --remote --owner-approved --encrypt-for owner-backup-public.pem   # Stage 3A: wrangler d1 export cannot export this database (FTS5)
 npx wrangler d1 execute skillmountainacademy-db --remote --command "DELETE FROM mfa_recovery_codes WHERE user_id = (SELECT id FROM users WHERE email = 'bookebukar@gmail.com'); DELETE FROM mfa_factors WHERE user_id = (SELECT id FROM users WHERE email = 'bookebukar@gmail.com'); DELETE FROM auth_sessions WHERE user_id = (SELECT id FROM users WHERE email = 'bookebukar@gmail.com'); UPDATE users SET mfa_required = 1 WHERE email = 'bookebukar@gmail.com'; INSERT INTO audit_log (id, at, action, target_type, target_id, detail) SELECT lower(hex(randomblob(16))), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'mfa.owner_break_glass_d1', 'user', id, '{\"via\":\"wrangler d1\"}' FROM users WHERE email = 'bookebukar@gmail.com';"
 ```
 
@@ -216,7 +216,7 @@ Administrative removal is not reversible in the application. If reinstatement is
 
 Mitigations for Stage 3:
 - Restrict Cloudflare account membership and require 2FA on it.
-- Export the audit log regularly to storage the operator cannot silently edit, for example a daily `d1 export` kept off-platform.
+- Export the audit log regularly to storage the operator cannot silently edit, for example a daily `npm run db:backup` (Stage 3A) kept off-platform.
 - Consider hash-chaining entries so any gap or edit is detectable.
 
 ## 8. Staff session configuration
@@ -392,7 +392,7 @@ Uploaded files will live in R2 when enabled. Today R2 is unbound, so there are n
 
 ### 12.4 Existing backup capability
 
-- **Manual only:** `npx wrangler d1 export skillmountainacademy-db --remote --output backup-YYYY-MM-DD.sql`, documented in the Stage 2 and 2B checklists.
+- **Manual only:** (superseded by Stage 3A: `wrangler d1 export` refuses this database because of its FTS5 table; use `npm run db:backup`, see `docs/SMA_STAGE_3A_BACKUP_RESTORE_ARCHITECTURE.md`) formerly `npx wrangler d1 export …`, documented in the Stage 2 and 2B checklists.
 - **Cloudflare D1 Time Travel** (point-in-time restore within Cloudflare's retention window for the account's plan) is available by platform design, but it has **not been verified or tested** for this account.
 - No scheduled exports, no off-platform copies and **no restore test has ever been performed**.
 

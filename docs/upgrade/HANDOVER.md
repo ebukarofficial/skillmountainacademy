@@ -542,3 +542,12 @@ Owner bound to one account at bootstrap (`owner_record`, migration 0010, immutab
 actions require an authenticator-verified session (fail closed); atomic bootstrap; legacy administrator review and optional
 read-only policy; removal returns teaching to reassign and removed accounts get no email; append-only audit log in the database;
 audit-log retention owner-only. Report and Stage 3 handover: `docs/SMA_STAGE_2C_FINAL_SECURITY_GATE.md`. Tests: `tests/stage2c.test.ts`.
+
+## Stage 3A (22 Nov 2026)
+
+Backup, restore, preflight and recovery tooling in `scripts/db/` (logical backups, because `wrangler d1 export` refuses this
+database's FTS5 table; manifests; optional encryption; isolated restore verification; manifest comparison; fail-closed
+migration preflight with an SQLite-aware parser and reviewed exceptions; rehearsal on a restored copy; gated `npm run db:migrate`).
+Data classification in `scripts/db/classification.mts`; expected schema in `db/schema.expected.json` and
+`src/server/schema-version.ts` (shown in Admin > Platform). Documents: `docs/SMA_STAGE_3A_*.md`. Tests: `tests/db-preflight.test.ts`,
+`tests/db-recovery.test.ts`.

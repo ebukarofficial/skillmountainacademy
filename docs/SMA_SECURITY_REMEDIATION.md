@@ -433,9 +433,9 @@ Update `/privacy/` only after the owner approves these periods.
 
 Do these in order, after reviewing this document. Never paste secret values into chat or the repository.
 
-1. **Back up D1:** `npx wrangler d1 export skillmountainacademy-db --remote --output backup-YYYY-MM-DD.sql`, stored off-machine.
+1. **Back up D1** (superseded by Stage 3A: use `npm run db:backup`, since `wrangler d1 export` refuses this database; see `docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md`): formerly `npx wrangler d1 export …`, stored off-machine.
 2. **Check migrations:** `npx wrangler d1 migrations list skillmountainacademy-db --remote`.
-3. **Apply migrations** (with approval): `npm run db:migrate` (0007 if still pending, then 0008).
+3. **Apply migrations** (with approval): through the gated Stage 3A procedure (`docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md`); `npm run db:migrate` now refuses unless every gate passes.
 4. **Secrets:**
    - `openssl rand -base64 36`, then `npx wrangler secret put IP_HASH_SALT`;
    - `openssl rand -base64 32`, then `npx wrangler secret put MFA_ENCRYPTION_KEY`. Keep a copy in a password manager: losing it disables every enrolled factor.

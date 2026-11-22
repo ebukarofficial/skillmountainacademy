@@ -188,7 +188,7 @@ Procedure:
 **D1 break-glass (verified on a fresh local D1 with all 9 migrations: "5 commands executed successfully"; factor, codes and sessions = 0, `mfa_required` = 1, audit row written):**
 
 ```sh
-npx wrangler d1 export skillmountainacademy-db --remote --output backup-before-breakglass.sql
+npm run db:backup -- --remote --owner-approved --encrypt-for owner-backup-public.pem   # Stage 3A: wrangler d1 export cannot export this database (FTS5)
 npx wrangler d1 execute skillmountainacademy-db --remote --command "DELETE FROM mfa_recovery_codes WHERE user_id = (SELECT id FROM users WHERE email = 'bookebukar@gmail.com'); DELETE FROM mfa_factors WHERE user_id = (SELECT id FROM users WHERE email = 'bookebukar@gmail.com'); DELETE FROM auth_sessions WHERE user_id = (SELECT id FROM users WHERE email = 'bookebukar@gmail.com'); UPDATE users SET mfa_required = 1 WHERE email = 'bookebukar@gmail.com'; INSERT INTO audit_log (id, at, action, target_type, target_id, detail) SELECT lower(hex(randomblob(16))), strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'mfa.owner_break_glass_d1', 'user', id, '{\"via\":\"wrangler d1\"}' FROM users WHERE email = 'bookebukar@gmail.com';"
 ```
 

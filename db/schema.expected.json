@@ -1,0 +1,509 @@
+{
+  "migration": "0010_owner_integrity.sql",
+  "migrations": [
+    "0001_init.sql",
+    "0002_seed_programmes.sql",
+    "0003_lms.sql",
+    "0004_admissions.sql",
+    "0005_identity.sql",
+    "0006_instructor_profile.sql",
+    "0007_refinement.sql",
+    "0008_security.sql",
+    "0009_owner.sql",
+    "0010_owner_integrity.sql"
+  ],
+  "schema": [
+    {
+      "type": "table",
+      "name": "d1_migrations",
+      "tbl_name": "d1_migrations",
+      "sql": "CREATE TABLE \"d1_migrations\"(\n\t\tid         INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\tname       TEXT UNIQUE,\n\t\tapplied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "programmes",
+      "tbl_name": "programmes",
+      "sql": "CREATE TABLE programmes (\n  slug              TEXT PRIMARY KEY,\n  name              TEXT NOT NULL,\n  price_kobo        INTEGER NOT NULL,\n  was_kobo          INTEGER,\n  timed_price_kobo  INTEGER,\n  group_price_kobo  INTEGER,\n  training_months   INTEGER NOT NULL,\n  internship_months INTEGER NOT NULL,\n  level             TEXT NOT NULL,\n  updated_at        TEXT NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "registrations",
+      "tbl_name": "registrations",
+      "sql": "CREATE TABLE registrations (\n  id                TEXT PRIMARY KEY,\n  created_at        TEXT NOT NULL,\n  role              TEXT NOT NULL CHECK (role IN ('learner', 'parent', 'child', 'group_member')),\n  lead_id           TEXT REFERENCES registrations(id),  -- group lead, or the parent of a child\n  programme_slug    TEXT NOT NULL,\n  first_name        TEXT NOT NULL,\n  middle_name       TEXT,\n  surname           TEXT,\n  email             TEXT NOT NULL,\n  phone             TEXT,\n  country           TEXT,\n  city              TEXT,\n  adult             TEXT,\n  education         TEXT,\n  english           TEXT,\n  computer_literate TEXT,\n  background        TEXT,\n  background_detail TEXT,\n  why               TEXT,\n  goals             TEXT,\n  industry          TEXT,\n  guardian_name     TEXT,\n  guardian_phone    TEXT,\n  terms             TEXT,\n  ip_hash           TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "registrations_email",
+      "tbl_name": "registrations",
+      "sql": "CREATE INDEX registrations_email ON registrations(email)"
+    },
+    {
+      "type": "index",
+      "name": "registrations_lead",
+      "tbl_name": "registrations",
+      "sql": "CREATE INDEX registrations_lead ON registrations(lead_id)"
+    },
+    {
+      "type": "table",
+      "name": "orders",
+      "tbl_name": "orders",
+      "sql": "CREATE TABLE orders (\n  id               TEXT PRIMARY KEY,\n  reference        TEXT NOT NULL UNIQUE,\n  created_at       TEXT NOT NULL,\n  registration_id  TEXT NOT NULL REFERENCES registrations(id),\n  programme_slug   TEXT NOT NULL,\n  plan             TEXT NOT NULL CHECK (plan IN ('full', 'parts')),\n  method           TEXT NOT NULL CHECK (method IN ('paystack', 'bank')),\n  total_kobo       INTEGER NOT NULL,   -- what the learner owes in NGN, computed by the server\n  regular_kobo     INTEGER NOT NULL,   -- the programme's regular price at the time\n  hold_id          TEXT,               -- the price hold used, if any\n  group_size       INTEGER NOT NULL DEFAULT 1,\n  display_currency TEXT NOT NULL DEFAULT 'NGN',\n  fx_rate          REAL,               -- units of display_currency per 1 NGN, when the order was made\n  fx_at            TEXT,               -- when that rate was fetched\n  status           TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'part_paid', 'paid', 'cancelled'))\n)"
+    },
+    {
+      "type": "index",
+      "name": "orders_registration",
+      "tbl_name": "orders",
+      "sql": "CREATE INDEX orders_registration ON orders(registration_id)"
+    },
+    {
+      "type": "table",
+      "name": "instalments",
+      "tbl_name": "instalments",
+      "sql": "CREATE TABLE instalments (\n  id               TEXT PRIMARY KEY,\n  order_id         TEXT NOT NULL REFERENCES orders(id),\n  seq              INTEGER NOT NULL,\n  amount_kobo      INTEGER NOT NULL,\n  due_date         TEXT NOT NULL,      -- YYYY-MM-DD (Africa/Lagos)\n  reference        TEXT NOT NULL UNIQUE,\n  status           TEXT NOT NULL DEFAULT 'due' CHECK (status IN ('due', 'paid', 'overdue')),\n  reminder_sent_at TEXT,\n  link_sent_at     TEXT,\n  paid_at          TEXT,\n  UNIQUE (order_id, seq)\n)"
+    },
+    {
+      "type": "index",
+      "name": "instalments_due",
+      "tbl_name": "instalments",
+      "sql": "CREATE INDEX instalments_due ON instalments(status, due_date)"
+    },
+    {
+      "type": "table",
+      "name": "payments",
+      "tbl_name": "payments",
+      "sql": "CREATE TABLE payments (\n  id            TEXT PRIMARY KEY,\n  order_id      TEXT NOT NULL REFERENCES orders(id),\n  instalment_id TEXT REFERENCES instalments(id),\n  provider      TEXT NOT NULL,         -- 'paystack' or 'bank'\n  provider_ref  TEXT NOT NULL UNIQUE,  -- one payment row per Paystack reference: the idempotency key\n  amount_kobo   INTEGER NOT NULL,\n  currency      TEXT NOT NULL,\n  status        TEXT NOT NULL,\n  paid_at       TEXT,\n  created_at    TEXT NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "webhook_events",
+      "tbl_name": "webhook_events",
+      "sql": "CREATE TABLE webhook_events (\n  id          TEXT PRIMARY KEY,\n  received_at TEXT NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "holds",
+      "tbl_name": "holds",
+      "sql": "CREATE TABLE holds (\n  id             TEXT PRIMARY KEY,\n  visitor_hash   TEXT NOT NULL,\n  ip_hash        TEXT,\n  programme_slug TEXT NOT NULL,\n  started_at     TEXT NOT NULL,\n  expires_at     TEXT NOT NULL,\n  cooldown_until TEXT NOT NULL,\n  UNIQUE (visitor_hash, programme_slug)\n)"
+    },
+    {
+      "type": "index",
+      "name": "holds_ip",
+      "tbl_name": "holds",
+      "sql": "CREATE INDEX holds_ip ON holds(ip_hash, programme_slug)"
+    },
+    {
+      "type": "table",
+      "name": "children_enquiries",
+      "tbl_name": "children_enquiries",
+      "sql": "CREATE TABLE children_enquiries (\n  id                 TEXT PRIMARY KEY,\n  created_at         TEXT NOT NULL,\n  parent_name        TEXT NOT NULL,\n  email              TEXT NOT NULL,\n  phone              TEXT NOT NULL,\n  child_age          INTEGER NOT NULL,\n  programme_interest TEXT NOT NULL,\n  message            TEXT,\n  ip_hash            TEXT\n)"
+    },
+    {
+      "type": "table",
+      "name": "rate_limits",
+      "tbl_name": "rate_limits",
+      "sql": "CREATE TABLE rate_limits (\n  key          TEXT PRIMARY KEY,\n  window_start INTEGER NOT NULL,\n  count        INTEGER NOT NULL\n)"
+    },
+    {
+      "type": "table",
+      "name": "users",
+      "tbl_name": "users",
+      "sql": "CREATE TABLE users (\n  id             TEXT PRIMARY KEY,\n  email          TEXT NOT NULL UNIQUE,\n  role           TEXT NOT NULL CHECK (role IN ('student', 'instructor', 'admin')),\n  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),\n  full_name      TEXT NOT NULL,\n  phone          TEXT,\n  bio            TEXT,\n  photo_key      TEXT,                -- R2 object key\n  student_no     TEXT UNIQUE,         -- students only, e.g. SMA26-7KQ2M\n  specialization TEXT,                -- instructors\n  qualifications TEXT,                -- instructors: JSON array of strings\n  links          TEXT,                -- instructors: JSON object {linkedin, portfolio, ...}\n  registration_id TEXT,               -- the website registration this account came from, if any\n  created_at     TEXT NOT NULL,\n  last_login_at  TEXT\n, verification TEXT, verification_checks TEXT, highest_qualification TEXT, experience TEXT, public_profile INTEGER NOT NULL DEFAULT 0, staff_no TEXT, email_prefs TEXT, headline TEXT, achievements TEXT, certifications TEXT, languages TEXT, country_origin TEXT, country_residence TEXT, profile_submitted_at TEXT, verified_at TEXT, meet_link TEXT, guardian_name TEXT, guardian_relationship TEXT, guardian_email TEXT, guardian_phone TEXT, guardian_contact_ok INTEGER NOT NULL DEFAULT 0, guardian_contact_note TEXT, admin_role TEXT\n  CHECK (admin_role IS NULL OR admin_role IN ('super', 'admissions', 'finance', 'academic', 'faculty', 'support', 'reporting')), removed_at TEXT, removed_by TEXT, removal_reason TEXT, mfa_required INTEGER NOT NULL DEFAULT 0)"
+    },
+    {
+      "type": "table",
+      "name": "auth_tokens",
+      "tbl_name": "auth_tokens",
+      "sql": "CREATE TABLE auth_tokens (\n  token_hash TEXT PRIMARY KEY,\n  user_id    TEXT NOT NULL REFERENCES users(id),\n  expires_at TEXT NOT NULL,\n  used_at    TEXT,\n  created_at TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "auth_tokens_user",
+      "tbl_name": "auth_tokens",
+      "sql": "CREATE INDEX auth_tokens_user ON auth_tokens(user_id)"
+    },
+    {
+      "type": "table",
+      "name": "auth_sessions",
+      "tbl_name": "auth_sessions",
+      "sql": "CREATE TABLE auth_sessions (\n  token_hash   TEXT PRIMARY KEY,\n  user_id      TEXT NOT NULL REFERENCES users(id),\n  created_at   TEXT NOT NULL,\n  expires_at   TEXT NOT NULL,\n  last_seen_at TEXT NOT NULL,\n  user_agent   TEXT\n, last_activity_at TEXT, mfa_pending INTEGER NOT NULL DEFAULT 0, mfa_verified_at TEXT)"
+    },
+    {
+      "type": "index",
+      "name": "auth_sessions_user",
+      "tbl_name": "auth_sessions",
+      "sql": "CREATE INDEX auth_sessions_user ON auth_sessions(user_id)"
+    },
+    {
+      "type": "table",
+      "name": "audit_log",
+      "tbl_name": "audit_log",
+      "sql": "CREATE TABLE audit_log (\n  id          TEXT PRIMARY KEY,\n  at          TEXT NOT NULL,\n  actor_id    TEXT,\n  action      TEXT NOT NULL,\n  target_type TEXT,\n  target_id   TEXT,\n  detail      TEXT,\n  ip_hash     TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "audit_log_at",
+      "tbl_name": "audit_log",
+      "sql": "CREATE INDEX audit_log_at ON audit_log(at)"
+    },
+    {
+      "type": "table",
+      "name": "courses",
+      "tbl_name": "courses",
+      "sql": "CREATE TABLE courses (\n  id             TEXT PRIMARY KEY,\n  programme_slug TEXT NOT NULL,\n  title          TEXT NOT NULL,\n  description    TEXT,\n  position       INTEGER NOT NULL DEFAULT 0,\n  created_at     TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "courses_programme",
+      "tbl_name": "courses",
+      "sql": "CREATE INDEX courses_programme ON courses(programme_slug, position)"
+    },
+    {
+      "type": "table",
+      "name": "lessons",
+      "tbl_name": "lessons",
+      "sql": "CREATE TABLE lessons (\n  id         TEXT PRIMARY KEY,\n  course_id  TEXT NOT NULL REFERENCES courses(id),\n  title      TEXT NOT NULL,\n  objectives TEXT,\n  position   INTEGER NOT NULL DEFAULT 0,\n  created_at TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "lessons_course",
+      "tbl_name": "lessons",
+      "sql": "CREATE INDEX lessons_course ON lessons(course_id, position)"
+    },
+    {
+      "type": "table",
+      "name": "enrolments",
+      "tbl_name": "enrolments",
+      "sql": "CREATE TABLE enrolments (\n  id             TEXT PRIMARY KEY,\n  student_id     TEXT NOT NULL REFERENCES users(id),\n  programme_slug TEXT NOT NULL,\n  instructor_id  TEXT REFERENCES users(id),\n  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'withdrawn')),\n  order_id       TEXT,                -- orders.id from the website checkout, if any\n  started_at     TEXT NOT NULL,\n  completed_at   TEXT,\n  created_at     TEXT NOT NULL,\n  UNIQUE (student_id, programme_slug)\n)"
+    },
+    {
+      "type": "index",
+      "name": "enrolments_instructor",
+      "tbl_name": "enrolments",
+      "sql": "CREATE INDEX enrolments_instructor ON enrolments(instructor_id)"
+    },
+    {
+      "type": "table",
+      "name": "timetables",
+      "tbl_name": "timetables",
+      "sql": "CREATE TABLE timetables (\n  id             TEXT PRIMARY KEY,\n  enrolment_id   TEXT NOT NULL REFERENCES enrolments(id),\n  weekday        INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),   -- 0 = Sunday\n  start_time     TEXT NOT NULL,                                       -- HH:MM Lagos time\n  duration_min   INTEGER NOT NULL CHECK (duration_min BETWEEN 45 AND 60),\n  effective_from TEXT NOT NULL,                                       -- YYYY-MM-DD\n  effective_to   TEXT,                                                -- YYYY-MM-DD, NULL = current\n  created_by     TEXT NOT NULL,\n  created_at     TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "timetables_enrolment",
+      "tbl_name": "timetables",
+      "sql": "CREATE INDEX timetables_enrolment ON timetables(enrolment_id)"
+    },
+    {
+      "type": "table",
+      "name": "class_sessions",
+      "tbl_name": "class_sessions",
+      "sql": "CREATE TABLE class_sessions (\n  id               TEXT PRIMARY KEY,\n  enrolment_id     TEXT NOT NULL REFERENCES enrolments(id),\n  timetable_id     TEXT REFERENCES timetables(id),\n  student_id       TEXT NOT NULL REFERENCES users(id),\n  instructor_id    TEXT REFERENCES users(id),\n  starts_at        TEXT NOT NULL,\n  ends_at          TEXT NOT NULL,\n  meet_url         TEXT,\n  meet_updated_at  TEXT,\n  meet_notified_at TEXT,\n  status           TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'missed', 'cancelled', 'rescheduled')),\n  outcome_at       TEXT,\n  outcome_by       TEXT,\n  notes            TEXT,\n  rescheduled_to   TEXT,\n  reminded_24h_at  TEXT,\n  reminded_1h_at   TEXT,\n  reminded_15m_at  TEXT,\n  link_missing_alert_at TEXT,\n  created_at       TEXT NOT NULL, attendance_detail TEXT,\n  UNIQUE (timetable_id, starts_at)\n)"
+    },
+    {
+      "type": "index",
+      "name": "class_sessions_student",
+      "tbl_name": "class_sessions",
+      "sql": "CREATE INDEX class_sessions_student ON class_sessions(student_id, starts_at)"
+    },
+    {
+      "type": "index",
+      "name": "class_sessions_instructor",
+      "tbl_name": "class_sessions",
+      "sql": "CREATE INDEX class_sessions_instructor ON class_sessions(instructor_id, starts_at)"
+    },
+    {
+      "type": "index",
+      "name": "class_sessions_due",
+      "tbl_name": "class_sessions",
+      "sql": "CREATE INDEX class_sessions_due ON class_sessions(status, starts_at)"
+    },
+    {
+      "type": "table",
+      "name": "notifications",
+      "tbl_name": "notifications",
+      "sql": "CREATE TABLE notifications (\n  id         TEXT PRIMARY KEY,\n  user_id    TEXT NOT NULL REFERENCES users(id),\n  kind       TEXT NOT NULL,\n  title      TEXT NOT NULL,\n  body       TEXT,\n  link       TEXT,\n  created_at TEXT NOT NULL,\n  read_at    TEXT,\n  emailed_at TEXT\n, priority TEXT NOT NULL DEFAULT 'normal')"
+    },
+    {
+      "type": "index",
+      "name": "notifications_user",
+      "tbl_name": "notifications",
+      "sql": "CREATE INDEX notifications_user ON notifications(user_id, created_at)"
+    },
+    {
+      "type": "table",
+      "name": "resources",
+      "tbl_name": "resources",
+      "sql": "CREATE TABLE resources (\n  id             TEXT PRIMARY KEY,\n  programme_slug TEXT NOT NULL,\n  course_id      TEXT REFERENCES courses(id),\n  title          TEXT NOT NULL,\n  kind           TEXT NOT NULL CHECK (kind IN ('document', 'video', 'link', 'exercise')),\n  url            TEXT,\n  file_key       TEXT,\n  file_name      TEXT,\n  text_content   TEXT,\n  approved       INTEGER NOT NULL DEFAULT 1,\n  created_by     TEXT NOT NULL,\n  created_at     TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "resources_programme",
+      "tbl_name": "resources",
+      "sql": "CREATE INDEX resources_programme ON resources(programme_slug)"
+    },
+    {
+      "type": "table",
+      "name": "assignments",
+      "tbl_name": "assignments",
+      "sql": "CREATE TABLE assignments (\n  id             TEXT PRIMARY KEY,\n  student_id     TEXT NOT NULL REFERENCES users(id),\n  instructor_id  TEXT NOT NULL REFERENCES users(id),\n  enrolment_id   TEXT NOT NULL REFERENCES enrolments(id),\n  title          TEXT NOT NULL,\n  description    TEXT,\n  due_at         TEXT NOT NULL,\n  max_score      INTEGER NOT NULL DEFAULT 100,\n  created_at     TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "assignments_student",
+      "tbl_name": "assignments",
+      "sql": "CREATE INDEX assignments_student ON assignments(student_id, due_at)"
+    },
+    {
+      "type": "table",
+      "name": "submissions",
+      "tbl_name": "submissions",
+      "sql": "CREATE TABLE submissions (\n  id            TEXT PRIMARY KEY,\n  assignment_id TEXT NOT NULL UNIQUE REFERENCES assignments(id),\n  student_id    TEXT NOT NULL REFERENCES users(id),\n  text          TEXT,\n  file_key      TEXT,\n  file_name     TEXT,\n  submitted_at  TEXT NOT NULL,\n  score         INTEGER,\n  feedback      TEXT,\n  graded_at     TEXT,\n  graded_by     TEXT\n)"
+    },
+    {
+      "type": "table",
+      "name": "quizzes",
+      "tbl_name": "quizzes",
+      "sql": "CREATE TABLE quizzes (\n  id            TEXT PRIMARY KEY,\n  student_id    TEXT NOT NULL REFERENCES users(id),\n  instructor_id TEXT NOT NULL REFERENCES users(id),\n  enrolment_id  TEXT NOT NULL REFERENCES enrolments(id),\n  kind          TEXT NOT NULL CHECK (kind IN ('quiz', 'assessment')),\n  title         TEXT NOT NULL,\n  instructions  TEXT,\n  duration_min  INTEGER,\n  due_at        TEXT NOT NULL,\n  questions     TEXT NOT NULL,       -- JSON; correct answers are never sent to the student\n  max_score     INTEGER NOT NULL,\n  created_at    TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "quizzes_student",
+      "tbl_name": "quizzes",
+      "sql": "CREATE INDEX quizzes_student ON quizzes(student_id, due_at)"
+    },
+    {
+      "type": "table",
+      "name": "quiz_attempts",
+      "tbl_name": "quiz_attempts",
+      "sql": "CREATE TABLE quiz_attempts (\n  id           TEXT PRIMARY KEY,\n  quiz_id      TEXT NOT NULL UNIQUE REFERENCES quizzes(id),\n  student_id   TEXT NOT NULL REFERENCES users(id),\n  started_at   TEXT NOT NULL,\n  submitted_at TEXT,\n  answers      TEXT,\n  score        INTEGER,\n  feedback     TEXT,\n  graded_at    TEXT,\n  graded_by    TEXT\n)"
+    },
+    {
+      "type": "table",
+      "name": "lesson_progress",
+      "tbl_name": "lesson_progress",
+      "sql": "CREATE TABLE lesson_progress (\n  student_id   TEXT NOT NULL REFERENCES users(id),\n  lesson_id    TEXT NOT NULL REFERENCES lessons(id),\n  completed_at TEXT NOT NULL,\n  PRIMARY KEY (student_id, lesson_id)\n)"
+    },
+    {
+      "type": "table",
+      "name": "messages",
+      "tbl_name": "messages",
+      "sql": "CREATE TABLE messages (\n  id         TEXT PRIMARY KEY,\n  from_id    TEXT NOT NULL REFERENCES users(id),\n  to_id      TEXT NOT NULL REFERENCES users(id),\n  body       TEXT NOT NULL,\n  created_at TEXT NOT NULL,\n  read_at    TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "messages_to",
+      "tbl_name": "messages",
+      "sql": "CREATE INDEX messages_to ON messages(to_id, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "messages_pair",
+      "tbl_name": "messages",
+      "sql": "CREATE INDEX messages_pair ON messages(from_id, to_id, created_at)"
+    },
+    {
+      "type": "table",
+      "name": "instructor_ratings",
+      "tbl_name": "instructor_ratings",
+      "sql": "CREATE TABLE instructor_ratings (\n  id            TEXT PRIMARY KEY,\n  student_id    TEXT NOT NULL REFERENCES users(id),\n  instructor_id TEXT NOT NULL REFERENCES users(id),\n  rating        INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),\n  comment       TEXT,\n  created_at    TEXT NOT NULL,\n  UNIQUE (student_id, instructor_id)\n)"
+    },
+    {
+      "type": "table",
+      "name": "ai_messages",
+      "tbl_name": "ai_messages",
+      "sql": "CREATE TABLE ai_messages (\n  id         TEXT PRIMARY KEY,\n  student_id TEXT NOT NULL REFERENCES users(id),\n  role       TEXT NOT NULL CHECK (role IN ('user', 'assistant')),\n  content    TEXT NOT NULL,\n  created_at TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "ai_messages_student",
+      "tbl_name": "ai_messages",
+      "sql": "CREATE INDEX ai_messages_student ON ai_messages(student_id, created_at)"
+    },
+    {
+      "type": "table",
+      "name": "resource_chunks",
+      "tbl_name": "resource_chunks",
+      "sql": "CREATE VIRTUAL TABLE resource_chunks USING fts5(resource_id UNINDEXED, programme_slug UNINDEXED, title, body)"
+    },
+    {
+      "type": "table",
+      "name": "error_log",
+      "tbl_name": "error_log",
+      "sql": "CREATE TABLE error_log (\n  id      TEXT PRIMARY KEY,\n  at      TEXT NOT NULL,\n  route   TEXT,\n  message TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "error_log_at",
+      "tbl_name": "error_log",
+      "sql": "CREATE INDEX error_log_at ON error_log(at)"
+    },
+    {
+      "type": "table",
+      "name": "programme_admissions",
+      "tbl_name": "programme_admissions",
+      "sql": "CREATE TABLE programme_admissions (\n  programme_slug       TEXT PRIMARY KEY,\n  mode                 TEXT NOT NULL DEFAULT 'open' CHECK (mode IN ('open', 'scheduled', 'closed')),\n  enforce_capacity     INTEGER NOT NULL DEFAULT 0,   -- 1 = stop new registrations when the programme is full\n  default_instructor_cap INTEGER NOT NULL DEFAULT 30, -- students per instructor when an assignment has no own figure\n  reserved             INTEGER NOT NULL DEFAULT 0,   -- places held back by the admin (for example, agreed sponsorships)\n  listed               INTEGER NOT NULL DEFAULT 1,   -- 0 = hidden from the programme listings (the page still exists)\n  updated_at           TEXT,\n  updated_by           TEXT\n)"
+    },
+    {
+      "type": "table",
+      "name": "admission_periods",
+      "tbl_name": "admission_periods",
+      "sql": "CREATE TABLE admission_periods (\n  id             TEXT PRIMARY KEY,\n  programme_slug TEXT,\n  label          TEXT,\n  opens_at       TEXT NOT NULL,   -- ISO time\n  closes_at      TEXT NOT NULL,   -- ISO time\n  created_at     TEXT NOT NULL,\n  created_by     TEXT,\n  cancelled_at   TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "admission_periods_window",
+      "tbl_name": "admission_periods",
+      "sql": "CREATE INDEX admission_periods_window ON admission_periods(opens_at, closes_at)"
+    },
+    {
+      "type": "table",
+      "name": "instructor_programmes",
+      "tbl_name": "instructor_programmes",
+      "sql": "CREATE TABLE instructor_programmes (\n  instructor_id  TEXT NOT NULL REFERENCES users(id),\n  programme_slug TEXT NOT NULL,\n  max_students   INTEGER,         -- NULL = the programme's default_instructor_cap\n  created_at     TEXT NOT NULL,\n  PRIMARY KEY (instructor_id, programme_slug)\n)"
+    },
+    {
+      "type": "index",
+      "name": "instructor_programmes_slug",
+      "tbl_name": "instructor_programmes",
+      "sql": "CREATE INDEX instructor_programmes_slug ON instructor_programmes(programme_slug)"
+    },
+    {
+      "type": "table",
+      "name": "id_sequences",
+      "tbl_name": "id_sequences",
+      "sql": "CREATE TABLE id_sequences (\n  name TEXT PRIMARY KEY,          -- e.g. 'STU:26', 'FAC', 'ADM'\n  last INTEGER NOT NULL DEFAULT 0\n)"
+    },
+    {
+      "type": "index",
+      "name": "users_student_no",
+      "tbl_name": "users",
+      "sql": "CREATE UNIQUE INDEX users_student_no ON users(student_no) WHERE student_no IS NOT NULL"
+    },
+    {
+      "type": "index",
+      "name": "users_staff_no",
+      "tbl_name": "users",
+      "sql": "CREATE UNIQUE INDEX users_staff_no ON users(staff_no) WHERE staff_no IS NOT NULL"
+    },
+    {
+      "type": "table",
+      "name": "call_bookings",
+      "tbl_name": "call_bookings",
+      "sql": "CREATE TABLE call_bookings (\n  id TEXT PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT NOT NULL,\n  phone TEXT NOT NULL,\n  programme TEXT,                 -- programme slug, or NULL for \"not sure yet\"\n  preferred_date TEXT NOT NULL,   -- YYYY-MM-DD in the applicant's time zone\n  preferred_time TEXT NOT NULL,   -- HH:MM in the applicant's time zone\n  timezone TEXT NOT NULL,         -- IANA name, e.g. Europe/London\n  reason TEXT NOT NULL,\n  status TEXT NOT NULL DEFAULT 'new',   -- new | assigned | contacted | closed\n  assigned_to TEXT REFERENCES users(id),\n  notes TEXT,\n  ip_hash TEXT,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "idx_call_bookings_status",
+      "tbl_name": "call_bookings",
+      "sql": "CREATE INDEX idx_call_bookings_status ON call_bookings(status, created_at)"
+    },
+    {
+      "type": "table",
+      "name": "assistant_enquiries",
+      "tbl_name": "assistant_enquiries",
+      "sql": "CREATE TABLE assistant_enquiries (\n  id TEXT PRIMARY KEY,\n  conversation_id TEXT NOT NULL,   -- random reference created in the visitor's browser\n  question TEXT NOT NULL,\n  answer TEXT,\n  programme TEXT,                  -- programme slug the question concerns, when known\n  answered INTEGER NOT NULL DEFAULT 1,\n  needs_followup INTEGER NOT NULL DEFAULT 0,\n  handled_at TEXT,\n  ip_hash TEXT,\n  created_at TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "idx_assistant_enquiries_created",
+      "tbl_name": "assistant_enquiries",
+      "sql": "CREATE INDEX idx_assistant_enquiries_created ON assistant_enquiries(created_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_assistant_enquiries_followup",
+      "tbl_name": "assistant_enquiries",
+      "sql": "CREATE INDEX idx_assistant_enquiries_followup ON assistant_enquiries(needs_followup, handled_at)"
+    },
+    {
+      "type": "table",
+      "name": "weekly_items",
+      "tbl_name": "weekly_items",
+      "sql": "CREATE TABLE weekly_items (\n  id                TEXT PRIMARY KEY,\n  enrolment_id      TEXT NOT NULL REFERENCES enrolments(id),\n  student_id        TEXT NOT NULL REFERENCES users(id),\n  week_start        TEXT NOT NULL,            -- Monday, YYYY-MM-DD, Lagos time\n  item_key          TEXT NOT NULL,\n  title             TEXT,                     -- instructor tasks only\n  detail            TEXT,\n  assigned_by       TEXT REFERENCES users(id),\n  completed_at      TEXT,\n  completion_note   TEXT,\n  created_at        TEXT NOT NULL,\n  UNIQUE (enrolment_id, week_start, item_key)\n)"
+    },
+    {
+      "type": "index",
+      "name": "weekly_items_student",
+      "tbl_name": "weekly_items",
+      "sql": "CREATE INDEX weekly_items_student ON weekly_items(student_id, week_start)"
+    },
+    {
+      "type": "table",
+      "name": "app_settings",
+      "tbl_name": "app_settings",
+      "sql": "CREATE TABLE app_settings (\n  key        TEXT PRIMARY KEY,\n  value      TEXT NOT NULL,\n  updated_at TEXT NOT NULL,\n  updated_by TEXT\n)"
+    },
+    {
+      "type": "table",
+      "name": "contact_log",
+      "tbl_name": "contact_log",
+      "sql": "CREATE TABLE contact_log (\n  id          TEXT PRIMARY KEY,\n  student_id  TEXT NOT NULL REFERENCES users(id),\n  target      TEXT NOT NULL CHECK (target IN ('student', 'guardian')),\n  channel     TEXT NOT NULL CHECK (channel IN ('email', 'call', 'sms', 'whatsapp', 'in_person')),\n  outcome     TEXT NOT NULL CHECK (outcome IN ('sent', 'reached', 'no_answer', 'left_message', 'wrong_number', 'failed')),\n  subject     TEXT,\n  summary     TEXT,\n  by_user     TEXT NOT NULL REFERENCES users(id),\n  created_at  TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "contact_log_student",
+      "tbl_name": "contact_log",
+      "sql": "CREATE INDEX contact_log_student ON contact_log(student_id, created_at)"
+    },
+    {
+      "type": "table",
+      "name": "mfa_factors",
+      "tbl_name": "mfa_factors",
+      "sql": "CREATE TABLE mfa_factors (\n  user_id     TEXT PRIMARY KEY REFERENCES users(id),\n  secret_enc  TEXT NOT NULL,\n  status      TEXT NOT NULL CHECK (status IN ('pending', 'active')),\n  created_at  TEXT NOT NULL,\n  enabled_at  TEXT,\n  last_step   INTEGER\n)"
+    },
+    {
+      "type": "table",
+      "name": "mfa_recovery_codes",
+      "tbl_name": "mfa_recovery_codes",
+      "sql": "CREATE TABLE mfa_recovery_codes (\n  id          TEXT PRIMARY KEY,\n  user_id     TEXT NOT NULL REFERENCES users(id),\n  code_hash   TEXT NOT NULL UNIQUE,\n  created_at  TEXT NOT NULL,\n  used_at     TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "mfa_recovery_codes_user",
+      "tbl_name": "mfa_recovery_codes",
+      "sql": "CREATE INDEX mfa_recovery_codes_user ON mfa_recovery_codes(user_id)"
+    },
+    {
+      "type": "table",
+      "name": "staff_removal_requests",
+      "tbl_name": "staff_removal_requests",
+      "sql": "CREATE TABLE staff_removal_requests (\n  id            TEXT PRIMARY KEY,\n  user_id       TEXT NOT NULL REFERENCES users(id),\n  requested_by  TEXT NOT NULL REFERENCES users(id),\n  reason        TEXT NOT NULL,\n  status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),\n  decided_by    TEXT REFERENCES users(id),\n  decided_at    TEXT,\n  decision_note TEXT,\n  created_at    TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "staff_removal_requests_status",
+      "tbl_name": "staff_removal_requests",
+      "sql": "CREATE INDEX staff_removal_requests_status ON staff_removal_requests(status, created_at)"
+    },
+    {
+      "type": "table",
+      "name": "owner_record",
+      "tbl_name": "owner_record",
+      "sql": "CREATE TABLE owner_record (\n  id               INTEGER PRIMARY KEY CHECK (id = 1),\n  user_id          TEXT NOT NULL REFERENCES users(id),\n  email            TEXT NOT NULL,\n  bootstrapped_at  TEXT NOT NULL\n)"
+    },
+    {
+      "type": "trigger",
+      "name": "owner_record_no_update",
+      "tbl_name": "owner_record",
+      "sql": "CREATE TRIGGER owner_record_no_update BEFORE UPDATE ON owner_record\nBEGIN\n  SELECT RAISE(ABORT, 'owner_record is fixed after bootstrap');\nEND"
+    },
+    {
+      "type": "trigger",
+      "name": "owner_record_no_delete",
+      "tbl_name": "owner_record",
+      "sql": "CREATE TRIGGER owner_record_no_delete BEFORE DELETE ON owner_record\nBEGIN\n  SELECT RAISE(ABORT, 'owner_record is fixed after bootstrap');\nEND"
+    },
+    {
+      "type": "trigger",
+      "name": "audit_log_no_update",
+      "tbl_name": "audit_log",
+      "sql": "CREATE TRIGGER audit_log_no_update BEFORE UPDATE ON audit_log\nBEGIN\n  SELECT RAISE(ABORT, 'audit_log is append-only');\nEND"
+    },
+    {
+      "type": "trigger",
+      "name": "audit_log_min_retention",
+      "tbl_name": "audit_log",
+      "sql": "CREATE TRIGGER audit_log_min_retention BEFORE DELETE ON audit_log\nWHEN OLD.at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-365 days')\nBEGIN\n  SELECT RAISE(ABORT, 'audit entries younger than 365 days cannot be deleted');\nEND"
+    }
+  ]
+}

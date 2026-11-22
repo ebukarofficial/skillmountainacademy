@@ -1,5 +1,8 @@
 # Owner checklist: everything only you can do, in order
 
+> **Stage 3A (22 Nov 2026), read first:** `npm run db:migrate` is now the GATED production migration tool. It refuses unless a verified backup, a passing preflight on the production state and a passing rehearsal exist, and it does nothing without `--execute`. Every older instruction below to run `npm run db:migrate` directly, to chain it with `wrangler deploy`, to run `wrangler d1 migrations apply --remote`, or to back up with `wrangler d1 export` (which cannot export this database) is superseded by `docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md`.
+
+
 Work top to bottom. Until a step is done, the site keeps working safely: the original checkout, Google Form and Apps Script
 flow carry on, and any new feature that is not set up shows a clear "contact us" message instead of breaking.
 
@@ -92,7 +95,7 @@ None of them is in the repository.
 
 11. Commit the two ids in `wrangler.jsonc` and push to `main`. Workers Builds runs as before:
     build command `npm run build`, deploy command `npx wrangler deploy`, build variable `NODE_VERSION` = `22`.
-    (Optional: make the deploy command `npm run db:migrate && npx wrangler deploy` so future migrations apply automatically,
+    (Superseded in Stage 3A: never chain migrations into the deploy command; migrations go through the gated checklist. Formerly: make the deploy command `npm run db:migrate && npx wrangler deploy` so future migrations apply automatically,
     if the build token has D1 edit permission.)
 
 ## C. Check it works (with Paystack TEST keys)
@@ -260,7 +263,7 @@ without activity from this release.
 
 Full detail: `docs/SMA_STAGE_2B_SECURITY_VERIFICATION.md` (sections 4, 7 and 15).
 
-1. Back up D1, then apply migrations (0008 and 0009 are additive): `npx wrangler d1 migrations apply skillmountainacademy-db --remote`.
+1. Back up D1 and apply migrations through the Stage 3A gated procedure (`docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md`). Formerly: `npx wrangler d1 migrations apply skillmountainacademy-db --remote`.
 2. Set three secrets yourself (generate random values; never share them):
    `npx wrangler secret put IP_HASH_SALT`, `npx wrangler secret put MFA_ENCRYPTION_KEY`, `npx wrangler secret put OWNER_RECOVERY_TOKEN`.
    Keep the recovery token offline (paper or password manager). It works once; set a new one after any use.
@@ -284,3 +287,13 @@ Full detail: `docs/SMA_STAGE_2C_FINAL_SECURITY_GATE.md`.
 4. "Revoke access permanently" never deletes records. If an instructor is removed, reassign the listed enrolments in
    Academics > Enrolments.
 5. Ownership can only move to another account through the documented D1 owner-transfer procedure (section 4 of the report).
+
+## O. Stage 3A: backups, restore and migration safety (22 Nov 2026)
+
+Read `docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md`. In short, after approving Stage 3A:
+1. Create your backup key pair (architecture document section 6) and keep the private key offline, in two copies.
+2. Part A of the checklist (read-only): find out which migrations production has, whether `owner_record` and the triggers exist, and
+   which Worker version is live. Send the summary to the engineer.
+3. Take the first ever production backup and verify its restore (`npm run db:backup ...`, `npm run db:restore:verify ...`).
+4. Check D1 Time Travel: `npx wrangler d1 time-travel info skillmountainacademy-db` (read-only).
+5. Only then, and only if something is pending: preflight, rehearsal, and `npm run db:migrate` with your name (Part B).

@@ -12,7 +12,17 @@
     "preview": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:seed-sql": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed.mts",
-    "db:migrate": "wrangler d1 migrations apply skillmountainacademy-db --remote",
+    "db:schema": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/schema.mts",
+    "db:backup": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/backup.mts",
+    "db:restore:verify": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/restore.mts",
+    "db:state": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/state.mts",
+    "db:preflight": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/preflight.mts",
+    "db:rehearse": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/rehearse.mts",
+    "db:compare": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/compare.mts",
+    "db:decrypt": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/decrypt.mts",
+    "db:rollback-check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/rollback.mts",
+    "db:post-restore-sql": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/post-restore.mts",
+    "db:migrate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/db/migrate-remote.mts",
     "docs:api": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/api-docs.mts"
   },
   "dependencies": {

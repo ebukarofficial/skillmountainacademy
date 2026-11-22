@@ -1,0 +1,41 @@
+{
+  "0002_seed_programmes.sql": {
+    "sha256": "9a0f876675045c32ecfbc8651b38f40bb5cb0a70d1efe7fa9dc2695a5b338c3c",
+    "reviewedBy": "Claude (Stage 3A engineering review, 22 Nov 2026)",
+    "reviewedAt": "2026-11-22",
+    "summary": "Seeds the programme catalogue. ON CONFLICT(slug) DO UPDATE overwrites existing programme rows (names, prices, durations) with the values in the file.",
+    "ownerApprovalRequired": true,
+    "ownerApproved": false,
+    "ownerDecision": "If this migration is still pending in production, applying it would overwrite any existing programme rows, including prices, with the values from when it was written. Prices must not change without the owner's approval: compare the programmes table with lib/config.ts first."
+  },
+  "0004_admissions.sql": {
+    "sha256": "8dbbb7d38df8e5a0a8ef0f64337895fedfec7fd3675bec78d74925e4b58abc81",
+    "reviewedBy": "Claude (Stage 3A engineering review, 22 Nov 2026)",
+    "reviewedAt": "2026-11-22",
+    "summary": "Adds admissions tables and instructor verification columns; UPDATE marks every instructor existing at that moment as verification = 'approved' (line 51).",
+    "ownerApprovalRequired": true,
+    "ownerApproved": false,
+    "ownerDecision": "If pending in production, every instructor account present at the moment it runs becomes 'approved' (able to teach). Confirm that every existing instructor account really is an approved, active instructor before approving."
+  },
+  "0005_identity.sql": {
+    "sha256": "fb38cfc1199d6ceae9cd5475d87c337624b815fd5ed5e80ad85ea14334b51c21",
+    "reviewedBy": "Claude (Stage 3A engineering review, 22 Nov 2026)",
+    "reviewedAt": "2026-11-22",
+    "summary": "Adds staff_no and email_prefs columns and numbers existing administrators and approved instructors in creation order (UPDATE ... WHERE on the new, empty staff_no column only). No existing value is overwritten."
+  },
+  "0006_instructor_profile.sql": {
+    "sha256": "b89b4fac154d03ff24b4a10e5171488217515cac72e484f0dcafeb3fb99a5fbe",
+    "reviewedBy": "Claude (Stage 3A engineering review, 22 Nov 2026)",
+    "reviewedAt": "2026-11-22",
+    "summary": "Adds instructor profile columns; fills the new verified_at column from created_at for already-approved instructors (UPDATE ... WHERE on a new column only). No existing value is overwritten."
+  },
+  "0007_refinement.sql": {
+    "sha256": "ecea2e9d3bae0a88e2b59f0d10b110b28c53e960b6fb4cb00a7002ea9241adf5",
+    "reviewedBy": "Claude (Stage 3A engineering review, 22 Nov 2026)",
+    "reviewedAt": "2026-11-22",
+    "summary": "Adds the AI Automation programme row and new tables. The programme INSERT uses ON CONFLICT(slug) DO UPDATE, which would overwrite an existing 'ai-automation' row's name, price and durations.",
+    "ownerApprovalRequired": true,
+    "ownerApproved": false,
+    "ownerDecision": "If pending in production and an 'ai-automation' programme row already exists, its price (NGN 300,000 in the file) and durations would be overwritten. Confirm the intended price with the owner before approving."
+  }
+}
