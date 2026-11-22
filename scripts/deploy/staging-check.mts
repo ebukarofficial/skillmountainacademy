@@ -33,6 +33,7 @@ export function checkStaging(staging: Cfg, production: Cfg, o: { productionUuid?
   const kv = staging.kv_namespaces?.find((k) => k.binding === "KV");
   if (!kv?.id) f.push("staging KV namespace id is not filled in");
   else if (kv.id === production.kv_namespaces?.find((k) => k.binding === "KV")?.id || kv.id === o.productionKv) f.push("staging KV IS THE PRODUCTION NAMESPACE");
+  if (!o.productionKv && !production.kv_namespaces?.find((k) => k.binding === "KV")?.id) f.push("the production KV namespace id was not supplied (--production-kv), so separation of the cache cannot be proven");
   const v = staging.vars ?? {}, pv = production.vars ?? {};
   if (v.SITE_URL && v.SITE_URL === pv.SITE_URL) f.push("staging SITE_URL is the production site");
   if (v.SITE_URL && /skillmountainacademy\.com/i.test(v.SITE_URL)) f.push("staging SITE_URL points at the production domain");

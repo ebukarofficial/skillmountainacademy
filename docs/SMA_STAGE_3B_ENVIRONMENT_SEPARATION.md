@@ -44,6 +44,8 @@ Its ids are left empty **on purpose**: the owner creates the resources and fills
 - `OWNER_EMAIL` is the production owner address;
 - there is a Paystack key, or `ENVIRONMENT` is not `staging`.
 
+Stage 3B.1: when production's `wrangler.jsonc` does not pin a KV id, `--production-kv` is required, just as `--production-uuid` is.
+
 As shipped, it reports the four unfilled ids and nothing else. That is the expected "not ready" state, tested in `tests/stage3b-gates.test.ts`.
 
 ## 3. Creating staging (owner, after separate approval)
@@ -118,7 +120,13 @@ When realistic data is genuinely needed, the owner may approve an **anonymised c
 
 **What it does not hide:** the *shape* of the data, meaning how many students, payments and enrolments exist and when. Treat an anonymised copy as internal and confidential, and delete it when no longer needed.
 
-## 5. Not done in Stage 3B
+## 5. Known staging limitations (Stage 3B.1 audit)
+
+- **Turnstile.** The Turnstile *site* key is compiled in from `lib/config.ts`, so it is production's. The production key usually allows only the production hostname, and its secret must not go into staging. Forms protected by Turnstile will therefore fail on `*.workers.dev` until the owner decides how staging gets its own site key (a build-time override is a Stage 3C engineering item).
+- **No automatic enforcement.** Nothing forces `npm run staging:check` before `npx wrangler deploy -c wrangler.staging.jsonc`. The owner runs it by hand (Stage 3C may wrap both in one command).
+- **Quasi-identifiers.** Student and staff numbers are kept by the anonymiser, so staging behaves like production. Someone who knows a real student's number could still recognise that record. Treat anonymised copies as confidential.
+
+## 6. Not done in Stage 3B
 
 - No staging resources, secrets or deployments.
 - No import of any data.

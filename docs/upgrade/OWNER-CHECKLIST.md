@@ -93,6 +93,12 @@ None of them is in the repository.
 
 ## B. Deploy
 
+> **Production route (Stage 3B.2, 22 Nov 2026, owner instruction).**
+> - Production is published by the owner's intended arrangement: work locally → push to GitHub → Cloudflare, connected to the repository, builds and publishes (`npm run build`, then `npx wrangler deploy`).
+> - That route publishes **application code only**. D1 migrations are a separate, owner-approved step: `docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md`.
+> - Never add a migration command to the Cloudflare deploy command. Since Stage 3A, `npm run db:migrate` without approvals refuses and exits 1, so it would also stop every publish.
+> - The optional `deploy-worker.yml` workflow is not part of this route.
+
 11. Commit the two ids in `wrangler.jsonc` and push to `main`. Workers Builds runs as before:
     build command `npm run build`, deploy command `npx wrangler deploy`, build variable `NODE_VERSION` = `22`.
     (Superseded in Stage 3A: never chain migrations into the deploy command; migrations go through the gated checklist. Formerly: make the deploy command `npm run db:migrate && npx wrangler deploy` so future migrations apply automatically,

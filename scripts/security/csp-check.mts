@@ -63,6 +63,14 @@ export function checkCsp(outDir: string): CspReport {
 if (isMain(import.meta.url)) {
   const a = parseArgs();
   const r = checkCsp(a.str("out") ?? "out");
+  // Stage 3B.1: the deployment states the CSP mode it intends (vars.CSP_MODE); the build must match it, so a deployment can
+  // never silently downgrade an enforced policy to report-only (or the reverse).
+  const expect = a.str("expect-mode");
+  if (expect !== undefined) {
+    if (expect !== "report" && expect !== "enforce") r.failures.push(`--expect-mode must be "report" or "enforce" (got "${expect}"): set the CSP_MODE variable deliberately.`);
+    else if (r.mode !== expect) r.failures.push(`the build's CSP mode is ${r.mode ?? "none"}, but ${expect} was expected.`);
+    r.ok = r.failures.length === 0;
+  }
   for (const f of r.failures) console.log(`FAIL  ${f}`);
   console.log(`${r.ok ? "CSP CHECK PASSED" : "CSP CHECK FAILED"}: ${r.pages} pages, mode ${r.mode ?? "none"}.`);
   process.exit(r.ok ? 0 : 1);

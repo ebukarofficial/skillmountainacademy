@@ -25,6 +25,7 @@ import { join, resolve } from "node:path";
 import { isMain, parseArgs } from "./db/args.mts";
 import { identityProblems, parseWhoami, PROD_DB, query, remoteTarget, resolveIdentity, ROOT, UUID_RE, ACCOUNT_RE, type Identity, type ResolvedIdentity } from "./db/d1.mts";
 import type { Manifest } from "./db/dump.mts";
+import type { RestoreReport } from "./db/restore.mts";
 import type { RollbackRecord } from "./db/rollback.mts";
 import { splitSql } from "./db/sql.mts";
 
@@ -108,7 +109,7 @@ export function cf(operation: string, o: Opts, deps: CfDeps = {}): CfResult {
       else {
         const m = JSON.parse(readFileSync(mf, "utf8")) as Manifest;
         if (!m.encrypted || m.encrypted.sha256 !== sha(resolve(ev))) failures.push("The evidence backup must be encrypted and match its manifest.");
-        if (m.source.identity?.accountId !== accountId || m.source.identity?.databaseUuid !== databaseUuid) failures.push("The evidence backup is not of the approved account and database UUID.");
+        if (m.source?.identity?.accountId !== accountId || m.source?.identity?.databaseUuid !== databaseUuid) failures.push("The evidence backup is not of the approved account and database UUID.");
         const age = (now.getTime() - Date.parse(m.createdAt)) / 3_600_000;
         if (!ageOk(age, 2)) failures.push(`The evidence backup is ${Number.isFinite(age) ? age.toFixed(1) : "?"} hours old (limit 2 hours).`);
       }
@@ -126,6 +127,10 @@ export function cf(operation: string, o: Opts, deps: CfDeps = {}): CfResult {
       const r = rollbackRecord;
       if (r.versionId !== v) failures.push("The rollback record is for a different version id.");
       if (r.identity?.accountId !== accountId) failures.push("The rollback check was not run against the approved account.");
+      // Stage 3B.1: the compatibility verdict is only meaningful for the PRODUCTION database the Worker uses.
+      const prodUuid = (str(o, "database-uuid") ?? "").toLowerCase();
+      if (!UUID_RE.test(prodUuid)) failures.push("--database-uuid (the production D1 UUID the rollback check was run against) is required.");
+      else if (r.identity?.databaseUuid?.toLowerCase() !== prodUuid) failures.push("The rollback check was not run against the approved production database UUID.");
       const age = (now.getTime() - Date.parse(r.at)) / 3_600_000;
       if (!ageOk(age, 2)) failures.push(`The rollback check is ${Number.isFinite(age) ? age.toFixed(1) : "?"} hours old (limit 2 hours).`);
       if (r.verdict === "UNSAFE" || r.verdict === "PROHIBITED") failures.push(`The rollback verdict is ${r.verdict}: rollback refused.`);
@@ -143,7 +148,22 @@ export function cf(operation: string, o: Opts, deps: CfDeps = {}): CfResult {
     if (!mf || !existsSync(resolve(mf))) failures.push("--manifest (the backup's manifest) is required.");
     if (f && mf && existsSync(resolve(f)) && existsSync(resolve(mf))) {
       importSha = sha(resolve(f));
-      if ((JSON.parse(readFileSync(resolve(mf), "utf8")) as Manifest).file.sha256 !== importSha) failures.push("The file is not the backup described by the manifest (SHA-256 mismatch).");
+      const m = JSON.parse(readFileSync(resolve(mf), "utf8")) as Manifest;
+      if (m.file?.sha256 !== importSha) failures.push("The file is not the backup described by the manifest (SHA-256 mismatch).");
+      // Stage 3B.1: only a production backup of the approved account, and only after it passed restore verification.
+      if (m.source?.kind !== "remote" || m.source?.identity?.accountId !== accountId) failures.push("The backup is not a production backup of the approved account.");
+      const rr = str(o, "restore-report");
+      if (!rr || !existsSync(resolve(rr))) failures.push("--restore-report is required: the report written by npm run db:restore:verify for this backup (RESTORE VERIFIED).");
+      else {
+        let rep: RestoreReport | null = null;
+        try { rep = JSON.parse(readFileSync(resolve(rr), "utf8")) as RestoreReport; } catch { failures.push("The restore report could not be read."); }
+        if (rep) {
+          if (rep.ok !== true) failures.push("The restore report does not show a passed restore verification.");
+          if (rep.manifestSha256 !== sha(resolve(mf))) failures.push("The restore report was made for a different manifest.");
+          const age = (now.getTime() - Date.parse(rep.at)) / 3_600_000;
+          if (!ageOk(age, 24)) failures.push(`The restore verification is ${Number.isFinite(age) ? age.toFixed(1) : "?"} hours old (limit 24 hours): verify again.`);
+        }
+      }
     }
   }
   if (operation === "restore-reset") {
@@ -220,7 +240,7 @@ export function cf(operation: string, o: Opts, deps: CfDeps = {}): CfResult {
 if (isMain(import.meta.url)) {
   const a = parseArgs();
   const [operation] = a.positional;
-  const keys = ["account-id", "database-uuid", "database", "worker", "sql", "timestamp", "evidence-backup", "version-id", "reason", "rollback-record", "name", "file", "manifest", "approved-by"];
+  const keys = ["account-id", "database-uuid", "database", "worker", "sql", "timestamp", "evidence-backup", "version-id", "reason", "rollback-record", "name", "file", "manifest", "restore-report", "approved-by"];
   const o: Opts = Object.fromEntries(keys.map((k) => [k, a.str(k)]));
   for (const f of ["owner-approved", "execute", "actions-confirmed"]) o[f] = a.has(f);
   const r = cf(operation ?? "", o);

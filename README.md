@@ -4,6 +4,12 @@ Next.js 16 + Tailwind 4, built as a static website (`output: "export"`) and serv
 Registrations go to a Google Form, payment is taken with Paystack, and a Google script confirms the payment and emails the learner.
 
 ## Deploy (Cloudflare)
+> **Production route (Stage 3B.2, 22 Nov 2026, owner instruction).**
+> - Production is published by the owner's intended arrangement: work locally → push to GitHub → Cloudflare, connected to the repository, builds and publishes (`npm run build`, then `npx wrangler deploy`).
+> - That route publishes **application code only**. D1 migrations are a separate, owner-approved step: `docs/SMA_STAGE_3A_PRODUCTION_MIGRATION_CHECKLIST.md`.
+> - Never add a migration command to the Cloudflare deploy command. Since Stage 3A, `npm run db:migrate` without approvals refuses and exits 1, so it would also stop every publish.
+> - The optional `deploy-worker.yml` workflow is not part of this route.
+
 Full steps, build settings, variables and checklist: **docs/CLOUDFLARE-DEPLOY.md**.
 Short version: Build command `npm run build` · Deploy command `npx wrangler deploy` · Node 22 · the website folder is `out` (set in `wrangler.jsonc`).
 Public settings (Paystack public key, Google script address) are added in Cloudflare as BUILD variables. No secret is stored in this repo.

@@ -12,6 +12,13 @@ Status:
 
 `.github/workflows/backup.yml` runs at 02:17 UTC every day (and on demand) in the GitHub environment `backups`:
 
+0. **Configuration check, before production is read** (Stage 3B.1). These must be present, and the bucket reachable with these credentials (`head-bucket`), or the job stops:
+   - the approved account ID and D1 UUID;
+   - the bucket and region;
+   - the Cloudflare token;
+   - the storage keys.
+
+   A storage *listing error* also stops the job. Only an empty prefix (the first backup) continues without the previous manifest, so the record-count comparison is never skipped silently.
 1. **Backup.**
    - Creates a read-only, identity-proven logical backup of `skillmountainacademy-db`: `npm run db:backup -- --remote --owner-approved --account-id … --database-uuid …`.
    - Wrangler is pinned to the approved account and the exact D1 UUID.
@@ -66,8 +73,10 @@ The job reads production only. It never writes to D1 and never deletes anything 
 
    Restrict the environment to the `main` branch (GitHub protection guide §4).
 6. **Start:**
-   - run the workflow once by hand (Actions → "Database backup (scheduled)" → Run workflow), then check the run, the issue list and the bucket;
-   - then set the repository variable `BACKUP_ENABLED=true`.
+   - The job runs only while `BACKUP_ENABLED=true`, **including manual runs** (corrected in Stage 3B.1; the earlier text said to run it by hand first, which the workflow does not allow).
+   - So set the repository variable `BACKUP_ENABLED=true`, then immediately run the workflow once by hand (Actions → "Database backup (scheduled)" → Run workflow).
+   - Check the run, the issue list and the bucket. The daily schedule (02:17 UTC) starts from the same moment.
+   - To pause backups, set `BACKUP_ENABLED` to anything else.
 
 ## 3. Retention (owner approval required)
 
@@ -89,6 +98,8 @@ When an issue "Database backup FAILED" appears, open the run and find the first 
 
 | Failed step | Usual cause | Action |
 |---|---|---|
+| Storage and identity configuration | A variable or secret is missing, or the bucket is unreachable with these credentials | Fill in the `backups` environment (§2.5) |
+| Fetch the previous manifest | Listing denied or failed | Give the storage key `ListBucket` on the prefix (§2.3) |
 | Require the owner's public key | Key not committed | §2.1 |
 | Encrypted, identity-proven backup | Token, account or UUID wrong, or Cloudflare unavailable | Check environment values and token (never paste them into the issue); run again |
 | Shipping checks: "fell from X to Y" | Records really dropped, or a deletion happened | **Treat as a possible incident.** Do not override. Compare with the application, then follow the DR runbook |
@@ -113,6 +124,7 @@ Two consecutive failed days means the recovery-point objective is at risk: take 
 
 `.github/workflows/restore-drill.yml` opens an issue "Monthly restore drill YYYY-MM" on the 1st of each month, unless one is already open. It touches nothing else. The owner then:
 - carries out §5 steps 1–3 on the newest backup;
+- confirms the newest stored backup is less than 2 days old (the schedule may have been disabled silently);
 - notes the restore time (recovery-time objective) and the backup's age (recovery-point objective);
 - confirms both private-key copies can be read;
 - records the result in the issue and closes it.
@@ -126,4 +138,6 @@ A drill that cannot restore is a priority-one incident.
 - the issue creation;
 - the schedule itself.
 
-The local tests cover the decision logic only: what is shipped, what is refused, and how the stored copy is verified.
+The local tests cover the decision logic only: what is shipped, what is refused, how the stored copy is verified, and the workflow's ordering (configuration check before the production read).
+
+**GitHub disables scheduled workflows after 60 days without repository activity**, without any failure or issue. The monthly drill (§6) is the safeguard: it must confirm that the newest stored backup is less than 2 days old.

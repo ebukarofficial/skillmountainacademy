@@ -90,13 +90,13 @@ A lower expected migration number is **not** sufficient to approve a rollback. A
    | **PROHIBITED** | Crosses the **Stage 2C security floor** (candidate expects a migration before `0010_owner_integrity.sql`) | Never, unless the owner gives an explicit written exception (`--owner-security-exception "<owner name, date>"`). Even then the verdict is at best CHECK_REQUIRED, and the weaknesses fixed in Stages 2B and 2C return while that Worker runs. |
 
 5. **Roll back.** ⚠ DESTRUCTIVE: changes live code; see §3. The operation refuses unless:
-   - the record from step 4 is for this exact version id and the approved account, and under 2 hours old;
+   - the record from step 4 is for this exact version id, the approved account **and the production D1 UUID** (Stage 3B.1), and under 2 hours old;
    - the verdict is SAFE, or CHECK_REQUIRED with the listed actions confirmed (`--actions-confirmed`).
 
    It always names the version explicitly, never an implicit "previous version". Run it once without `--execute` (dry run), then:
 
    ```sh
-   npm run cf -- worker-rollback --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --version-id "${VERSION_ID:?}" \
+   npm run cf -- worker-rollback --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}" --version-id "${VERSION_ID:?}" \
      --rollback-record backups/rollback-check.json --reason "${ROLLBACK_REASON:?short reason}" --approved-by "${SMA_APPROVER:?owner's full name}" --execute
    ```
 
@@ -155,10 +155,10 @@ Then verify with §6.4.
 1. **Verify the backup locally** (isolated; the copy and any decrypted data are deleted afterwards):
 
    ```sh
-   npm run db:restore:verify -- "${SMA_BACKUP:?path to backups/<file>.sql.enc}" --key "${SMA_KEY_PRIV:?path to owner-backup-private.pem}"
+   npm run db:restore:verify -- "${SMA_BACKUP:?path to backups/<file>.sql.enc}" --key "${SMA_KEY_PRIV:?path to owner-backup-private.pem}" --report "${SMA_RESTORE_REPORT:=backups/restore-report.json}"
    ```
 
-   It must print `RESTORE VERIFIED`.
+   It must print `RESTORE VERIFIED`. The report (bound to the backup's manifest by SHA-256) is required by the import in step 4.
 2. **Create the new database** in the approved account (not destructive). The name must be `skillmountainacademy-db-restore-YYYYMMDD`. The operation reads the new UUID from Wrangler's output and **proves** it (it exists in the approved account under that name) before reporting it:
 
    ```sh
@@ -175,12 +175,14 @@ Then verify with §6.4.
 
 4. **Import into the new database only.** ⚠ This writes to the **new** database; see §3. The operation refuses:
    - any database not named `skillmountainacademy-db-restore-…`;
-   - any file whose SHA-256 differs from the backup's manifest.
+   - any file whose SHA-256 differs from the backup's manifest;
+   - a backup that is not a production backup of the approved account;
+   - a missing, failed, older-than-24-hours or different-manifest restore verification report (Stage 3B.1).
 
    It runs pinned to the new UUID.
 
    ```sh
-   npm run cf -- restore-import --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --file "${SMA_PLAINTEXT:?}" --manifest "${SMA_BACKUP_MANIFEST:?the original backup's .manifest.json}" --approved-by "${SMA_APPROVER:?}" --execute
+   npm run cf -- restore-import --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --file "${SMA_PLAINTEXT:?}" --manifest "${SMA_BACKUP_MANIFEST:?the original backup's .manifest.json}" --restore-report "${SMA_RESTORE_REPORT:?the report from step 1}" --approved-by "${SMA_APPROVER:?}" --execute
    ```
 
    Then delete `"$SMA_PLAINTEXT"`.

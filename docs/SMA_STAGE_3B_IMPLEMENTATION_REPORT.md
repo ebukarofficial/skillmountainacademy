@@ -2,6 +2,8 @@
 
 Date: 22 November 2026. Scope: engineering implementation and local testing only.
 
+> **Read with `docs/SMA_STAGE_3B_1_CLOSURE_AUDIT.md`.** The Stage 3B.1 audit corrected several items described here. Most notably, the first-deployment attestation no longer exists: compatibility is read from the approved D1 UUID. The audit also records the hosting findings (Workers Builds, GitHub Pages).
+
 **Nothing was deployed, migrated, rolled back, created or changed in Cloudflare, GitHub, DNS, storage, Paystack or R2.** No production data was accessed. Production `wrangler.jsonc`, the GitHub Pages workflow, `app/globals.css`, logos and icons are unchanged.
 
 **Handover note:** the brief refers to `docs/SMA_STAGE_3A_1_CLOSURE_REPORT.md`. The Stage 3A.1 document is actually named **`docs/SMA_STAGE_3A_1_CLOSURE_AUDIT.md`**, and that file was used.

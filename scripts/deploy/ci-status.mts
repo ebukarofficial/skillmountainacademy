@@ -6,11 +6,12 @@ import { readFileSync } from "node:fs";
 import { isMain } from "../db/args.mts";
 
 export const REQUIRED_CHECKS = ["CI static checks", "CI tests", "CI build and security headers"];
-type Run = { name: string; head_sha: string; status: string; conclusion: string | null; completed_at?: string | null; started_at?: string | null };
+type Run = { name: string; head_sha: string; app?: { slug?: string } | null; status: string; conclusion: string | null; completed_at?: string | null; started_at?: string | null };
 
 export function ciPassed(data: { check_runs?: Run[] }, sha: string, required = REQUIRED_CHECKS): { ok: boolean; failures: string[] } {
   const failures: string[] = [];
-  const runs = (data.check_runs ?? []).filter((r) => r.head_sha === sha);
+  // Only GitHub Actions check runs count: another app with checks permission cannot satisfy a required name (Stage 3B.1).
+  const runs = (data.check_runs ?? []).filter((r) => r.head_sha === sha && r.app?.slug === "github-actions");
   for (const name of required) {
     const latest = runs.filter((r) => r.name === name).sort((a, b) => String(b.started_at ?? "").localeCompare(String(a.started_at ?? "")))[0];
     if (!latest) failures.push(`${name}: no run for ${sha.slice(0, 12)}.`);

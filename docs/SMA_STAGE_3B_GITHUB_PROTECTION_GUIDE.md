@@ -4,6 +4,8 @@ Date: 22 November 2026.
 
 Status: **documentation only. No repository setting has been changed.** This session had no authorised GitHub access to the repository: the GitHub API answered "GitHub access to this repository is not enabled". The owner applies these settings in the GitHub web interface (Settings). Each step says what to click and what to check afterwards.
 
+> **Stage 3B.2 (owner instruction).** The owner pushes directly to `main`, and Cloudflare publishes from it. **Do not turn on "Require a pull request", required approvals or required status checks** for `main`: they would block that route, and a sole maintainer cannot approve their own pull requests. If anything is applied, the minimum that keeps the route unchanged is **Block force pushes** and **Restrict deletions** only. CI still runs on every push and reports problems without blocking publication. The `production` environment (§4) is needed only if the optional `deploy-worker.yml` is ever used.
+
 ## 1. Branch protection for `main` (Settings → Rules → Rulesets → New branch ruleset)
 
 | Setting | Value |

@@ -21,7 +21,7 @@ Permission names follow Cloudflare's API token permission reference (checked 22 
 | Permission | Level | Why |
 |---|---|---|
 | Workers Scripts (or Workers *Editor* scoped to `skillmountainacademy`) | Edit | `wrangler deploy`, `deployments list` |
-| D1 | **Read** | The gate's live identity proof (`d1 info` by UUID and by name). Never Edit: the workflow cannot migrate or write. |
+| D1 | **Read** | The gate's live identity proof (`d1 info` by UUID and by name), and (Stage 3B.1) the read-only query of the approved database's `d1_migrations` for compatibility. Never Edit: the workflow cannot migrate or write. |
 | Account Settings | Read | Wrangler reads account details during deploy (commonly needed; confirm on staging) |
 
 Not granted:
@@ -67,6 +67,7 @@ Use a separate token with Workers Scripts Edit, D1 Edit and KV Edit (for its own
 | `NEXT_PUBLIC_SHEET_URL`, `NEXT_PUBLIC_WHATSAPP` | variable | production | owner | Public build values |
 | `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | variable | production | owner | **Empty** until Paystack is approved |
 | `PAYSTACK_APPROVED`, `R2_APPROVED` | variable | production | owner | `false` until approved |
+| `CSP_MODE` | variable | production | owner | `report` or `enforce`: the mode production uses now. Required; the build must match it. |
 | `CLOUDFLARE_BACKUP_TOKEN` | secret | backups | owner | §3 |
 | `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | secret | backups | owner | §4 |
 | `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_PREFIX` | variable | backups | owner | Provider details |
