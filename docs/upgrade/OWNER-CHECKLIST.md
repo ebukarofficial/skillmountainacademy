@@ -249,3 +249,9 @@ mailbox's own spam scanning (Northwest webmail). Gmail and Outlook addresses usu
    consent; the note you enter is kept with the record.
 8. **Assistant questions** are kept for 180 days (privacy policy section 6 says so). Check Admin > Admissions > Assistant
    enquiries regularly for questions marked for follow-up.
+
+## L. Stage 2 security (22 Nov 2026)
+Read `docs/SMA_SECURITY_REMEDIATION.md` first. Section 15 lists every step in order: backup, check migrations, apply 0008
+with approval, set `IP_HASH_SALT` and `MFA_ENCRYPTION_KEY`, deploy (CSP report-only), enrol in two-step sign-in, assign
+administrator groups, then switch on `MFA_ENFORCE_ADMINS` and the enforced CSP. Students are signed out after 10 minutes
+without activity from this release.

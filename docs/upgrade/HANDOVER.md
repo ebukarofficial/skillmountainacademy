@@ -3,7 +3,8 @@
 This ZIP is the live skillmountainacademy.com project, upgraded by Claude following `docs/upgrade/SPEC.md`.
 ## Status
 
-**21 Nov 2026 (latest):** final refinement brief done (section "Final refinement" at the end). Owner steps: OWNER-CHECKLIST section K.
+**22 Nov 2026 (latest):** Stage 2 security remediation: see `docs/SMA_SECURITY_REMEDIATION.md` (OWNER-CHECKLIST section L).
+**21 Nov 2026:** final refinement brief done (section "Final refinement" at the end). Owner steps: OWNER-CHECKLIST section K.
 Earlier the same day: premium institutional experience (OWNER-CHECKLIST section G).
 
 | Phase | State |
