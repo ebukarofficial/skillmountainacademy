@@ -12,14 +12,14 @@ export type User = {
   country_origin?: string | null; country_residence?: string | null; profile_submitted_at?: string | null; verified_at?: string | null;
   meet_link?: string | null; guardian_name?: string | null; guardian_relationship?: string | null; guardian_email?: string | null; guardian_phone?: string | null;
   guardian_contact_ok?: number; guardian_contact_note?: string | null;
-  admin_role?: string | null;
+  admin_role?: string | null; removed_at?: string | null; removed_by?: string | null; removal_reason?: string | null; mfa_required?: number;
 };
 // Only approved instructors teach (see lib/admissions.ts). New instructors can sign in before approval, but only to
 // complete and submit their profile (the API allows them nothing else). Rejected or suspended candidates cannot sign
 // in. If migration 0004 has not run yet the column does not exist (undefined), and instructors work as before.
 export const isApproved = (u: Pick<User, "verification">) => u.verification === undefined || u.verification === "approved";
-export const canSignIn = (u: Pick<User, "status" | "role" | "verification">) =>
-  u.status === "active" && (u.role !== "instructor" || (u.verification !== "rejected" && u.verification !== "suspended"));
+export const canSignIn = (u: Pick<User, "status" | "role" | "verification" | "removed_at">) =>
+  u.status === "active" && !u.removed_at && (u.role !== "instructor" || (u.verification !== "rejected" && u.verification !== "suspended"));
 export const isVerifiedInstructor = (u: Pick<User, "role" | "verification">) => u.role === "instructor" && u.verification === "approved";
 
 export const getUser = (db: DB, id: string) => one<User>(db, "SELECT * FROM users WHERE id = ?1", id);
@@ -131,5 +131,11 @@ export const revokeTokens = (db: DB, userId: string, at: string) => run(db, "UPD
 // administrator keeps today's full access.
 export async function setAdminRole(db: DB, userId: string, role: string | null) {
   try { await run(db, "UPDATE users SET admin_role = ?2 WHERE id = ?1", userId, role); }
+  catch (e) { if (!/no such column|has no column named/i.test(String((e as Error)?.message ?? e))) throw e; }
+}
+
+// MFA re-enrolment flag (migration 0009). Missing column before the migration: nothing happens.
+export async function setMfaRequired(db: DB, userId: string, on: boolean) {
+  try { await run(db, "UPDATE users SET mfa_required = ?2 WHERE id = ?1", userId, on ? 1 : 0); }
   catch (e) { if (!/no such column|has no column named/i.test(String((e as Error)?.message ?? e))) throw e; }
 }

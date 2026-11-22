@@ -3,10 +3,14 @@
 // admits administrators but is missing from this table is refused for every scoped group (tests check that the table is
 // complete).
 //
-// Activation is safe by design: `users.admin_role` is NULL for every existing administrator, and NULL means "not yet
-// assigned: full access as today". Nothing changes for anyone until the owner assigns groups (see the migration plan in
-// docs/SMA_SECURITY_REMEDIATION.md). Only a Super Administrator (or an unassigned administrator, i.e. the owner today)
-// can assign groups.
+// Existing administrators (`users.admin_role` NULL, "unassigned") keep the day-to-day access they have today, EXCEPT
+// managing administrators: since Stage 2B they cannot create administrators, change anyone's group, change roles to or
+// from administrator, or suspend administrators. Those powers belong only to:
+//   - the OWNER: the one account whose email equals the OWNER_EMAIL server variable (set in wrangler.jsonc, not in the
+//     database, so no request can make someone the owner). The owner always has full access and cannot be suspended,
+//     removed, demoted or reset by anyone else;
+//   - Super Administrators, who are appointed (and removed) only by the owner, and only after the owner has completed
+//     the one-time bootstrap (POST /api/app/owner/bootstrap). See docs/SMA_STAGE_2B_SECURITY_VERIFICATION.md.
 
 export const ADMIN_ROLES = ["super", "admissions", "finance", "academic", "faculty", "support", "reporting"] as const;
 export type AdminRole = (typeof ADMIN_ROLES)[number];
@@ -23,7 +27,8 @@ export type Area =
   | "support"      // student contact: emails, guardian details, contact records
   | "people"       // the user directory (read) used by several screens
   | "users"        // creating, changing, suspending and inviting accounts; administrator groups; MFA resets
-  | "security";    // audit log, platform status, test email
+  | "security"     // audit log, platform status, test email
+  | "owner";       // the owner console: bootstrap, permanent removals, removal approvals (the owner only)
 
 type Grant = { read: Area[]; write: Area[] };
 const ALL_AREAS: Area[] = ["any", "overview", "admissions", "orders", "finance", "academic", "records", "faculty", "support", "people", "users", "security"];
@@ -89,6 +94,12 @@ const TABLE: [string, string, Area][] = [
   ["GET", "/api/app/admin/settings/retention", "security"], ["PUT", "/api/app/admin/settings/retention", "security"],
 
   ["GET", "/api/app/admin/audit", "security"], ["GET", "/api/app/admin/platform", "security"], ["POST", "/api/app/admin/test-email", "security"],
+  ["POST", "/api/app/admin/users/:id/removal-requests", "users"],
+
+  ["GET", "/api/app/owner/status", "any"],
+  ["POST", "/api/app/owner/bootstrap", "owner"], ["GET", "/api/app/owner/staff", "owner"], ["GET", "/api/app/owner/audit", "owner"],
+  ["POST", "/api/app/owner/users/:id/remove", "owner"], ["GET", "/api/app/owner/removal-requests", "owner"],
+  ["POST", "/api/app/owner/removal-requests/:id", "owner"],
 ];
 
 const MAP = new Map(TABLE.map(([m, p, a]) => [`${m} ${p}`, a]));
@@ -96,22 +107,63 @@ export const permissionTable = () => TABLE.map(([method, path, area]) => ({ meth
 export const areaFor = (method: string, path: string): Area | undefined => MAP.get(`${method} ${path}`);
 export const isAdminRole = (v: unknown): v is AdminRole => typeof v === "string" && (ADMIN_ROLES as readonly string[]).includes(v);
 
-// Does this administrator (group, or null for unassigned) hold the right for this route? Default deny.
-export function adminMay(role: string | null | undefined, method: string, path: string): boolean {
-  if (role === null || role === undefined) return true; // unassigned = today's full access (see header)
-  if (!isAdminRole(role)) return false;                 // an unknown value never grants anything
+// Does this administrator hold the right for this route? Default deny. The owner may do everything; the "owner" area is
+// the owner's alone; an unassigned administrator keeps today's access except the "users" and "owner" areas.
+export function adminMay(role: string | null | undefined, method: string, path: string, owner = false): boolean {
   const area = areaFor(method, path);
-  if (!area) return false;
+  if (owner) return true;
+  if (!area || area === "owner") return false;
+  // Unassigned (existing) administrators keep their day-to-day access, including student and instructor accounts.
+  // Everything that touches ADMINISTRATORS (creating one, promoting to admin, groups, suspending an administrator, MFA
+  // resets, removal requests) is refused in the route handlers by canManageAdmins / groupChangeRefusal /
+  // accountChangeRefusal, which need the owner, or a Super Administrator appointed after the owner's bootstrap.
+  if (role === null || role === undefined) return true;
+  if (!isAdminRole(role)) return false;                 // an unknown value never grants anything
   const g = GRANTS[role];
   return method === "GET" ? g.read.includes(area) : g.write.includes(area);
 }
 
 // Areas an administrator can see, for the dashboard (display only; the server still checks every request).
-export function areasFor(role: string | null | undefined): { read: Area[]; write: Area[] } {
+export function areasFor(role: string | null | undefined, owner = false): { read: Area[]; write: Area[] } {
+  if (owner) return { read: [...ALL_AREAS, "owner"], write: [...ALL_AREAS, "owner"] };
   if (role === null || role === undefined) return { read: ALL_AREAS, write: ALL_AREAS };
   if (!isAdminRole(role)) return { read: [], write: [] };
   return GRANTS[role];
 }
 
-// Only a Super Administrator, or an unassigned administrator (the owner before groups are assigned), may manage groups.
-export const canManageAdmins = (role: string | null | undefined) => role === null || role === undefined || role === "super";
+// ---- the owner ----
+type Who = { id: string; email: string; role: string; status: string; admin_role?: string | null; removed_at?: string | null };
+export const ownerEmail = (env: { OWNER_EMAIL?: string }) => (env.OWNER_EMAIL || "").trim().toLowerCase();
+export function isOwner(u: Who | null | undefined, env: { OWNER_EMAIL?: string }): boolean {
+  const o = ownerEmail(env);
+  return !!u && !!o && u.email.toLowerCase() === o && u.role === "admin" && u.status === "active" && !u.removed_at;
+}
+export const isSuper = (u: Who) => u.role === "admin" && u.admin_role === "super";
+// Can this person manage administrator accounts at all (create, suspend, change role, groups)? Owner, or a Super
+// Administrator once the owner has completed the bootstrap.
+export const canManageAdmins = (actor: Who, env: { OWNER_EMAIL?: string }, bootstrapped: boolean) =>
+  isOwner(actor, env) || (bootstrapped && isSuper(actor));
+
+// Every administrator-group change goes through here. Returns a refusal message, or null when allowed.
+export function groupChangeRefusal(actor: Who, target: Who, next: string, env: { OWNER_EMAIL?: string }, bootstrapped: boolean): string | null {
+  const owner = isOwner(actor, env);
+  if (!isAdminRole(next)) return "Unknown administrator group.";
+  if (!bootstrapped) return owner ? "Complete the owner set-up first (Owner console)." : "Administrator groups can be assigned once the owner has completed set-up.";
+  if (!owner && !isSuper(actor)) return "Only the owner or a Super Administrator can change administrator groups.";
+  if (target.role !== "admin") return "Administrator groups apply to administrators only.";
+  if (target.removed_at) return "This account has been removed.";
+  if (isOwner(target, env)) return "The owner's access cannot be changed.";
+  if (actor.id === target.id) return "Nobody can change their own administrator group.";
+  if ((next === "super" || target.admin_role === "super") && !owner) return "Only the owner can appoint or change a Super Administrator.";
+  return null;
+}
+// May the actor suspend, reactivate, change the role of, or request removal of this account?
+export function accountChangeRefusal(actor: Who, target: Who, env: { OWNER_EMAIL?: string }, bootstrapped: boolean): string | null {
+  if (isOwner(target, env) && actor.id !== target.id) return "The owner's account cannot be changed by anyone else.";
+  if (target.removed_at) return "This account has been permanently removed.";
+  if (target.role === "admin" && actor.id !== target.id) {
+    if (!canManageAdmins(actor, env, bootstrapped)) return "Only the owner or a Super Administrator can change administrator accounts.";
+    if (target.admin_role === "super" && !isOwner(actor, env)) return "Only the owner can change a Super Administrator.";
+  }
+  return null;
+}

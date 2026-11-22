@@ -4,13 +4,14 @@ import type { AppEnv } from "../env";
 import { ApiError, clientIp, getCookie, json, readJson, sameOrigin, sha256 } from "../http";
 import { ipPseudonym } from "../privacy";
 import { audit, canSignIn, deleteSession, isApproved, logError, sessionWithUser, touchSession, type Role, type SessionRow, type User } from "./data/users";
-import { adminMay } from "./permissions";
+import { adminMay, areaFor, isOwner } from "./permissions";
+import { mfaKeyUsable } from "./mfa-crypto";
 import { MFA_PENDING_MINUTES, policyFor, type SessionPolicy } from "./session-policy";
 
 export type Ctx = {
   req: Request; env: AppEnv; exec: ExecutionContext; url: URL; params: Record<string, string>;
   user: User; db: D1Database; ipHash: string; body: <T = Record<string, unknown>>() => Promise<T>;
-  session: SessionRow | null; sessionHash: string | null; policy: SessionPolicy | null; routePath: string;
+  session: SessionRow | null; sessionHash: string | null; policy: SessionPolicy | null; routePath: string; isOwner: boolean;
   audit: (action: string, target_type?: string, target_id?: string, detail?: unknown) => Promise<unknown>;
 };
 type PublicCtx = Omit<Ctx, "user" | "audit"> & { user: User | null };
@@ -32,7 +33,7 @@ export const SESSION_DAYS = 30; // staff default; see session-policy.ts
 export const clearCookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 
 // While a session waits for the administrator's authenticator code, only these routes answer.
-const MFA_PENDING_PATHS = /^\/api\/(me|auth\/logout|auth\/mfa\/verify)$/;
+const MFA_PENDING_PATHS = /^\/api\/(me|auth\/logout|auth\/mfa\/verify|auth\/owner-recovery)$/;
 // An administrator who must set up two-step sign-in (MFA_ENFORCE_ADMINS) can only reach the setup routes.
 const MFA_SETUP_PATHS = /^\/api\/(me|auth\/logout|auth\/logout-all|auth\/activity|auth\/mfa\/(status|setup|enable))$/;
 
@@ -115,11 +116,22 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
     // Administrator two-step sign-in: a session that has not passed the authenticator code can do nothing else.
     if (auth.session?.mfa_pending && !MFA_PENDING_PATHS.test(url.pathname))
       throw new ApiError(403, "mfa_required", "Enter the code from your authenticator app to finish signing in.");
-    if (user.role === "admin" && env.MFA_ENFORCE_ADMINS === "true" && !auth.session?.mfa_verified_at && !auth.session?.legacy && !MFA_SETUP_PATHS.test(url.pathname))
+    // Two-step sign-in required: for every administrator when MFA_ENFORCE_ADMINS is on, and always for an administrator
+    // whose factor was reset (users.mfa_required) until they enrol again.
+    const mustEnrol = user.role === "admin" && !auth.session?.mfa_verified_at && !auth.session?.legacy && (env.MFA_ENFORCE_ADMINS === "true" || Number(user.mfa_required) === 1);
+    if (mustEnrol && !MFA_SETUP_PATHS.test(url.pathname))
       throw new ApiError(403, "mfa_setup_required", "Set up two-step sign-in with an authenticator app to use administration.");
-    // Administrator permission groups (default deny for scoped groups; unassigned administrators keep full access).
-    if (user.role === "admin" && !adminMay(user.admin_role, req.method, found.r.path))
+    // Administrator permission groups (default deny for scoped groups). The owner may do everything.
+    const owner = isOwner(user, env);
+    if (user.role === "admin" && !adminMay(user.admin_role, req.method, found.r.path, owner)) {
+      // Refused administrator changes are recorded (the route, not the body), so attempts to reach powers a group lacks
+      // (for example an unassigned administrator trying to assign groups) leave a trail. Refused reads are not logged.
+      if (req.method !== "GET") await audit(db, { actor_id: user.id, action: "admin.access_refused", target_type: "route", target_id: found.params.id, detail: { method: req.method, route: found.r.path, area: areaFor(req.method, found.r.path), group: user.admin_role }, ip_hash: ipHash }).catch(() => undefined);
       throw new ApiError(403, "forbidden", "Your administrator role does not include this.");
+    }
+    // The owner console needs a session that passed the authenticator code (when two-step sign-in is configured).
+    if (areaFor(req.method, found.r.path) === "owner" && !auth.session?.mfa_verified_at && !auth.session?.legacy && (await mfaKeyUsable(env.MFA_ENCRYPTION_KEY)))
+      throw new ApiError(403, "owner_mfa_required", "Turn on two-step sign-in (Security) before using the owner console.");
     // An instructor awaiting verification may only complete their profile, see notices and sign out.
     if (user.role === "instructor" && !isApproved(user) && !ONBOARDING_PATHS.test(url.pathname))
       throw new ApiError(403, "awaiting_verification", "Your profile is awaiting verification. You can use the faculty workspace once the Academy approves it.");
@@ -127,7 +139,7 @@ export async function handleLms(req: Request, env: AppEnv, exec: ExecutionContex
   let cached: unknown;
   const c = {
     req, env, exec, url, params: found.params, user: user as User, db, ipHash,
-    session: auth.session, sessionHash: auth.hash, policy: auth.policy, routePath: found.r.path,
+    session: auth.session, sessionHash: auth.hash, policy: auth.policy, routePath: found.r.path, isOwner: isOwner(user, env),
     body: async <T,>() => (cached ??= await readJson(req, 160_000)) as T, // fits a 60,000-character material text
     audit: (action: string, target_type?: string, target_id?: string, detail?: unknown) => audit(db, { actor_id: user?.id ?? null, action, target_type, target_id, detail, ip_hash: ipHash }),
   } as Ctx;

@@ -2,6 +2,7 @@
 import "./routes/auth";
 import "./routes/mfa";
 import "./routes/security";
+import "./routes/owner";
 import "./routes/users";
 import "./routes/teaching";
 import "./routes/coursework";

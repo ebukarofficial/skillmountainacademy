@@ -5,7 +5,8 @@ import { ApiError } from "../../http";
 import { ipKeySource } from "../../privacy";
 import { ok, route } from "../api";
 import { mfaKeyUsable } from "../mfa-crypto";
-import { CATEGORIES, cleanSettings, loadSettings, NOT_AUTOMATED, saveSettings } from "../retention";
+import { CATEGORIES, cleanSettings, LAST_RUN_KEY, loadSettings, NOT_AUTOMATED, saveSettings, type LastRun } from "../retention";
+import { getSetting } from "../data/engagement";
 import { policyFor } from "../session-policy";
 
 route("GET", "/api/app/admin/settings/retention", ["admin"], async (c) => {
@@ -13,8 +14,9 @@ route("GET", "/api/app/admin/settings/retention", ["admin"], async (c) => {
   return ok({
     categories: Object.entries(CATEGORIES).map(([id, k]) => ({ id, label: k.label, group: k.group, defaultDays: k.defaultDays, minDays: k.minDays, defaultOn: k.defaultOn, ...settings[id as keyof typeof settings] })),
     notAutomated: NOT_AUTOMATED,
+    lastRun: await getSetting<LastRun>(c.db, LAST_RUN_KEY),
     security: {
-      ipHashKey: await ipKeySource(c.env), // "secret" (recommended), "kv" or "ephemeral"; never the key itself
+      ipHashKey: await ipKeySource(c.env), // "secret" (recommended), "d1", "ephemeral" or "missing"; never the key itself
       mfaConfigured: await mfaKeyUsable(c.env.MFA_ENCRYPTION_KEY),
       mfaEnforced: c.env.MFA_ENFORCE_ADMINS === "true",
       sessions: { student: policyFor("student", c.env), instructor: policyFor("instructor", c.env), admin: policyFor("admin", c.env) },

@@ -20,7 +20,7 @@ import { Repo } from "../../repo";
 import { ALL, clearCookie, ok, publicRoute, route, SESSION_COOKIE } from "../api";
 import { audit, canSignIn, isApproved, logError, consumeToken, revokeTokens, createSession, createToken, createUser, deleteSession, deleteUserSessions, getUser, getUserByEmail, recordActivity, updateUser, type User } from "../data/users";
 import { activeFactor } from "../data/mfa";
-import { areasFor } from "../permissions";
+import { areasFor, isOwner, ownerEmail } from "../permissions";
 import { ACTIVITY_THROTTLE_SECONDS, policyFor } from "../session-policy";
 import { selfView } from "../views";
 import { newStaffNo } from "../ids";
@@ -121,7 +121,8 @@ publicRoute("POST", "/api/auth/request", async (c) => {
   await repo.limitOrThrow(`login-email:${email}`, 4, 600);
   let user = await getUserByEmail(c.db, email);
   // First sign-in of an owner listed in ADMIN_EMAILS creates their admin account.
-  if (!user && (portal === null || portal === "admin") && adminEmails(c.env.ADMIN_EMAILS).includes(email)) {
+  // The owner (OWNER_EMAIL) is bootstrapped the same way; their group is set later by the owner set-up, never here.
+  if (!user && (portal === null || portal === "admin") && [...adminEmails(c.env.ADMIN_EMAILS), ownerEmail(c.env)].filter(Boolean).includes(email)) {
     user = { id: crypto.randomUUID(), email, role: "admin", status: "active", full_name: "SMA Admin", phone: null, bio: null, photo_key: null, student_no: null,
       specialization: null, qualifications: null, links: null, registration_id: null, created_at: nowIso(), last_login_at: null,
       staff_no: (await newStaffNo(c.db, "admin")) ?? undefined };
@@ -198,6 +199,6 @@ route("GET", "/api/me", ALL, async (c) => {
       enabled: !!mfa, pending: !!s?.mfa_pending, enforced: c.env.MFA_ENFORCE_ADMINS === "true",
       setupRequired: c.env.MFA_ENFORCE_ADMINS === "true" && !s?.mfa_verified_at && !s?.legacy,
     } : null,
-    admin: c.user.role === "admin" ? { role: c.user.admin_role ?? null, areas: areasFor(c.user.admin_role) } : null,
+    admin: c.user.role === "admin" ? { role: c.user.admin_role ?? null, owner: isOwner(c.user, c.env), areas: areasFor(c.user.admin_role, isOwner(c.user, c.env)) } : null,
   });
 });

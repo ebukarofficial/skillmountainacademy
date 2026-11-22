@@ -1,6 +1,7 @@
 // Profiles (everyone edits their own) and user management (admins only).
-import { ADMIN_ROLES, canManageAdmins, isAdminRole } from "../permissions";
+import { accountChangeRefusal, ADMIN_ROLES, canManageAdmins, groupChangeRefusal, isAdminRole, isOwner, ownerEmail } from "../permissions";
 import { setAdminRole } from "../data/users";
+import { isBootstrapped } from "../data/owner";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
 import { ALL, notFound, ok, page, route } from "../api";
@@ -104,6 +105,13 @@ route("POST", "/api/app/admin/users", ["admin"], async (c) => {
   const fields = profilePatch(ch, { ...b, fullName: b.fullName ?? "" }, role);
   ch.done();
   if (await getUserByEmail(c.db, email)) throw new ApiError(409, "exists", "A user with this email already exists.");
+  // The owner's address is reserved: only the owner's own first sign-in creates that account.
+  if (ownerEmail(c.env) && email === ownerEmail(c.env)) throw new ApiError(400, "reserved", "This email address is reserved for the platform owner.");
+  // Creating an administrator, and choosing their group, is for the owner or a Super Administrator (Stage 2B).
+  const booted = await isBootstrapped(c.db);
+  if (role === "admin" && !canManageAdmins(c.user, c.env, booted)) throw new ApiError(403, "forbidden", "Only the owner or a Super Administrator can create administrators.");
+  const wantGroup = role === "admin" ? (isAdminRole(b.adminRole) ? b.adminRole : "reporting") : null;
+  if (wantGroup === "super" && !isOwner(c.user, c.env)) throw new ApiError(403, "forbidden", "Only the owner can appoint a Super Administrator.");
   const u: User = { id: crypto.randomUUID(), email, role, status: "active", full_name: fields.full_name!, phone: fields.phone ?? null, bio: fields.bio ?? null,
     photo_key: null, student_no: role === "student" ? await newStudentNo(c.db) : null, specialization: fields.specialization ?? null, qualifications: fields.qualifications ?? null,
     links: fields.links ?? null, registration_id: null, created_at: nowIso(), last_login_at: null };
@@ -112,8 +120,9 @@ route("POST", "/api/app/admin/users", ["admin"], async (c) => {
   if (role === "admin") u.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
   await createUser(c.db, u);
   // Stage 2 least privilege: a NEW administrator gets the group asked for, or read-only Reporting until one is assigned.
-  if (role === "admin") await setAdminRole(c.db, u.id, isAdminRole(b.adminRole) ? b.adminRole : "reporting");
-  await c.audit("user.create", "user", u.id, { email, role, adminRole: role === "admin" ? (isAdminRole(b.adminRole) ? b.adminRole : "reporting") : undefined });
+  if (wantGroup) await setAdminRole(c.db, u.id, wantGroup);
+  await c.audit("user.create", "user", u.id, { email, role, adminRole: wantGroup ?? undefined });
+  if (wantGroup) await c.audit("admin.group_assigned", "user", u.id, { from: null, to: wantGroup, on: "create" });
   if (b.sendInvite !== false && canSignIn(u)) c.exec.waitUntil(sendSignInLink(c.env, c.db, u, true));
   return ok({ user: adminView((await getUser(c.db, u.id)) ?? u) }, 201);
 });
@@ -129,12 +138,22 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   const adminRole = b.adminRole === undefined ? undefined : ch.oneOf(b.adminRole, ADMIN_ROLES, "an administrator group");
   ch.done();
   if (u.id === c.user.id && (patch.status === "suspended" || (patch.role && patch.role !== "admin"))) throw new ApiError(400, "self", "You cannot suspend yourself or remove your own admin role.");
-  // Administrator groups: only a Super Administrator (or the unassigned owner) may set them; nobody can lower their own
-  // access by mistake, and the only group anyone may give themselves is Super Administrator.
+  // Stage 2B server-side rules (src/server/lms/permissions.ts):
+  //  - the owner's account can only be changed by the owner; removed accounts cannot be changed or reactivated;
+  //  - administrator accounts (suspend, reactivate, role change) are for the owner or a Super Administrator, and a
+  //    Super Administrator only by the owner; making someone an administrator likewise;
+  //  - every group change is checked by groupChangeRefusal (nobody changes their own group; only the owner appoints
+  //    or changes a Super Administrator; nothing before the owner's one-time bootstrap).
+  const booted = await isBootstrapped(c.db);
+  const touchesAccount = patch.status !== undefined || patch.role !== undefined;
+  if (touchesAccount || isOwner(u, c.env) || u.removed_at) {
+    const why = accountChangeRefusal(c.user, u, c.env, booted);
+    if (why) { await c.audit("admin.change_refused", "user", u.id, { why, patch: { status: patch.status, role: patch.role } }); throw new ApiError(403, "forbidden", why); }
+  }
+  if (patch.role === "admin" && u.role !== "admin" && !canManageAdmins(c.user, c.env, booted)) throw new ApiError(403, "forbidden", "Only the owner or a Super Administrator can make someone an administrator.");
   if (adminRole !== undefined) {
-    if (!canManageAdmins(c.user.admin_role)) throw new ApiError(403, "forbidden", "Only a Super Administrator can change administrator groups.");
-    if ((patch.role ?? u.role) !== "admin") throw new ApiError(400, "invalid", "Administrator groups apply to administrators only.");
-    if (u.id === c.user.id && adminRole !== "super") throw new ApiError(400, "self", "You can only assign yourself Super Administrator. Ask another Super Administrator to change your group.");
+    const why = groupChangeRefusal(c.user, { ...u, role: patch.role ?? u.role }, adminRole, c.env, booted);
+    if (why) { await c.audit("admin.group_refused", "user", u.id, { why, to: adminRole }); throw new ApiError(403, "forbidden", why); }
   }
   if (patch.role === "student" && !u.student_no) patch.student_no = await newStudentNo(c.db);
   if (patch.role === "admin" && !u.staff_no) patch.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
@@ -144,9 +163,9 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   const becameAdmin = patch.role === "admin" && u.role !== "admin";
   if (adminRole !== undefined || becameAdmin) await setAdminRole(c.db, u.id, adminRole ?? "reporting");
   const groupChanged = adminRole !== undefined && adminRole !== (u.admin_role ?? null);
-  // Suspension, a role change or a new administrator group takes effect at once: every session of that person ends
-  // (except the caller's own when they promote themselves to Super Administrator).
-  if (patch.status === "suspended" || (patch.role && patch.role !== u.role) || (groupChanged && u.id !== c.user.id)) await deleteUserSessions(c.db, u.id);
+  if (groupChanged || becameAdmin) await c.audit("admin.group_assigned", "user", u.id, { from: u.admin_role ?? null, to: adminRole ?? "reporting" });
+  // Suspension, a role change or a new administrator group takes effect at once: every session of that person ends.
+  if (patch.status === "suspended" || (patch.role && patch.role !== u.role) || groupChanged) await deleteUserSessions(c.db, u.id);
   await c.audit("user.update", "user", u.id, { ...patch, ...(adminRole !== undefined ? { adminRole } : {}) });
   return ok({ user: adminView((await getUser(c.db, u.id))!) });
 });

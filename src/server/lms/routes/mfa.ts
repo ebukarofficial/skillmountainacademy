@@ -14,11 +14,13 @@
 import { button, layout, sendEmail } from "../../email";
 import { ApiError, nowIso, sha256 } from "../../http";
 import { Repo } from "../../repo";
-import { ok, route, publicRoute, type Ctx } from "../api";
+import { clearCookie, ok, route, publicRoute, type Ctx } from "../api";
+import { getSetting, putSetting } from "../data/engagement";
 import { activateFactor, activeFactor, claimStep, deleteFactor, getFactor, recoveryLeft, replaceRecoveryCodes, savePendingFactor, useRecoveryCode } from "../data/mfa";
-import { createSession, deleteOtherSessions, deleteSession, deleteUserSessions, getUser, markSessionMfaVerified } from "../data/users";
+import { createSession, deleteOtherSessions, deleteSession, deleteUserSessions, getUser, markSessionMfaVerified, setMfaRequired } from "../data/users";
 import { decryptSecret, encryptSecret, hashRecovery, mfaKeyUsable, newRecoveryCodes, newTotpSecret, otpauthUrl, verifyTotp } from "../mfa-crypto";
-import { canManageAdmins } from "../permissions";
+import { accountChangeRefusal, canManageAdmins } from "../permissions";
+import { isBootstrapped } from "../data/owner";
 import { newSessionToken, sessionCookie } from "./auth";
 import { siteUrl } from "../../env";
 
@@ -76,6 +78,7 @@ route("POST", "/api/auth/mfa/enable", ["admin"], async (c) => {
   if (step === null) { await c.audit("mfa.enable_failed", "user", c.user.id); throw new ApiError(400, "invalid_code", "That code is not right. Check the time on your phone and try the newest code."); }
   const at = nowIso();
   await activateFactor(c.db, c.user.id, step, at);
+  await setMfaRequired(c.db, c.user.id, false);
   const codes = newRecoveryCodes();
   await replaceRecoveryCodes(c.db, c.user.id, await Promise.all(codes.map(hashRecovery)), at);
   if (c.sessionHash) { await markSessionMfaVerified(c.db, c.sessionHash, at); await deleteOtherSessions(c.db, c.user.id, c.sessionHash); }
@@ -149,14 +152,51 @@ route("POST", "/api/auth/mfa/disable", ["admin"], async (c) => {
 // Lost phone and no recovery codes: a Super Administrator removes the factor; the administrator signs in by email and
 // sets it up again. Nobody can reset their own factor this way.
 route("POST", "/api/app/admin/users/:id/mfa-reset", ["admin"], async (c) => {
-  if (!canManageAdmins(c.user.admin_role)) throw new ApiError(403, "forbidden", "Only a Super Administrator can reset two-step sign-in.");
   const u = await getUser(c.db, c.params.id);
   if (!u || u.role !== "admin") throw new ApiError(404, "not_found", "Administrator not found.");
-  if (u.id === c.user.id) throw new ApiError(400, "self", "You cannot reset your own two-step sign-in. Another Super Administrator must do it.");
+  if (u.id === c.user.id) throw new ApiError(400, "self", "You cannot reset your own two-step sign-in. Another Super Administrator must do it, or the owner's break-glass procedure.");
+  const why = accountChangeRefusal(c.user, u, c.env, await isBootstrapped(c.db));
+  if (why || !canManageAdmins(c.user, c.env, await isBootstrapped(c.db))) { await c.audit("mfa.reset_refused", "user", u.id, { why }); throw new ApiError(403, "forbidden", why ?? "Only the owner or a Super Administrator can reset two-step sign-in."); }
   await deleteFactor(c.db, u.id);
   await deleteUserSessions(c.db, u.id);
+  await setMfaRequired(c.db, u.id, true); // they must enrol again before using administration
   await c.audit("mfa.reset_by_admin", "user", u.id);
   await notify(c, u.id, "two-step sign-in reset", "A Super Administrator removed two-step sign-in from your account and signed you out everywhere. Sign in by email and set it up again.");
   return ok({ reset: true });
 });
 
+
+// Owner break-glass (Stage 2B). For the case where the owner has lost both the authenticator and the recovery codes and
+// there is no other Super Administrator. It requires BOTH:
+//   1. the owner's mailbox (a signed-in owner session from an email link; the pending MFA step is enough), and
+//   2. control of the Cloudflare account: someone with that access sets the one-time secret OWNER_RECOVERY_TOKEN
+//      (npx wrangler secret put OWNER_RECOVERY_TOKEN), which is entered here and then deleted.
+// Success removes the owner's factor and recovery codes, signs the owner out everywhere, records the token as used (its
+// hash), marks the owner as having to enrol again, writes an audit entry and emails the owner. Unlike editing the
+// database by hand, every step is audited.
+publicRoute("POST", "/api/auth/owner-recovery", async (c) => {
+  const ctx = c as Ctx;
+  if (!c.user || !ctx.isOwner) throw new ApiError(403, "forbidden", "Sign in with the owner's email link first.");
+  await new Repo(c.db).limitOrThrow(`owner-recovery:${c.user.id}`, 3, 86400);
+  const secret = c.env.OWNER_RECOVERY_TOKEN || "";
+  const b = await c.body<{ token?: string }>();
+  const given = String(b.token ?? "");
+  const used = (await getSetting<string[]>(c.db, "owner_recovery_used")) ?? [];
+  const givenHash = await sha256(`orc|${given}`);
+  const okToken = secret.length >= 32 && safeEq(givenHash, await sha256(`orc|${secret}`)) && !used.includes(givenHash);
+  if (!okToken) { await ctx.audit("mfa.owner_break_glass_failed", "user", c.user.id); throw new ApiError(400, "invalid", "The recovery token is not valid, has been used, or is not set."); }
+  await putSetting(c.db, "owner_recovery_used", [...used, givenHash].slice(-20), c.user.id, nowIso());
+  await deleteFactor(c.db, c.user.id);
+  await setMfaRequired(c.db, c.user.id, true);
+  await deleteUserSessions(c.db, c.user.id);
+  await ctx.audit("mfa.owner_break_glass", "user", c.user.id);
+  await notify(ctx, c.user.id, "owner two-step sign-in reset", "The owner break-glass procedure removed two-step sign-in from your account. Sign in by email and set it up again now, then delete the OWNER_RECOVERY_TOKEN secret.");
+  return ok({ reset: true, next: "Sign in again by email, set up two-step sign-in, then run: npx wrangler secret delete OWNER_RECOVERY_TOKEN" }, 200, { "set-cookie": clearCookie });
+});
+
+function safeEq(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}

@@ -13,6 +13,8 @@ import { audit } from "./data/users";
 
 export const BATCH = 500;
 export const RETENTION_KEY = "retention";
+export const LAST_RUN_KEY = "retention_last_run";
+export type LastRun = { at: string; deleted: Record<string, number>; backlog: string[] };
 
 type Category = {
   label: string; group: string; defaultDays: number; minDays: number; defaultOn: boolean; protectedNote?: string;
@@ -79,5 +81,10 @@ export async function runRetention(db: D1Database, now = new Date(), batch = BAT
     }
   }
   if (Object.keys(done).length) await audit(db, { actor_id: null, action: "retention.purge", target_type: "retention", target_id: now.toISOString().slice(0, 10), detail: done });
+  // Backlog monitoring (Stage 2B): a category that hit the batch limit probably has more rows waiting. It is flagged in
+  // the audit log and in Admin > Security so a growing backlog is visible instead of silently accumulating.
+  const backlog = Object.entries(done).filter(([, n]) => n >= batch).map(([id]) => id);
+  if (backlog.length) await audit(db, { actor_id: null, action: "retention.backlog", target_type: "retention", target_id: now.toISOString().slice(0, 10), detail: { categories: backlog, batch } });
+  await putSetting(db, LAST_RUN_KEY, { at: now.toISOString(), deleted: done, backlog }, "system", now.toISOString()).catch(() => undefined);
   return done;
 }
