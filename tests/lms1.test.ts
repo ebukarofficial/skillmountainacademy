@@ -39,7 +39,9 @@ test("unknown emails get the same answer and no email; Turnstile and rate limits
   assert.ok(!w.calls.slice(before).some((c) => c.url.includes("api.resend.com")), "no email for unknown addresses");
   assert.equal((await w.post("/api/auth/request", { email: "nobody@example.com" })).status, 400, "Turnstile required");
   const codes = [];
-  for (let i = 0; i < 9; i++) codes.push((await w.post("/api/auth/request", { email: `x${i}@example.com`, turnstileToken: "good-token" }, { "cf-connecting-ip": "10.1.1.2" })).status);
+  // Stage 2: 20 requests per address per 10 minutes (a classroom behind one address), then 429.
+  for (let i = 0; i < 21; i++) codes.push((await w.post("/api/auth/request", { email: `x${i}@example.com`, turnstileToken: "good-token" }, { "cf-connecting-ip": "10.1.1.2" })).status);
+  assert.equal(codes.at(-2), 200);
   assert.equal(codes.at(-1), 429);
 });
 

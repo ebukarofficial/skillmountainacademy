@@ -142,7 +142,7 @@ test("profile photos: images only, 3 MB max", async () => {
   const doc = checkUpload("notes.pdf", MAX_FILE_MB * 1024 * 1024 + 1, DOC_TYPES, MAX_FILE_MB);
   assert.equal(doc.ok ? 0 : doc.status, 413);
   assert.equal(checkUpload("../../etc/passwd.pdf", 10, DOC_TYPES, 25).ok && (checkUpload("../../etc/passwd.pdf", 10, DOC_TYPES, 25) as { name: string }).name.includes("/"), false, "no path tricks");
-  assert.equal((await upload(stu, "/api/me/photo", "me.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png")).status, 200);
+  assert.equal((await upload(stu, "/api/me/photo", "me.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), "image/png")).status, 200);
   const me = await stu.json<{ user: { photo: string } }>("GET", "/api/me");
   assert.equal((await ins.get(me.user.photo)).headers.get("content-disposition")?.startsWith("inline"), true);
   assert.equal((await w.fetchApi(me.user.photo)).status, 401, "signed-in users only");

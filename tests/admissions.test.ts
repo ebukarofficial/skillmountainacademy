@@ -136,7 +136,7 @@ test("instructor onboarding: invited candidates sign in only to complete their p
     countryOrigin: "Ghana", countryResidence: "United Kingdom", languages: ["English", "French"], links: { linkedin: "https://linkedin.com/in/cand", x: "https://x.com/cand", facebook: "https://facebook.com/cand", portfolio: "https://cand.design" },
     achievements: ["Led the redesign of a national banking app"], certifications: [{ title: "Google UX Design Certificate", issuer: "Google", year: "2023", url: "https://www.credly.com/badges/example" }] });
   assert.equal((await cand.send("PATCH", "/api/me", { certifications: [{ title: "X", url: "http://insecure" }] })).status, 400, "verification links must be https");
-  const ph = await w.fetchApi("/api/me/photo?name=me.png", { method: "PUT", headers: { cookie: cand.cookie, origin: "https://skillmountainacademy.com", "content-type": "image/png", "content-length": "4" }, body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) });
+  const ph = await w.fetchApi("/api/me/photo?name=me.png", { method: "PUT", headers: { cookie: cand.cookie, origin: "https://skillmountainacademy.com", "content-type": "image/png", "content-length": "8" }, body: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) });
   assert.equal(ph.status, 200);
   const sub = await cand.json<{ user: { verification: string; profileSubmittedAt: string } }>("POST", "/api/app/instructor/onboarding/submit");
   assert.equal(sub.user.verification, "under_review");
