@@ -1,5 +1,6 @@
 // Skill Mountain Academy Worker. Only /api/* reaches this code (wrangler.jsonc "run_worker_first"); every other
 // address is the static website, served by Cloudflare directly from the "out" folder.
+import { schemaStatus } from "./server/schema-version";
 import { FLAGS } from "../lib/config.ts";
 import { readiness, type AppEnv } from "./server/env";
 import { ApiError, fail, json } from "./server/http";
@@ -23,7 +24,10 @@ type Handler = (req: Request, env: AppEnv, ctx: ExecutionContext) => Promise<Res
 async function status(_req: Request, env: AppEnv): Promise<Response> {
   const ready = readiness(env);
   if (env.DB) ready.database = await new Repo(env.DB).tablesReady();
-  return json({ ok: true, ready, flags: FLAGS }, 200, { "cache-control": "no-store" });
+  // Stage 3B: the schema this Worker expects and the database's latest applied migration, so the deployment gate can check
+  // compatibility over HTTPS without any database credentials. Migration file names are not sensitive.
+  const applied = env.DB ? await env.DB.prepare("SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1").first<{ name: string }>().then((r) => r?.name ?? null).catch(() => null) : null;
+  return json({ ok: true, ready, flags: FLAGS, schema: schemaStatus(applied) }, 200, { "cache-control": "no-store" });
 }
 
 const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
