@@ -1,6 +1,6 @@
 # SMA Stage 3A: Production Migration Checklist
 
-Revised in Stage 3A.1, 22 November 2026.
+Revised in Stage 3A.1 and Stage 3B (identity-bound execution), 22 November 2026.
 
 **Status:** owner actions for later. Every step requires Cloudflare account access and the owner's approval. **Nothing here has been run.**
 
@@ -15,15 +15,15 @@ Revised in Stage 3A.1, 22 November 2026.
 ### A0. Production identity (first, always)
 
 ```sh
-npx wrangler whoami                         # the signed-in user and the accounts it can use
-npx wrangler d1 list                        # find skillmountainacademy-db and its UUID
+npx wrangler whoami                         # DISCOVERY ONLY: the signed-in user and the accounts it can use
+export SMA_ACCOUNT_ID=""                    # owner fills in: the account ID chosen from the whoami list
+CLOUDFLARE_ACCOUNT_ID="${SMA_ACCOUNT_ID:?}" npx wrangler d1 list   # DISCOVERY ONLY: databases in THAT account
 ```
 
-The owner confirms, and **records in writing**, the two values:
+These two commands only help the owner find the values. They read lists and change nothing. The `d1 list` is pinned to the intended account with `CLOUDFLARE_ACCOUNT_ID`, not the cached one. The owner confirms, and **records in writing**, the two values:
 
 ```sh
-export SMA_ACCOUNT_ID=""   # owner fills in: 32-character Cloudflare account ID
-export SMA_DB_UUID=""      # owner fills in: UUID of skillmountainacademy-db
+export SMA_DB_UUID=""      # owner fills in: UUID of skillmountainacademy-db (from the list above)
 ```
 
 Every later tool **proves** them live before reading anything:
@@ -44,22 +44,22 @@ This prints the table count, total rows and the applied migrations, or `UNKNOWN 
 ### A2. Stage 2C objects and owner set-up (read-only)
 
 ```sh
-npx wrangler d1 execute skillmountainacademy-db --remote --command "SELECT type, name FROM sqlite_master WHERE name IN ('owner_record','staff_removal_requests','mfa_factors','mfa_recovery_codes','app_settings') OR type = 'trigger' ORDER BY type, name"
+npm run cf -- d1-query --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}" --sql "SELECT type, name FROM sqlite_master WHERE name IN ('owner_record','staff_removal_requests','mfa_factors','mfa_recovery_codes','app_settings') OR type = 'trigger' ORDER BY type, name"
 ```
 
 If `owner_record` is listed:
 
 ```sh
-npx wrangler d1 execute skillmountainacademy-db --remote --command "SELECT o.email, o.bootstrapped_at, u.role, u.status FROM owner_record o LEFT JOIN users u ON u.id = o.user_id"
+npm run cf -- d1-query --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}" --sql "SELECT o.email, o.bootstrapped_at, u.role, u.status FROM owner_record o LEFT JOIN users u ON u.id = o.user_id"
 ```
 
 If `app_settings` is listed:
 
 ```sh
-npx wrangler d1 execute skillmountainacademy-db --remote --command "SELECT key, updated_at FROM app_settings WHERE key IN ('owner_bootstrap','owner_policy')"
+npm run cf -- d1-query --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}" --sql "SELECT key, updated_at FROM app_settings WHERE key IN ('owner_bootstrap','owner_policy')"
 ```
 
-These `wrangler d1 execute` commands resolve the database **by name**. Run them only right after A1 has verified that the name resolves to `$SMA_DB_UUID`.
+These queries are read-only and identity-bound: `scripts/cf.mts` proves the identity, then runs pinned to `$SMA_DB_UUID` and the account.
 
 ### A3. Consistency and pending list (offline)
 
@@ -75,8 +75,8 @@ Without a backup it fails if anything is pending; that is expected here. Read:
 ### A4. Deployed Worker
 
 ```sh
-npx wrangler deployments list --name skillmountainacademy
-npx wrangler versions list --name skillmountainacademy
+npm run cf -- worker-deployments --owner-approved --account-id "${SMA_ACCOUNT_ID:?}"
+npm run cf -- worker-versions --owner-approved --account-id "${SMA_ACCOUNT_ID:?}"
 curl -s https://skillmountainacademy.com/api/status        # JSON from the Worker; GitHub Pages would answer 404 HTML
 ```
 

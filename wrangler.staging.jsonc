@@ -1,0 +1,63 @@
+{
+  // STAGING (Stage 3B). A separate Worker, database, cache and settings. Production keeps wrangler.jsonc unchanged.
+  // Nothing here exists yet: the owner creates the staging resources (docs/SMA_STAGE_3B_ENVIRONMENT_SEPARATION.md) and
+  // pastes their ids below. `npm run staging:check` refuses to let this file be used until it is complete and isolated.
+  //   npx wrangler deploy -c wrangler.staging.jsonc   (only after the check passes and the owner approves)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "skillmountainacademy-staging",
+  "compatibility_date": "2026-10-26",
+  "main": "src/worker.ts",
+  "assets": {
+    "directory": "./out",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Staging is reached only on its workers.dev address: no routes and no custom domain, so it can never answer on
+  // skillmountainacademy.com. Pin the account that holds staging (the owner decides whether that is the production
+  // account or a separate one; a separate account isolates staging more strongly).
+  "workers_dev": true,
+  // "account_id": "",
+
+  // Staging's OWN database. It starts EMPTY (migrations only). Production records are never copied here; an anonymised
+  // copy may be imported only through `npm run db:anonymise` and with the owner's approval.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "skillmountainacademy-staging-db", "migrations_dir": "migrations" }
+  ],
+
+  // Staging's OWN cache namespace (paste its id after `npx wrangler kv namespace create skillmountainacademy-staging-cache`).
+  "kv_namespaces": [
+    { "binding": "KV" }
+  ],
+
+  // No schedule in staging by default: no reminders, no payment links, no rate refreshes.
+  "triggers": { "crons": [] },
+
+  "ai": { "binding": "AI" },
+
+  // Staging settings. Secrets are set separately for this Worker (`npx wrangler secret put NAME -c wrangler.staging.jsonc`)
+  // and must be staging/test values: Turnstile test keys, no Resend key (emails off) unless a staging sender is approved,
+  // no Paystack key, a staging-only HOLD_SIGNING_KEY and MFA_ENCRYPTION_KEY.
+  "vars": {
+    "SITE_URL": "",
+    "EMAIL_FROM": "",
+    "ADMIN_EMAIL": "",
+    "CLASS_BOOKING_URL": "",
+    "ADMIN_EMAILS": "",
+    // The staging owner account: set by the owner (a staging address, not a student's).
+    "OWNER_EMAIL": "",
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "ENVIRONMENT": "staging"
+  },
+
+  "define": {
+    "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": "\"\"",
+    "process.env.NEXT_PUBLIC_SHEET_URL": "\"\"",
+    "process.env.NEXT_PUBLIC_WHATSAPP": "\"\"",
+    "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": "\"\""
+  },
+
+  "observability": { "enabled": true }
+}

@@ -1,6 +1,6 @@
 # SMA Stage 3A: Disaster Recovery Runbook
 
-Revised in Stage 3A.1, 22 November 2026.
+Revised in Stage 3A.1 and Stage 3B (identity-bound execution), 22 November 2026.
 
 **Status of this runbook:**
 - **Local tooling** (backup, restore verification, two-phase comparison, post-restore reset SQL, rollback compatibility check, migration gate): **implemented and tested on isolated local databases.**
@@ -20,10 +20,15 @@ Revised in Stage 3A.1, 22 November 2026.
 
    ```sh
    export SMA_ACCOUNT_ID=""   # owner fills in: the 32-character Cloudflare account ID
-   export SMA_DB_UUID=""      # owner fills in: the D1 UUID of skillmountainacademy-db (shown by: npx wrangler d1 list)
+   export SMA_DB_UUID=""      # owner fills in: the D1 UUID of skillmountainacademy-db (discovery only, account-pinned: CLOUDFLARE_ACCOUNT_ID="${SMA_ACCOUNT_ID:?}" npx wrangler d1 list)
    ```
 
-   Every command below uses `"${SMA_ACCOUNT_ID:?…}"` and similar, so it **refuses to run** while a value is empty. The tools then prove the identity live before reading anything: account membership, the UUID, and that the name resolves to the same UUID.
+   Every command below uses `"${SMA_ACCOUNT_ID:?…}"` and similar, so it **refuses to run** while a value is empty.
+
+   **Identity-bound execution (Stage 3B).** No production or recovery resource is reached with a bare `npx wrangler …` command. Wrangler chooses the account from the config's `account_id`, then `CLOUDFLARE_ACCOUNT_ID`, then **an account cached from an earlier session**; for D1 it uses the config's `database_id`, otherwise it looks the name up. A check followed by an unpinned command is therefore not safe. All operations go through `npm run db:*` or `npm run cf -- <operation>` (`scripts/cf.mts`), which:
+   - prove the identity live: account membership; the UUID exists under the expected name; the name resolves to the same UUID; for Workers, the Worker exists in that account;
+   - run Wrangler with a temporary config pinned to the account (plus the database UUID or the Worker name), **and** `CLOUDFLARE_ACCOUNT_ID` set to the same account;
+   - change nothing without `--execute` and `--approved-by`.
 3. **Take an evidence backup of the current, possibly damaged, state.** This is read-only on production. It may hold records written since the last good backup:
 
    ```sh
@@ -61,19 +66,20 @@ A lower expected migration number is **not** sufficient to approve a rollback. A
 1. **Identify the deployed version** (read-only):
 
    ```sh
-   npx wrangler deployments list --name skillmountainacademy
-   npx wrangler versions list --name skillmountainacademy
+   npm run cf -- worker-deployments --owner-approved --account-id "${SMA_ACCOUNT_ID:?}"
+   npm run cf -- worker-versions --owner-approved --account-id "${SMA_ACCOUNT_ID:?}"
    ```
 
 2. **Choose the candidate.** It is the last known-good version, by upload time and message, cross-checked against `docs/upgrade/HANDOVER.md`.
 3. **Find the candidate's expected migration:**
    - builds from Stage 3A onward: `EXPECTED_MIGRATION` in `src/server/schema-version.ts` at that commit;
    - older builds: the last file in `migrations/` at that commit.
-4. **Run the compatibility check.** It reads the live migration history and runs read-only counts:
+4. **Run the compatibility check and write its record.** It reads the live migration history and runs read-only counts, identity-bound:
 
    ```sh
-   npm run db:rollback-check -- --candidate-expected "${CANDIDATE_EXPECTED:?e.g. the candidate's last migration file name}" \
-     --remote --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}"
+   npm run db:rollback-check -- --candidate-expected "${CANDIDATE_EXPECTED:?the candidate's last migration file name}" \
+     --remote --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}" \
+     --version-id "${VERSION_ID:?the candidate version id from step 1}" --record backups/rollback-check.json
    ```
 
    | Verdict | Meaning | What may happen |
@@ -83,19 +89,23 @@ A lower expected migration number is **not** sufficient to approve a rollback. A
    | **UNSAFE** | Not without an additional migration or code change, or the history is unknown | Do not roll back. Fix forward, or restore (§6). |
    | **PROHIBITED** | Crosses the **Stage 2C security floor** (candidate expects a migration before `0010_owner_integrity.sql`) | Never, unless the owner gives an explicit written exception (`--owner-security-exception "<owner name, date>"`). Even then the verdict is at best CHECK_REQUIRED, and the weaknesses fixed in Stages 2B and 2C return while that Worker runs. |
 
-5. **Roll back.** ⚠ DESTRUCTIVE: changes live code; see §3.
+5. **Roll back.** ⚠ DESTRUCTIVE: changes live code; see §3. The operation refuses unless:
+   - the record from step 4 is for this exact version id and the approved account, and under 2 hours old;
+   - the verdict is SAFE, or CHECK_REQUIRED with the listed actions confirmed (`--actions-confirmed`).
+
+   It always names the version explicitly, never an implicit "previous version". Run it once without `--execute` (dry run), then:
 
    ```sh
-   npx wrangler rollback "${VERSION_ID:?paste the candidate version id from step 1}" --name skillmountainacademy --message "Rollback: ${ROLLBACK_REASON:?short reason}"
+   npm run cf -- worker-rollback --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --version-id "${VERSION_ID:?}" \
+     --rollback-record backups/rollback-check.json --reason "${ROLLBACK_REASON:?short reason}" --approved-by "${SMA_APPROVER:?owner's full name}" --execute
    ```
 
-   This does not touch D1, secrets or vars. Then do every action the check listed. When 0008 is crossed, that means ending all sessions on production, also listed in §3:
+   This does not touch D1, secrets or vars. When the check listed **ending all sessions** (always the case when 0008 is crossed), do it with the identity-bound operation. This is also in §3:
 
    ```sh
-   npx wrangler d1 execute skillmountainacademy-db --remote --command "DELETE FROM auth_sessions"   # only if the rollback check listed it; owner-approved
+   npm run cf -- end-sessions --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}" --approved-by "${SMA_APPROVER:?}" --execute
    ```
 
-   That command resolves the database by name: run it only after `db:rollback-check` has just verified the identity.
 6. **Verify:**
    - Admin → Platform shows the schema status and no new errors.
    - Each role can sign in.
@@ -126,13 +136,14 @@ A lower expected migration number is **not** sufficient to approve a rollback. A
 This applies only if Time Travel has been verified for the account and the mistake is inside its window.
 
 ```sh
-npx wrangler d1 time-travel info skillmountainacademy-db      # read-only: current bookmark and window
+npm run cf -- time-travel-info --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}"      # read-only: current bookmark and window
 ```
 
 ⚠ DESTRUCTIVE: rewinds the whole production database; see §3.
 
 ```sh
-npx wrangler d1 time-travel restore skillmountainacademy-db --timestamp "${RESTORE_TIME:?ISO time before the mistake, agreed with the owner}"
+npm run cf -- time-travel-restore --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database-uuid "${SMA_DB_UUID:?}" --timestamp "${RESTORE_TIME:?ISO time before the mistake, agreed with the owner}" \
+  --evidence-backup "${SMA_EVIDENCE:?the encrypted evidence backup from §1.3, under 2 hours old}" --approved-by "${SMA_APPROVER:?}" --execute
 ```
 
 Then verify with §6.4.
@@ -148,23 +159,28 @@ Then verify with §6.4.
    ```
 
    It must print `RESTORE VERIFIED`.
-2. **Create the new database.** Not destructive:
+2. **Create the new database** in the approved account (not destructive). The name must be `skillmountainacademy-db-restore-YYYYMMDD`. The operation reads the new UUID from Wrangler's output and **proves** it (it exists in the approved account under that name) before reporting it:
 
    ```sh
-   npx wrangler d1 create "skillmountainacademy-db-restore-$(date -u +%Y%m%d)"
+   export SMA_NEW_DB="skillmountainacademy-db-restore-$(date -u +%Y%m%d)"
+   npm run cf -- d1-create-restore --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --name "$SMA_NEW_DB" --approved-by "${SMA_APPROVER:?}" --execute
+   export SMA_NEW_UUID=""   # owner fills in: the createdUuid printed above
    ```
 
-   Record its UUID from the output: `export SMA_NEW_DB="skillmountainacademy-db-restore-YYYYMMDD"` and `export SMA_NEW_UUID="…"`, using the values just printed.
 3. **Decrypt deliberately for the import.** The output is verified against the manifest. Keep it on an encrypted disk and delete it after step 4:
 
    ```sh
    npm run db:decrypt -- "${SMA_BACKUP:?}" --key "${SMA_KEY_PRIV:?}" --out "${SMA_PLAINTEXT:?a new path, e.g. /secure/restore.sql}"
    ```
 
-4. **Import into the new database only.** ⚠ This writes to the **new** database; see §3.
+4. **Import into the new database only.** ⚠ This writes to the **new** database; see §3. The operation refuses:
+   - any database not named `skillmountainacademy-db-restore-…`;
+   - any file whose SHA-256 differs from the backup's manifest.
+
+   It runs pinned to the new UUID.
 
    ```sh
-   npx wrangler d1 execute "${SMA_NEW_DB:?}" --remote --file "${SMA_PLAINTEXT:?}"
+   npm run cf -- restore-import --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --file "${SMA_PLAINTEXT:?}" --manifest "${SMA_BACKUP_MANIFEST:?the original backup's .manifest.json}" --approved-by "${SMA_APPROVER:?}" --execute
    ```
 
    Then delete `"$SMA_PLAINTEXT"`.
@@ -179,7 +195,7 @@ Then verify with §6.4.
 6. **Owner and MFA checks** (read-only) on the new database:
 
    ```sh
-   npx wrangler d1 execute "${SMA_NEW_DB:?}" --remote --command "SELECT o.user_id, u.email, u.role, u.status, u.removed_at FROM owner_record o JOIN users u ON u.id = o.user_id; SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name; SELECT COUNT(*) AS factors FROM mfa_factors; SELECT COUNT(*) AS codes FROM mfa_recovery_codes WHERE used_at IS NULL"
+   npm run cf -- d1-query --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --sql "SELECT o.user_id, u.email, u.role, u.status, u.removed_at FROM owner_record o JOIN users u ON u.id = o.user_id; SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name; SELECT COUNT(*) AS factors FROM mfa_factors; SELECT COUNT(*) AS codes FROM mfa_recovery_codes WHERE used_at IS NULL"
    ```
 
    Expected:
@@ -192,10 +208,10 @@ Then verify with §6.4.
 
    ```sh
    npm run db:post-restore-sql -- --backup "${SMA_BACKUP:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --approved-by "${SMA_APPROVER:?owner's full name}" --out backups/post-restore-reset.sql
-   npx wrangler d1 execute "${SMA_NEW_DB:?}" --remote --file backups/post-restore-reset.sql
+   npm run cf -- restore-reset --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --file backups/post-restore-reset.sql --approved-by "${SMA_APPROVER:?}" --execute
    ```
 
-   It does exactly three things:
+   `restore-reset` refuses any file that is not an unmodified, generated reset for this UUID. The reset does exactly three things:
    - `DELETE FROM auth_sessions`;
    - marks unused `auth_tokens` as used;
    - inserts one `audit_log` entry, `action = 'system.restore'`. That entry has `actor_id` NULL (no application user is invented), `target_type 'database'`, `target_id` = the new UUID, and a detail holding the backup name and SHA-256, the approver's name and `approving_owner_user_id` read from the restored `owner_record`.
@@ -206,7 +222,7 @@ Then verify with §6.4.
    ```sh
    npm run db:backup -- --remote --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --encrypt-for "${SMA_KEY_PUB:?}" --out backups/phase-b
    npm run db:compare -- "${SMA_PHASE_A_MANIFEST:?}" "${SMA_PHASE_B_MANIFEST:?the new backups/phase-b/*.manifest.json}" --post-reset
-   npx wrangler d1 execute "${SMA_NEW_DB:?}" --remote --command "SELECT action, actor_id, target_type, target_id, json_extract(detail, '$.approving_owner_user_id') = (SELECT user_id FROM owner_record) AS owner_ok FROM audit_log WHERE action = 'system.restore'"
+   npm run cf -- d1-query --owner-approved --account-id "${SMA_ACCOUNT_ID:?}" --database "${SMA_NEW_DB:?}" --database-uuid "${SMA_NEW_UUID:?}" --sql "SELECT action, actor_id, target_type, target_id, json_extract(detail, '$.approving_owner_user_id') = (SELECT user_id FROM owner_record) AS owner_ok FROM audit_log WHERE action = 'system.restore'"
    ```
 
    - It must print `POST-RESET VERIFIED`. The only allowed differences: `auth_sessions` → 0 rows; `auth_tokens` same count with unused links invalidated; `audit_log` exactly one more row. Every other table, the schema and the version must be identical.
