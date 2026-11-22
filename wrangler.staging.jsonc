@@ -19,17 +19,17 @@
   // skillmountainacademy.com. Pin the account that holds staging (the owner decides whether that is the production
   // account or a separate one; a separate account isolates staging more strongly).
   "workers_dev": true,
-  // "account_id": "",
+  "account_id": "7d15b62fcb8a05a5611535061b690162",
 
   // Staging's OWN database. It starts EMPTY (migrations only). Production records are never copied here; an anonymised
   // copy may be imported only through `npm run db:anonymise` and with the owner's approval.
   "d1_databases": [
-    { "binding": "DB", "database_name": "skillmountainacademy-staging-db", "migrations_dir": "migrations" }
+    { "binding": "DB", "database_name": "skillmountainacademy-staging-db", "database_id": "8a25339e-9dd9-4adb-82da-2950b1905cf5", "migrations_dir": "migrations" }
   ],
 
   // Staging's OWN cache namespace (paste its id after `npx wrangler kv namespace create skillmountainacademy-staging-cache`).
   "kv_namespaces": [
-    { "binding": "KV" }
+    { "binding": "KV", "id": "57cc4f7a1ce6427d92ef9aa47f65a10d" }
   ],
 
   // No schedule in staging by default: no reminders, no payment links, no rate refreshes.
@@ -41,7 +41,7 @@
   // and must be staging/test values: Turnstile test keys, no Resend key (emails off) unless a staging sender is approved,
   // no Paystack key, a staging-only HOLD_SIGNING_KEY and MFA_ENCRYPTION_KEY.
   "vars": {
-    "SITE_URL": "",
+    "SITE_URL": "https://skillmountainacademy-staging.ebuka-pascal-solomon.workers.dev",
     "EMAIL_FROM": "",
     "ADMIN_EMAIL": "",
     "CLASS_BOOKING_URL": "",
