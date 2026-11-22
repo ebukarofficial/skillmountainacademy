@@ -185,10 +185,30 @@ export function writeRecord(r: Result, file?: string): string {
   return out;
 }
 
+// ---- files-only mode (Stage 3B, for CI: no database state) ----
+// Checks every migration file as if it were pending: names, numbering, safe parsing, and that every risky statement has a
+// review matching the file's exact SHA-256 (destructive statements acknowledged; forbidden statements refused). Open owner
+// decisions are reported as notes: they only matter if the migration is still pending in production.
+export function checkFiles(opts: { migrationsDir?: string; reviews?: Record<string, Review> } = {}): { result: "PASS" | "FAIL"; failures: string[]; notes: string[]; files: number } {
+  const dir = opts.migrationsDir ?? join(ROOT, "migrations");
+  const r = preflight({ migrationsDir: dir, state: { capturedAt: new Date().toISOString(), target: { kind: "local", database: PROD_DB }, tables: [], migrations: [], schema: [], rows: 0 },
+    reviews: opts.reviews, expectedSchemaFor: () => [] });
+  const notes = r.failures.filter((f) => /needs the owner's decision/.test(f)).map((f) => f.replace(/^review: /, "owner decision (if pending in production): "));
+  const failures = r.failures.filter((f) => !/needs the owner's decision/.test(f) && !/^backup:/.test(f));
+  return { result: failures.length ? "FAIL" : "PASS", failures, notes, files: r.files.length };
+}
+
 // ---- CLI ----
 if (isMain(import.meta.url)) {
   const { parseArgs } = await import("./args.mts");
   const a = parseArgs();
+  if (a.has("files-only")) {
+    const r = checkFiles();
+    for (const n of r.notes) console.log(`NOTE  ${n}`);
+    for (const f of r.failures) console.log(`FAIL  ${f}`);
+    console.log(`MIGRATION FILES ${r.result} (${r.files} files)`);
+    process.exit(r.result === "PASS" ? 0 : 1);
+  }
   const stateFile = a.str("state");
   let state: State | null = null;
   try { state = stateFile && existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, "utf8")) as State : null; } catch { state = null; }

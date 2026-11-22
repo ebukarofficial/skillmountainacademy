@@ -143,7 +143,11 @@ const liveAppliedDefault = (approved: Identity): string[] => {
 };
 
 export type ApplyRunner = (config: string) => number;
-const realApply: ApplyRunner = (config) => spawnSync(join(ROOT, "node_modules", ".bin", "wrangler"), ["d1", "migrations", "apply", PROD_DB, "--remote", "-c", config], { cwd: tmpdir(), stdio: "inherit" }).status ?? 1;
+const realApply: ApplyRunner = (config) => {
+  const accountId = (JSON.parse(readFileSync(config, "utf8")) as { account_id: string }).account_id;
+  return spawnSync(join(ROOT, "node_modules", ".bin", "wrangler"), ["d1", "migrations", "apply", PROD_DB, "--remote", "-c", config],
+    { cwd: tmpdir(), stdio: "inherit", env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: accountId, WRANGLER_SEND_METRICS: "false" } }).status ?? 1;
+};
 
 // Runs the gate and, only when asked AND every gate passed, the pinned production migration. Returns an exit code.
 export function runMigrate(o: GateInput & { execute?: boolean }, deps: GateDeps & { apply?: ApplyRunner; approvalsDir?: string; log?: (s: string) => void } = {}): number {

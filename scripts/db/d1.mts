@@ -84,7 +84,10 @@ function run(target: Target, args: string[]): { stdout: string; stderr: string; 
     : [...args, "--remote", ...(target.config ? ["-c", target.config] : [])];
   const r = spawnSync(WRANGLER, full, {
     cwd: target.kind === "local" ? target.dir : ROOT, encoding: "utf8", maxBuffer: 512 * 1024 * 1024,
-    env: { ...process.env, WRANGLER_SEND_METRICS: "false", NO_COLOR: "1", FORCE_COLOR: "0", CI: "1" },
+    // Stage 3B: the account is pinned twice (config account_id, which Wrangler prefers, and CLOUDFLARE_ACCOUNT_ID), so
+    // neither a cached account nor a stray environment value can redirect a remote command.
+    env: { ...process.env, WRANGLER_SEND_METRICS: "false", NO_COLOR: "1", FORCE_COLOR: "0", CI: "1",
+      ...(target.kind === "remote" && target.identity ? { CLOUDFLARE_ACCOUNT_ID: target.identity.accountId } : {}) },
   });
   return { stdout: r.stdout ?? "", stderr: r.stderr ?? "", status: r.status ?? 1 };
 }

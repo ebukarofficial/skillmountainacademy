@@ -14,10 +14,14 @@
 // A migration with no assessment here makes every rollback across it UNSAFE (a test enforces that each migration file
 // has an entry). Facts are counts from read-only queries, gathered with `npm run db:rollback-check`.
 //   npm run db:rollback-check -- --candidate-expected 0009_owner.sql (--local-dir <isolated> | --remote --owner-approved
-//     --account-id <id> --database-uuid <uuid>) [--owner-security-exception "Name"]
+//     --account-id <id> --database-uuid <uuid>) [--owner-security-exception "Name"] [--version-id <id> --record <file.json>]
+// The record (Stage 3B) is what `npm run cf -- worker-rollback` requires: verdict, identity, candidate version, facts.
+export type RollbackRecord = { at: string; candidateExpected: string; versionId: string | null; identity: { accountId: string; databaseUuid: string } | null;
+  applied: string[]; facts: Record<string, number>; verdict: Verdict; actions: string[]; reasons: string[] };
 import { isMain, parseArgs } from "./args.mts";
 import { localTarget, query, verifiedRemote, type Target } from "./d1.mts";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
 
 export type Verdict = "SAFE" | "CHECK_REQUIRED" | "UNSAFE" | "PROHIBITED";
 export type Area = "schema" | "data" | "triggers" | "auth" | "security";
@@ -136,6 +140,12 @@ if (isMain(import.meta.url)) {
     const [rows] = query(t, "SELECT name FROM d1_migrations ORDER BY id");
     const applied = rows.map((r) => String(r.name));
     const d = decideRollback({ candidateExpected: cand, dbApplied: applied, facts: gatherFacts(t, cand, applied), ownerSecurityException: a.str("owner-security-exception") });
+    if (a.str("record")) {
+      const rec: RollbackRecord = { at: new Date().toISOString(), candidateExpected: cand, versionId: a.str("version-id") ?? null,
+        identity: t.kind === "remote" && t.identity ? { ...t.identity } : null, applied, facts: gatherFacts(t, cand, applied), verdict: d.verdict, actions: d.actions, reasons: d.reasons };
+      mkdirSync(dirname(resolve(a.str("record")!)), { recursive: true });
+      writeFileSync(resolve(a.str("record")!), `${JSON.stringify(rec, null, 2)}\n`, { mode: 0o600 });
+    }
     for (const r of d.reasons) console.log(`  ${r}`);
     for (const c of d.checks) console.log(`CHECK ${c.outcome.toUpperCase().padEnd(7)} ${c.id} = ${c.value ?? "?"} (${c.description})`);
     for (const x of d.actions) console.log(`ACTION  ${x}`);
