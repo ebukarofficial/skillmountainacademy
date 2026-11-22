@@ -11,9 +11,10 @@ import { AdmissionsAdmin, RecruitmentAdmin } from "./admissions-admin";
 import { AssistantEnquiries, CallRequests } from "./desk-admin";
 import { CurrencySettings, Monitoring } from "./monitoring-admin";
 import { MfaSettings } from "./mfa";
+import { OwnerConsole } from "./owner";
 import { RetentionSettings } from "./security-admin";
 
-const TABS = ["overview", "students", "instructors", "programmes", "admissions", "payments", "records", "allocation", "attendance", "assessments", "materials", "content", "reports", "notifications", "security"] as const;
+const TABS = ["overview", "students", "instructors", "programmes", "admissions", "payments", "records", "allocation", "attendance", "assessments", "materials", "content", "reports", "notifications", "security", "owner"] as const;
 type Tab = (typeof TABS)[number];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 type U = { id: string; email: string; role: string; status: string; fullName: string; studentNo: string | null; lastLoginAt: string | null; adminRole?: string | null };
@@ -107,7 +108,7 @@ function Segments<T extends string>({ value, onChange, items }: { value: T; onCh
 const ADMIN_GROUPS: [string, string][] = [["super", "Super Administrator"], ["admissions", "Admissions"], ["finance", "Finance"], ["academic", "Academic Administration"],
   ["faculty", "Faculty Management"], ["support", "Student Support"], ["reporting", "Read-only Reporting"]];
 
-function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", "student"] }: { fixedRole?: string; title?: string; addRoles?: string[] }) {
+function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", "student"], access = null, meId }: { fixedRole?: string; title?: string; addRoles?: string[]; access?: Access; meId?: string }) {
   const [role, setRole] = useState(fixedRole ?? "");
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
@@ -129,6 +130,11 @@ function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", 
                 <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/admin/users/${u.id}/invite`, { method: "POST" }), `Sign-in link sent to ${u.email}.`)}>Send link</Btn>
                 <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/admin/users/${u.id}`, { method: "PATCH", body: { status: u.status === "active" ? "suspended" : "active" } }), "Updated.", reload)}>{u.status === "active" ? "Suspend" : "Reactivate"}</Btn>
               </td></tr>
+            {u.id !== meId && (access?.owner || (access?.role === "super" && u.role !== "student")) && <tr><td colSpan={9} className="px-2 pb-2 text-right text-sm">
+              {access?.owner
+                ? <Btn small kind="ghost" disabled={busy} onClick={() => { const reason = prompt(`Permanently remove ${u.fullName}? Sign-in is closed for good; records are kept. Reason:`); if (reason?.trim()) run(() => api(`/api/app/owner/users/${u.id}/remove`, { method: "POST", body: { reason } }), "Account removed.", reload); }}>Remove permanently</Btn>
+                : <Btn small kind="ghost" disabled={busy} onClick={() => { const reason = prompt(`Ask the owner to remove ${u.fullName} permanently. Reason:`); if (reason?.trim()) run(() => api(`/api/app/admin/users/${u.id}/removal-requests`, { method: "POST", body: { reason } }), "Request sent to the owner.", reload); }}>Request permanent removal</Btn>}
+            </td></tr>}
             {u.role === "admin" && <tr className="border-b border-ink/[0.06]"><td colSpan={9} className="px-2 pb-3 text-sm">
               <span className="mr-2 text-ink/70">Administrator group:</span>
               <select aria-label={`Administrator group for ${u.fullName}`} value={u.adminRole ?? ""} disabled={busy}
@@ -504,16 +510,17 @@ const TITLES: Record<Tab, [string, string?]> = {
   reports: ["Reports", "Figures from the Academy's records, with downloads for your own analysis."],
   notifications: ["Notifications", ""],
   security: ["Security and audit", "Accounts, sign-in access, email delivery, errors and the audit log."],
+  owner: ["Owner console", "Platform owner only: set-up, administrator groups, permanent removals, approvals and the full audit log."],
 };
 
 // Which dashboard sections an administrator group sees. DISPLAY ONLY: the server checks every request (permissions.ts).
-type Access = { role: string | null; areas: { read: string[]; write: string[] } } | null;
+type Access = { role: string | null; owner?: boolean; areas: { read: string[]; write: string[] } } | null;
 const TAB_AREAS: Partial<Record<Tab, string[]>> = {
   overview: ["overview"], students: ["records", "support", "academic"], instructors: ["faculty"], programmes: ["academic", "finance"],
   admissions: ["admissions"], payments: ["finance", "orders"], records: ["academic", "records"], allocation: ["academic"], attendance: ["academic"],
-  assessments: ["academic"], materials: ["academic"], content: ["academic", "admissions"], reports: ["overview"],
+  assessments: ["academic"], materials: ["academic"], content: ["academic", "admissions"], reports: ["overview"], owner: ["owner"],
 };
-const mayRead = (access: Access, areas: string[]) => !access || areas.some((a) => access.areas.read.includes(a));
+const mayRead = (access: Access, areas: string[]) => (areas.includes("owner") ? !!access?.owner : !access || areas.some((a) => access.areas.read.includes(a)));
 
 export function AdminDashboard({ me, access = null }: { me: Me; access?: Access }) {
   const [tab, setTab] = useTab(TABS, "overview");
@@ -538,6 +545,7 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
     { id: "reports", label: "Reports", icon: "chart" },
     { id: "notifications", label: "Notifications", icon: "bell" },
     { id: "security", label: "Security and audit", icon: "shield" },
+    { id: "owner", label: "Owner console", icon: "shield" },
   ];
   const nav = allNav.filter((n) => !TAB_AREAS[n.id] || mayRead(access, TAB_AREAS[n.id]!));
   const [title, sub] = TITLES[tab];
@@ -547,7 +555,7 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
       {tab === "overview" && <Overview go={setTab} />}
       {tab === "students" && <>
         <Segments value={stuSeg} onChange={setStuSeg} items={[["monitoring", "Monitoring"], ["accounts", "Accounts"]]} />
-        {stuSeg === "monitoring" ? <Monitoring /> : <Users fixedRole="student" title="Students" addRoles={["student"]} />}
+        {stuSeg === "monitoring" ? <Monitoring /> : <Users fixedRole="student" title="Students" addRoles={["student"]} access={access} meId={me.id} />}
       </>}
       {tab === "instructors" && <>
         <Segments value={insSeg} onChange={setInsSeg} items={[["verification", "Verification"], ["activity", "Teaching activity"], ["accounts", "Accounts"]]} />
@@ -572,7 +580,8 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
       {tab === "materials" && <Materials />}
       {tab === "content" && <WebsiteContent go={setTab} />}
       {tab === "reports" && <Reports />}
-      {tab === "security" && <div className="space-y-6"><MfaSettings />{mayRead(access, ["people"]) && <Users title="All accounts" />}{mayRead(access, ["security"]) && <><RetentionSettings /><Platform /></>}</div>}
+      {tab === "owner" && <OwnerConsole />}
+      {tab === "security" && <div className="space-y-6"><MfaSettings />{mayRead(access, ["people"]) && <Users title="All accounts" access={access} meId={me.id} />}{mayRead(access, ["security"]) && <><RetentionSettings /><Platform /></>}</div>}
     </AppShell>
   );
 }

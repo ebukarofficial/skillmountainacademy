@@ -98,6 +98,8 @@ export function EntryPage({ kind }: { kind: Portal }) {
           {expired && !sent && (
             <p role="status" className="mt-6 rounded-xl border border-brand-orange/40 bg-white px-4 py-3 text-sm text-ink/85">
               {expired === "idle" ? "You were signed out because there was no activity for a while. Request a new sign-in link to continue." : "Your session has ended. Request a new sign-in link to continue."}
+              {kind === "student" && " If you are in a live class, stay in Google Meet: signing out here does not affect the class or your attendance."}
+              {next && " You will return to the page you were on."}
             </p>
           )}
           {sent ? (

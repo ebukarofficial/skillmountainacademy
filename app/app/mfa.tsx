@@ -31,10 +31,30 @@ export function MfaChallenge() {
         <button type="button" onClick={() => { setRecovery(!recovery); setCode(""); setErr(""); }} className="mt-3 w-full text-sm font-semibold text-indigo hover:underline">
           {recovery ? "Use my authenticator app instead" : "I cannot use my app: use a recovery code"}
         </button>
+        <details className="mt-3 text-sm">
+          <summary className="cursor-pointer text-ink/65">Platform owner: break-glass recovery</summary>
+          <p className="mt-2 text-ink/70">Only for the owner, when the app and all recovery codes are lost. Someone with access to the Academy’s Cloudflare account must first set the one-time OWNER_RECOVERY_TOKEN secret.</p>
+          <OwnerRecovery />
+        </details>
         <button type="button" onClick={async () => { await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined); goTo("/app/login/"); }}
           className="mt-2 w-full text-sm text-ink/65 hover:underline">Cancel and sign out</button>
       </form>
     </main>
+  );
+}
+
+function OwnerRecovery() {
+  const [token, setToken] = useState("");
+  const [msg, setMsg] = useState("");
+  return (
+    <div className="mt-2 space-y-2">
+      <input type="password" value={token} onChange={(e) => setToken(e.target.value)} aria-label="Owner recovery token" autoComplete="off" className={`${inputCls} mt-0`} />
+      <button type="button" disabled={!token} onClick={async () => {
+        try { const r = await api<{ next: string }>("/api/auth/owner-recovery", { method: "POST", body: { token } }); setMsg(r.next); }
+        catch (x) { setMsg((x as Error).message); }
+      }} className="w-full rounded-lg border border-ink/20 py-2 font-semibold disabled:opacity-50">Use recovery token</button>
+      {msg && <p role="status" className="text-ink/80">{msg}</p>}
+    </div>
   );
 }
 

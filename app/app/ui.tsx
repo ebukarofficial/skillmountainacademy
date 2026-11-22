@@ -1,5 +1,5 @@
 "use client";
-import { lastPortal } from "./portals";
+import { expiredUrl, lastPortal } from "./portals";
 // Small building blocks for the dashboards: API calls, cards, buttons, badges, fields and file uploads.
 // Colours come only from the existing tokens in app/globals.css.
 import Image from "next/image";
@@ -12,7 +12,7 @@ export async function api<T = Record<string, unknown>>(path: string, init: { met
   const j = await r.json().catch(() => ({ ok: false, message: "Something went wrong. Please try again." }));
   if (r.status === 401 && !path.startsWith("/api/auth/")) {
     // Signed out by the server for inactivity (or the session's lifetime): back to the entrance with an explanation.
-    if (j.error === "session_expired") { goTo(`${lastPortal()}?expired=${r.headers.get("x-session-expired") === "idle" ? "idle" : "ended"}`); throw new ApiFail(401, j.message || "Please sign in."); }
+    if (j.error === "session_expired") { goTo(expiredUrl(r.headers.get("x-session-expired") === "idle" ? "idle" : "ended")); throw new ApiFail(401, j.message || "Please sign in."); }
     // Back to the entry page, remembering where the person was going (bookmarked pages work after signing in).
     const here = window.location.pathname + window.location.search;
     goTo(`${lastPortal()}${here.startsWith("/app/") && here !== "/app/" ? `?next=${encodeURIComponent(here)}` : ""}`);

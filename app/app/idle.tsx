@@ -5,7 +5,7 @@
 // activity, and the warning itself never extends the session: only a click, key press, touch or scroll does.
 import { useEffect, useRef, useState } from "react";
 import { goTo } from "./ui";
-import { lastPortal } from "./portals";
+import { expiredUrl } from "./portals";
 
 const PING_EVERY_MS = 30_000;   // at most one activity report every 30 seconds
 const WARN_MS = 60_000;         // show the warning in the last minute
@@ -31,7 +31,7 @@ export function IdleGuard({ session }: { session: SessionInfo | null | undefined
       if (gone.current) return;
       gone.current = true;
       await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
-      goTo(`${lastPortal()}?expired=idle`);
+      goTo(expiredUrl("idle"));
     };
     const ping = async () => {
       if (gone.current) return;

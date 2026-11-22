@@ -3,7 +3,7 @@
 import { api, Btn, Card, Empty, inputCls, Msg, useAction, useLoad } from "./ui";
 
 type Cat = { id: string; label: string; group: string; defaultDays: number; minDays: number; defaultOn: boolean; on: boolean; days: number };
-type Data = { categories: Cat[]; notAutomated: { table: string; group: string; why: string }[];
+type Data = { categories: Cat[]; notAutomated: { table: string; group: string; why: string }[]; lastRun: { at: string; deleted: Record<string, number>; backlog: string[] } | null;
   security: { ipHashKey: string; mfaConfigured: boolean; mfaEnforced: boolean; sessions: Record<string, { idleMinutes: number | null; absoluteHours: number }> } };
 
 export function RetentionSettings() {
@@ -18,7 +18,7 @@ export function RetentionSettings() {
     <>
       <Card title="Security status">
         <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-          <dt className="text-ink/65">IP address pseudonym key</dt><dd className="font-semibold">{security.ipHashKey === "secret" ? "IP_HASH_SALT secret (recommended)" : security.ipHashKey === "kv" ? "Random key kept in KV (set IP_HASH_SALT)" : "Temporary in-memory key (set IP_HASH_SALT)"}</dd>
+          <dt className="text-ink/65">IP address pseudonym key</dt><dd className="font-semibold">{security.ipHashKey === "secret" ? "IP_HASH_SALT secret (recommended)" : security.ipHashKey === "d1" ? "Random key stored once in the database (set IP_HASH_SALT)" : security.ipHashKey === "missing" ? "Missing: IP_HASH_SALT is required (strict mode)" : "WARNING: temporary per-isolate key; set IP_HASH_SALT"}</dd>
           <dt className="text-ink/65">Two-step sign-in</dt><dd className="font-semibold">{security.mfaConfigured ? (security.mfaEnforced ? "Available and required for administrators" : "Available, optional") : "Not configured (MFA_ENCRYPTION_KEY)"}</dd>
           {(["student", "instructor", "admin"] as const).map((r) => <div key={r} className="contents"><dt className="text-ink/65 capitalize">{r} sessions</dt>
             <dd className="font-semibold">{s[r].idleMinutes ? `Sign out after ${s[r].idleMinutes} min idle` : "No idle limit"}, at most {life(s[r].absoluteHours)}</dd></div>)}
@@ -43,6 +43,8 @@ export function RetentionSettings() {
           <div className="mt-3"><Btn small type="submit" disabled={busy}>Save retention settings</Btn></div>
         </form>
         <Msg text={msg.text} kind={msg.kind} />
+        <p className="mt-3 text-sm text-ink/70">{d.data.lastRun ? `Last run ${new Date(d.data.lastRun.at).toLocaleString("en-GB")}: ${Object.entries(d.data.lastRun.deleted).map(([k, n]) => `${k} ${n}`).join(", ") || "nothing due"}.` : "No retention run recorded yet."}
+          {d.data.lastRun?.backlog.length ? <b className="ml-1 text-brand-red">Backlog: {d.data.lastRun.backlog.join(", ")} reached the daily limit; more rows are waiting.</b> : null}</p>
         <h3 className="mt-6 text-sm font-semibold">Kept, never deleted automatically</h3>
         <ul className="mt-2 space-y-1 text-sm text-ink/75">{notAutomated.map((n) => <li key={n.table}><b className="font-semibold">{n.group}</b> ({n.table}): {n.why}</li>)}</ul>
       </Card>
