@@ -21,25 +21,30 @@ function load(): Promise<void> {
   return loader;
 }
 
-export const turnstileAvailable = () => !!CFG.turnstileSiteKey;
+// Stage 3C: a STAGING build may supply its own Turnstile site key through the build variable
+// NEXT_PUBLIC_SMA_TURNSTILE_SITE_KEY (the production key only allows the production hostname). Production does not set
+// this variable, so production keeps CFG.turnstileSiteKey exactly as before. This file is browser-only (never in the Worker).
+const SITE_KEY: string = process.env.NEXT_PUBLIC_SMA_TURNSTILE_SITE_KEY || CFG.turnstileSiteKey;
+
+export const turnstileAvailable = () => !!SITE_KEY;
 
 export function Turnstile({ onToken, action }: { onToken: (t: string) => void; action: string }) {
   const box = useRef<HTMLDivElement>(null);
   const cb = useRef(onToken);
   useEffect(() => { cb.current = onToken; }, [onToken]);
   useEffect(() => {
-    if (!CFG.turnstileSiteKey) return;
+    if (!SITE_KEY) return;
     let id: string | undefined;
     let gone = false;
     load().then(() => {
       if (gone || !box.current || !window.turnstile) return;
       id = window.turnstile.render(box.current, {
-        sitekey: CFG.turnstileSiteKey, action, theme: "light", size: "flexible",
+        sitekey: SITE_KEY, action, theme: "light", size: "flexible",
         callback: (t: string) => cb.current(t), "expired-callback": () => cb.current(""), "error-callback": () => cb.current(""),
       });
     }).catch(() => cb.current(""));
     return () => { gone = true; if (id) window.turnstile?.remove(id); };
   }, [action]);
-  if (!CFG.turnstileSiteKey) return null;
+  if (!SITE_KEY) return null;
   return <div ref={box} className="min-h-[65px]" aria-label="Security check" />;
 }
