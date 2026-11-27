@@ -122,7 +122,7 @@ When realistic data is genuinely needed, the owner may approve an **anonymised c
 
 ## 5. Known staging limitations (Stage 3B.1 audit)
 
-- **Turnstile.** The Turnstile *site* key is compiled in from `lib/config.ts`, so it is production's. The production key usually allows only the production hostname, and its secret must not go into staging. Forms protected by Turnstile will therefore fail on `*.workers.dev` until the owner decides how staging gets its own site key (a build-time override is a Stage 3C engineering item).
+- **Turnstile (resolved in Stage 3C).** A staging build supplies its own site key through the build variable `NEXT_PUBLIC_SMA_TURNSTILE_SITE_KEY`; production does not set it and keeps the key in `lib/config.ts`. The staging secret is set with `npx wrangler secret put TURNSTILE_SECRET -c wrangler.staging.jsonc`. See `docs/SMA_STAGE_3C_STAGING_AND_MIGRATION_REHEARSAL_REPORT.md`.
 - **No automatic enforcement.** Nothing forces `npm run staging:check` before `npx wrangler deploy -c wrangler.staging.jsonc`. The owner runs it by hand (Stage 3C may wrap both in one command).
 - **Quasi-identifiers.** Student and staff numbers are kept by the anonymiser, so staging behaves like production. Someone who knows a real student's number could still recognise that record. Treat anonymised copies as confidential.
 

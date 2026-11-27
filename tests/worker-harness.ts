@@ -58,7 +58,9 @@ export function defaultMock(req: Request, body: string): Response {
   return new Response("not mocked", { status: 599 });
 }
 
-export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; r2?: boolean; ai?: boolean; mock?: Mock; patch?: string } = {}) {
+// `migrationsUpTo` (Stage 3C): apply migrations only up to and including this file, to start from an older database state
+// (for example production's 0009) and then apply the rest in place with applyPending().
+export async function startWorker(opts: { env?: Record<string, string>; db?: boolean; kv?: boolean; r2?: boolean; ai?: boolean; mock?: Mock; patch?: string; migrationsUpTo?: string } = {}) {
   const scriptPath = await bundle(opts.patch, !!opts.ai);
   const calls: Call[] = [];
   // Miniflare 5 (bundled with Wrangler 4.156) takes the classic option shape through convertV4MiniflareOptions.
@@ -75,9 +77,9 @@ export async function startWorker(opts: { env?: Record<string, string>; db?: boo
       return (await opts.mock?.(req, body)) ?? defaultMock(req, body);
     },
   }));
-  if (opts.db !== false) {
+  const applyFiles = async (files: string[]) => {
     const db = await mf.getD1Database("DB");
-    for (const f of readdirSync(join(ROOT, "migrations")).filter((n) => n.endsWith(".sql")).sort()) {
+    for (const f of files) {
       const sql = readFileSync(join(ROOT, "migrations", f), "utf8").replace(/^\s*--.*$/gm, "");
       const parts = sql.split(/;\s*\n/).map((s) => s.trim()).filter(Boolean);
       // Keep CREATE TRIGGER ... BEGIN ...; END together (their bodies contain semicolons), as wrangler does.
@@ -90,7 +92,12 @@ export async function startWorker(opts: { env?: Record<string, string>; db?: boo
       }
       await db.batch(stmts.map((s) => db.prepare(s)));
     }
-  }
+  };
+  const allFiles = readdirSync(join(ROOT, "migrations")).filter((n) => n.endsWith(".sql")).sort();
+  const applied = opts.migrationsUpTo ? allFiles.filter((f) => f <= opts.migrationsUpTo!) : allFiles;
+  if (opts.db !== false) await applyFiles(applied);
+  // Applies the remaining migration files in place (each in one batch, as Wrangler applies one migration file).
+  const applyPending = async () => { const rest = allFiles.filter((f) => !applied.includes(f)); await applyFiles(rest); applied.push(...rest); return rest; };
   const fetchApi = (path: string, init: RequestInit & { cf?: Record<string, unknown> } = {}) => {
     const headers = new Headers(init.headers);
     if (init.method === "POST" && !headers.has("origin")) headers.set("origin", SITE);
@@ -106,7 +113,7 @@ export async function startWorker(opts: { env?: Record<string, string>; db?: boo
     return pred(calls);
   };
   const db = () => mf.getD1Database("DB");
-  return { mf, calls, fetchApi, post, waitFor, db, dispose: () => mf.dispose() };
+  return { mf, calls, fetchApi, post, waitFor, db, applyPending, dispose: () => mf.dispose() };
 }
 
 export function learner(over: Record<string, unknown> = {}) {
