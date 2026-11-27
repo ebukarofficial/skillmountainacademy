@@ -29,7 +29,12 @@ export const STAGING_DOMAIN = "staging.invalid";
 // staging behaves like production; anything that identifies or describes a person, or was written by one, is replaced.
 export const POLICY: Record<string, TablePolicy> = {
   d1_migrations: { columns: keep("id", "name", "applied_at") },
-  programmes: { columns: keep("slug", "name", "price_kobo", "was_kobo", "timed_price_kobo", "group_price_kobo", "training_months", "internship_months", "level", "updated_at") },
+  programmes: { columns: { ...keep("slug", "name", "price_kobo", "was_kobo", "timed_price_kobo", "group_price_kobo", "training_months", "internship_months", "level", "updated_at",
+    "school_slug", "tag", "tone", "blurb", "description", "learn_json", "curriculum_json", "final_project", "audience", "track", "full_payment_only", "price_usd_cents", "status",
+    "published_at", "position", "created_at", "retired_at", "retired_reason"), updated_by: "null", retired_by: "null" } },
+  schools: { columns: keep("slug", "code", "name", "tab_label", "tone", "position", "created_at", "updated_at") },
+  programme_drafts: { columns: { ...keep("slug", "name", "school_slug", "blurb", "description", "learn_json", "curriculum_json", "final_project", "training_months", "internship_months",
+    "price_usd_cents", "price_kobo", "level", "audience", "full_payment_only", "position", "source", "created_at", "updated_at"), updated_by: "null" } },
   registrations: { columns: { ...keep("id", "created_at", "role", "lead_id", "programme_slug", "country", "adult", "education", "english", "computer_literate", "background", "industry", "terms"),
     first_name: "first_name", middle_name: "null", surname: "surname", email: "email", phone: "phone", city: "null", background_detail: "text", why: "text", goals: "text", guardian_name: "name", guardian_phone: "phone", ip_hash: "null" } },
   orders: { columns: { ...keep("id", "created_at", "registration_id", "programme_slug", "plan", "method", "total_kobo", "regular_kobo", "hold_id", "group_size", "display_currency", "fx_rate", "fx_at", "status"), reference: "ref" } },
@@ -48,7 +53,7 @@ export const POLICY: Record<string, TablePolicy> = {
   audit_log: { columns: { ...keep("id", "at", "actor_id", "action", "target_type", "target_id"), detail: "json_object", ip_hash: "null" } },
   courses: { columns: keep("id", "programme_slug", "title", "description", "position", "created_at") },
   lessons: { columns: keep("id", "course_id", "title", "objectives", "position", "created_at") },
-  enrolments: { columns: keep("id", "student_id", "programme_slug", "instructor_id", "status", "order_id", "started_at", "completed_at", "created_at") },
+  enrolments: { columns: keep("id", "student_id", "programme_slug", "instructor_id", "status", "order_id", "started_at", "completed_at", "created_at", "training_months", "internship_months") },
   timetables: { columns: keep("id", "enrolment_id", "weekday", "start_time", "duration_min", "effective_from", "effective_to", "created_by", "created_at") },
   class_sessions: { columns: { ...keep("id", "enrolment_id", "timetable_id", "student_id", "instructor_id", "starts_at", "ends_at", "meet_updated_at", "meet_notified_at", "status", "outcome_at", "outcome_by",
     "rescheduled_to", "reminded_24h_at", "reminded_1h_at", "reminded_15m_at", "link_missing_alert_at", "created_at"), meet_url: "null", notes: "text", attendance_detail: "null" } },

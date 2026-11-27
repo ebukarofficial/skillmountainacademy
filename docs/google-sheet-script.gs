@@ -30,7 +30,8 @@ var APPS_SHEET = "Applications";                     // full application details
 var ADMIN_EMAIL = "skillmountainacademy@gmail.com";  // gets a notice for every confirmed payment
 
 // Fees in naira (the discounted price the learner pays). The server uses these, never the amount sent by the browser.
-// The names must match the programme names in lib/config.ts exactly.
+// The names must match the PUBLISHED programme names exactly. Generate this block with npm run sheet:fees after a catalogue
+// change (Stage B); the Worker prices every registration from the database catalogue and never relies on it.
 var FEES = {
   "Graphics Design": 350000,
   "UI/UX Design (Product Design)": 400000,

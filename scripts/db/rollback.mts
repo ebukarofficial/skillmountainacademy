@@ -75,6 +75,11 @@ export const COMPAT: Record<string, MigrationCompat> = {
     checks: [{ id: "bootstrap_only_in_owner_record", area: "security", description: "owner set-up recorded only in owner_record (invisible to a Stage 2B Worker)", onFail: "unsafe",
       sql: "SELECT COUNT(*) AS n FROM owner_record WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE key = 'owner_bootstrap')",
       remediation: "a Stage 2B Worker would offer the one-time owner set-up again; do not roll back below Stage 2C" }] },
+  "0011_catalogue.sql": { olderWorker: "check",
+    areas: { schema: "additive (schools, programme_drafts, catalogue columns on programmes, duration snapshot on enrolments)", data: "an older Worker prices and names programmes from its own lib/config.ts and ignores drafts, schools and publication status" },
+    checks: [{ id: "catalogue_published_changes", area: "data", description: "programmes published, paused or retired through the catalogue (changes an older Worker would not honour)", onFail: "unsafe",
+      sql: "SELECT COUNT(*) AS n FROM programmes WHERE published_at IS NOT NULL OR status <> 'published'",
+      remediation: "an older Worker would keep selling a paused or retired programme, or reject a newly published one; do not roll back below 0011 after the first catalogue publication" }] },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));

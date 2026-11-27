@@ -56,6 +56,8 @@ export const CLASSIFICATION: Record<string, TableClass> = {
   staff_removal_requests: { class: "security" },
   app_settings: { class: "security", note: "platform settings incl. owner policy, retention, used recovery tokens" },
   programmes: { class: "reference", seeded: true },
+  schools: { class: "reference", seeded: true },
+  programme_drafts: { class: "reference", seeded: true, note: "unpublished catalogue edits; never public" },
   d1_migrations: { class: "reference", note: "migration history: required to know the schema version" },
   auth_tokens: { class: "disposable" },
   auth_sessions: { class: "disposable" },
