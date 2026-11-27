@@ -15,7 +15,10 @@ function files(dir: string, exts: string[]): string[] {
     return exts.some((e) => n.endsWith(e)) ? [p] : [];
   });
 }
-const SOURCE = [...files("app", [".ts", ".tsx"]), ...files("lib", [".ts"])];
+// lib/catalogue-2027.ts is reference data for the database seed (Stage B), never rendered: it names the owner-approved
+// 2027 programme "Data Analytics & Business Intelligence" (a new programme under a new address, not the removed one).
+// When the owner publishes it, this rule must be revisited (Stage B report, outstanding decisions).
+const SOURCE = [...files("app", [".ts", ".tsx"]), ...files("lib", [".ts"])].filter((f) => f !== "lib/catalogue-2027.ts");
 
 // The one place IELTS and Data Analytics may be named: the short "no longer offered" notice.
 const NOTICE = "IELTS Training and Data Analytics are no longer offered.";

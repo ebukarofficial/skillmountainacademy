@@ -1,3 +1,6 @@
+import { PUBLISHED_SNAPSHOT } from "./catalogue.published.ts";
+import type { SnapshotProgramme, SnapshotSchool } from "./catalogue-types.ts";
+
 export const SITE_URL = "https://skillmountainacademy.com";
 
 export const CFG = {
@@ -76,14 +79,20 @@ export type Programme = {
   fullPaymentOnly?: boolean;  // true = no 3-part instalment plan (AI Automation)
   tone: string;
   learn: string[];
+  school?: string;           // school slug (2027 catalogue); programmes without one keep their own tag
 };
 
 // Every programme is online, one-on-one, teacher-to-student, with a Skill Mountain Academy certificate,
-// and can be paid in 3 parts unless it is marked fullPaymentOnly. All programmes listed here are open for registration.
-// Prices are checked on the server too: change them in docs/google-sheet-script.gs (FEES) as well.
+// and can be paid in 3 parts unless it is marked fullPaymentOnly.
+//
+// Stage B (27 Nov 2026): the programme catalogue lives in the database (tables programmes, programme_drafts, schools)
+// and is managed in Admin > Programmes > Catalogue. This SEED list is the controlled fallback only: it is what the
+// database was aligned to in migration 0011, and it is used when the build cannot obtain the published catalogue
+// (lib/catalogue.published.ts is null). Do NOT edit prices or programmes here to change the website: publish the
+// change through the catalogue instead (owner approval), and the next build picks it up.
 const base = (slug: string) => ({ timedPrice: null, fastTrack: false, curriculum: `/curricula/${slug}.pdf`, groupPrice: null });
 
-export const PROGRAMMES: Programme[] = [
+export const SEED_PROGRAMMES: Programme[] = [
   { slug: "graphics", name: "Graphics Design", tag: "Design", price: 350000, trainingMonths: 4, internshipMonths: 2,
     level: "Beginner to advanced", ...base("graphics"),
     tone: "from-brand-red via-brand-orange to-[#ffb35c]",
@@ -146,19 +155,49 @@ export const PROGRAMMES: Programme[] = [
       "Integrating business applications", "Testing, monitoring and improving automated workflows"] },
 ];
 
+// Gradient strings a programme card may use. Anything else from the catalogue is replaced by the default, so a value
+// from the database can never inject classes the build has not generated.
+export const ALLOWED_TONES = [...new Set(SEED_PROGRAMMES.map((p) => p.tone))];
+const DEFAULT_TONE = "from-indigo via-navy to-brand-orange";
+export const safeTone = (t: string | null | undefined) => (t && ALLOWED_TONES.includes(t) ? t : DEFAULT_TONE);
+
+const fromSnapshot = (p: SnapshotProgramme): Programme => ({
+  slug: p.slug, name: p.name, tag: p.tag, blurb: p.blurb, price: p.price, ...(p.was ? { was: p.was } : {}),
+  trainingMonths: p.trainingMonths, internshipMonths: p.internshipMonths, level: p.level,
+  ...(p.audience ? { audience: p.audience } : {}), ...(p.track === "cloud" ? { track: "cloud" as const } : {}),
+  timedPrice: p.timedPrice, fastTrack: false, curriculum: `/curricula/${p.slug}.pdf`, groupPrice: p.groupPrice,
+  ...(p.fullPaymentOnly ? { fullPaymentOnly: true } : {}), tone: safeTone(p.tone), learn: p.learn,
+  ...(p.school ? { school: p.school } : {}),
+});
+
+// The published catalogue: the build-time snapshot of the database when there is one, otherwise the seed.
+export const CATALOGUE_SOURCE: "database" | "seed" = PUBLISHED_SNAPSHOT && PUBLISHED_SNAPSHOT.programmes.length ? "database" : "seed";
+export const PROGRAMMES: Programme[] = CATALOGUE_SOURCE === "database" ? PUBLISHED_SNAPSHOT!.programmes.map(fromSnapshot) : SEED_PROGRAMMES;
+export const SCHOOLS: SnapshotSchool[] = PUBLISHED_SNAPSHOT?.schools ?? [];
+// Retired programmes keep their name for old records, receipts and links.
+const RETIRED_NAMES: Record<string, string> = Object.fromEntries((PUBLISHED_SNAPSHOT?.retired ?? []).map((r) => [r.slug, r.name]));
+
 // Old links used different names. /checkout/?p=cyber still opens Cybersecurity, and so on.
 export const LEGACY_SLUGS: Record<string, string> = { cyber: "cybersecurity", web: "webdev" };
 // Programmes that are no longer offered. Old links to them go to the home page with a short notice.
-export const REMOVED_SLUGS = ["ielts", "data", "data-analytics"];
+// Retired catalogue programmes join them automatically (their records and names are kept; see programmeName).
+export const REMOVED_SLUGS = ["ielts", "data", "data-analytics", ...Object.keys(RETIRED_NAMES)];
 
 // "nine" etc. for prose, so copy never falls out of step with the catalogue.
-const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen",
+  "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five"];
 export const PROGRAMME_COUNT = WORDS[PROGRAMMES.length] ?? String(PROGRAMMES.length);
 
 export function findProgramme(slug: string | null | undefined): Programme | undefined {
   if (!slug) return undefined;
   const s = LEGACY_SLUGS[slug] ?? slug;
   return PROGRAMMES.find((p) => p.slug === s);
+}
+
+// A programme's name for any record, including programmes that are retired or no longer published (R-05).
+export function programmeName(slug: string | null | undefined): string {
+  if (!slug) return "";
+  return findProgramme(slug)?.name ?? RETIRED_NAMES[slug] ?? SEED_PROGRAMMES.find((p) => p.slug === slug)?.name ?? slug;
 }
 
 // "4 months training + 2 months internship"

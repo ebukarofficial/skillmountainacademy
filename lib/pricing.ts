@@ -95,3 +95,17 @@ export function display(naira: number, cur: Currency, rates: Rates | null): stri
   if (v == null || cur === "NGN") return money(naira, "NGN");
   return approx(v, cur);
 }
+
+// International tuition (2027 catalogue, Stage B). The international price is set in US dollars (integer cents) and is
+// never converted into naira: Nigerian visitors see the separate Nigerian price. Pounds and euros are derived from the
+// dollar price with the SAME approved rates feed and the SAME whole-unit rounding used everywhere else (the cross rate
+// of the NGN-based rates). Returns null when there is no international price or no rate (show nothing rather than guess).
+export function internationalAmount(usdCents: number | null | undefined, cur: Exclude<Currency, "NGN">, rates: Rates | null): number | null {
+  if (!Number.isInteger(usdCents) || (usdCents as number) <= 0) return null;
+  const usd = (usdCents as number) / 100;
+  if (cur === "USD") return Math.round(usd);
+  if (cur !== "GBP" && cur !== "EUR") return null; // never naira
+  const r = rates?.rates[cur], u = rates?.rates.USD;
+  if (!r || !u || !Number.isFinite(r) || !Number.isFinite(u) || r <= 0 || u <= 0) return null;
+  return Math.round(usd * (r / u));
+}

@@ -25,3 +25,8 @@ export const FOCUS: Record<string, string> = {
 };
 
 export const SMA_PHOTO = pSma;
+
+// Every programme gets a photo: a programme added through the catalogue without its own photograph uses the Academy
+// photo, so a newly published programme can never break the build.
+export const photoFor = (slug: string): StaticImageData => PHOTO[slug] ?? pSma;
+export const focusFor = (slug: string): string => FOCUS[slug] ?? "50% 20%";

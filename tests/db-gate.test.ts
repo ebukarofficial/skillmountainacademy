@@ -215,8 +215,12 @@ test("rollback: every migration has a compatibility assessment; every check is a
 });
 
 test("rollback: SAFE only for a same-schema rollback at or above the security floor", () => {
-  const d = decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL });
+  const d = decideRollback({ candidateExpected: ALL.at(-1)!, dbApplied: ALL });
   assert.deepEqual([d.verdict, d.crossed], ["SAFE", []]);
+  // Stage B: rolling back across 0011 needs the catalogue check: unrun -> CHECK_REQUIRED; no publications -> SAFE.
+  assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL }).verdict, "CHECK_REQUIRED");
+  assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL, facts: { catalogue_published_changes: 0 } }).verdict, "SAFE");
+  assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL, facts: { catalogue_published_changes: 2 } }).verdict, "UNSAFE");
 });
 
 test("rollback: a lower expected migration number is NOT enough: below the floor is PROHIBITED without the owner's exception", () => {
@@ -253,7 +257,7 @@ test("rollback: unknown history, a candidate needing newer schema, an unknown ca
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: null }).verdict, "UNSAFE");
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: upTo("0009_owner.sql") }).verdict, "UNSAFE");
   assert.equal(decideRollback({ candidateExpected: "0099_future.sql", dbApplied: ALL }).verdict, "UNSAFE");
-  const fut = decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: [...ALL, "0011_future.sql"], known: [...ALL, "0011_future.sql"] });
+  const fut = decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: [...ALL, "0012_future.sql"], known: [...ALL, "0012_future.sql"] });
   assert.equal(fut.verdict, "UNSAFE");
-  assert.ok(fut.reasons.some((r) => /No compatibility assessment for 0011_future\.sql/.test(r)));
+  assert.ok(fut.reasons.some((r) => /No compatibility assessment for 0012_future\.sql/.test(r)));
 });

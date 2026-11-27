@@ -170,6 +170,8 @@ test("group classes: hidden and refused while GROUP_ENABLED is off", async () =>
 
 test("group classes when switched on: 2-3 people, one group price, each learner gets their own record", async () => {
   const g = await startWorker({ patch: `FLAGS.GROUP_ENABLED = true; PROGRAMMES.find((p) => p.slug === "cloud").groupPrice = 600000;` });
+  // Stage B: the group price is read from the published catalogue in the database as well.
+  await (await g.db()).prepare("UPDATE programmes SET group_price_kobo = 60000000 WHERE slug = 'cloud'").run();
   try {
     const r = await g.post("/api/register", registration({ members: [{ name: "Tolu", email: "tolu@example.com" }, { name: "Emeka", email: "emeka@example.com" }], learner: learner({ email: "lead@example.com" }) }));
     assert.equal(r.status, 200, await r.clone().text());

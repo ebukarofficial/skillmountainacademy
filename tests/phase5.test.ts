@@ -25,7 +25,9 @@ test("dormant: no programme has a timed price, so no hold ever starts", async ()
 });
 
 let w: Awaited<ReturnType<typeof startWorker>>;
-before(async () => { w = await startWorker({ patch: PATCH }); });
+// Stage B: registration prices from the published catalogue in the database, so the timed price is set there too.
+const TIMED_SQL = "UPDATE programmes SET timed_price_kobo = 40000000 WHERE slug = 'cloud'";
+before(async () => { w = await startWorker({ patch: PATCH }); await (await w.db()).prepare(TIMED_SQL).run(); });
 after(async () => { await w.dispose(); });
 
 test("a hold starts on first visit: 48 minutes, signed HttpOnly cookie, recorded in D1, survives a refresh", async () => {
@@ -87,6 +89,7 @@ test("when the hold ends: regular price, 'ended', and no restart for 7 days, eve
 
 test("not configured (no signing key): the regular price shows and nothing breaks", async () => {
   const x = await startWorker({ patch: PATCH, env: { ...SECRETS, HOLD_SIGNING_KEY: "" } });
+  await (await x.db()).prepare(TIMED_SQL).run();
   try {
     const j = await (await x.fetchApi("/api/hold?p=cloud")).json() as HoldJson;
     assert.deepEqual([j.offer, j.active, j.price, j.reason], [false, false, 450000, "not_configured"]);

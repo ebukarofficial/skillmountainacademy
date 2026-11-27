@@ -24,6 +24,10 @@ const dir = (n: string) => join(ROOT, n);
 after(() => rmSync(ROOT, { recursive: true, force: true }));
 const NOW = new Date().toISOString();
 const PENDING = "0010_owner_integrity.sql";
+// Expansion Stage B added 0011_catalogue.sql (local/staging only). Production and this staging rehearsal start at 0009,
+// so both are pending; the 0010 evidence below is unchanged and 0011 is checked alongside it.
+const PENDING_ALL = ["0010_owner_integrity.sql", "0011_catalogue.sql"];
+const CATALOGUE_TABLES = ["programmes", "enrolments"]; // 0011 adds columns (catalogue fields, duration snapshot); no rows added or removed
 const evidence: Record<string, unknown> = {};
 
 // ================================================================== A. data level (Stage 3A tools, local staging D1) ====
@@ -66,7 +70,7 @@ test("3C-C1 migration history: the staging database is at 0009 with 0010 pending
   assert.ok(!names(stg, "table").includes("owner_record"));
   assert.deepEqual(names(stg, "trigger"), []);
   const pending = readdirSync("migrations").filter((f) => f.endsWith(".sql") && !applied.includes(f));
-  assert.deepEqual(pending, [PENDING]);
+  assert.deepEqual(pending, PENDING_ALL);
   evidence.historyBefore = { applied: applied.length, latest: applied.at(-1), pending };
 });
 
@@ -88,7 +92,7 @@ test("3C-C2/D backup: created, manifest hashes verified, and restored into a SEP
 test("3C-C3 rehearsal with the approved tool: restore the backup, apply 0010 to the COPY, schema and triggers verified", () => {
   const r = rehearse(b9.file, { reportFile: dir("rehearsal.json") });
   assert.equal(r.ok, true, JSON.stringify(r).slice(0, 600));
-  assert.deepEqual([r.from, r.to, r.applied], ["0009_owner.sql", PENDING, [PENDING]]);
+  assert.deepEqual([r.from, r.to, r.applied], ["0009_owner.sql", EXPECTED_MIGRATION, PENDING_ALL]);
   assert.equal(r.files.find((f) => f.name === PENDING)?.sha256, sha256File(join("migrations", PENDING)));
   evidence.rehearsal = { ok: r.ok, from: r.from, to: r.to };
 });
@@ -114,10 +118,17 @@ test("3C-C3..C9 apply 0010 to the staging database (wrangler d1 migrations apply
   assert.throws(() => execLocal(stg, "DELETE FROM audit_log WHERE id = 'a1'"), /365 days/);
   // C9 compatibility: every existing table keeps every row and its content; only owner_record is new.
   const after = backup(stg, dir("backups-after")).manifest;
-  const diff = compareManifests(b9.manifest, after, { ignoreTables: ["owner_record", "d1_migrations"] });
-  const unexplained = diff.differences.filter((d) => !/migration|schema|trigger|owner_record|critical|tables? (added|count)/i.test(d));
+  const diff = compareManifests(b9.manifest, after, { ignoreTables: ["owner_record", "d1_migrations", "schools", "programme_drafts", ...CATALOGUE_TABLES] });
+  const unexplained = diff.differences.filter((d) => !/migration|schema|trigger|owner_record|schools|programme_drafts|critical|tables? (added|count)/i.test(d));
   assert.deepEqual(unexplained, [], diff.differences.join(" | "));
-  for (const [name, info] of Object.entries(b9.manifest.tables)) if (name !== "d1_migrations") assert.equal(after.tables[name]?.sha256, info.sha256, `${name}: content unchanged`);
+  for (const [name, info] of Object.entries(b9.manifest.tables)) {
+    if (name === "d1_migrations") continue;
+    if (CATALOGUE_TABLES.includes(name)) assert.equal(after.tables[name]?.rows, info.rows, `${name}: same rows (0011 only adds columns)`);
+    else assert.equal(after.tables[name]?.sha256, info.sha256, `${name}: content unchanged`);
+  }
+  // 0011: the existing enrolment keeps the durations it started with; the 21 catalogue drafts are unpublished.
+  assert.deepEqual({ ...one(stg, "SELECT training_months, internship_months FROM enrolments WHERE id = 'e1'") }, { training_months: 4, internship_months: 2 });
+  assert.deepEqual({ ...one(stg, "SELECT COUNT(*) AS n, SUM(price_kobo IS NULL) AS no_ngn FROM programme_drafts") }, { n: 21, no_ngn: 21 });
   evidence.applied = { latest: applied.at(-1), triggers: 4, tablesUnchanged: Object.keys(b9.manifest.tables).length };
 });
 
@@ -190,11 +201,11 @@ test("3C-B1 the CURRENT code on a 0009 database (production's state): runs, repo
 });
 
 test("3C-B2 apply 0010 in place: the running Worker becomes compatible; owner recognised from the carried-over record; protections active", async () => {
-  assert.deepEqual(await w.applyPending(), [PENDING]);
+  assert.deepEqual(await w.applyPending(), PENDING_ALL);
   const db = await w.db();
-  await db.prepare("INSERT INTO d1_migrations (name) VALUES (?1)").bind(PENDING).run();
+  for (const m of PENDING_ALL) await db.prepare("INSERT INTO d1_migrations (name) VALUES (?1)").bind(m).run();
   const st = await status();
-  assert.deepEqual([st.schema.applied, st.schema.status], [PENDING, "compatible"]);
+  assert.deepEqual([st.schema.applied, st.schema.status], [EXPECTED_MIGRATION, "compatible"]);
   const ownerSt = await owner.json<{ state: string; bootstrapped: boolean }>("GET", "/api/app/owner/status");
   assert.deepEqual([ownerSt.state, ownerSt.bootstrapped], ["bootstrapped", true], "no second set-up needed");
   assert.equal((await owner.send("POST", "/api/app/owner/bootstrap")).status, 409, "set-up cannot be repeated");
