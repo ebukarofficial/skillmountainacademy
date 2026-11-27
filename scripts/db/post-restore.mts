@@ -27,9 +27,15 @@ export function postRestoreSql(o: { manifest: Manifest; backupName: string; data
   if (!/^[A-Za-z0-9._-]+$/.test(o.database)) throw new Error("--database must be a D1 database name.");
   if (o.databaseUuid && !UUID_RE.test(o.databaseUuid)) throw new Error("--database-uuid is not a UUID.");
   const now = (o.now ?? new Date()).toISOString();
+  // Stage 3C: a backup taken BEFORE migration 0010 (production is at 0009) has no owner_record table; the Stage 2B owner
+  // set-up lives in app_settings there. Referencing the missing table made the whole reset fail.
+  const has0010 = !!o.manifest.tables?.owner_record || (o.manifest.migration?.latest ?? "") >= "0010_";
+  const ownerSource = has0010
+    ? "(SELECT user_id FROM owner_record WHERE id = 1)"
+    : "(SELECT json_extract(value, '$.by') FROM app_settings WHERE key = 'owner_bootstrap')";
   const detail = `json_object('from_backup', ${q(o.backupName)}, 'backup_sha256', ${q(o.manifest.file.sha256)}, 'backup_created_at', ${q(o.manifest.createdAt)}, `
     + `'backup_migration', ${q(o.manifest.migration.latest ?? "none")}, 'restored_database', ${q(o.database)}, 'restored_database_uuid', ${o.databaseUuid ? q(o.databaseUuid) : "NULL"}, `
-    + `'approved_by', ${q(name)}, 'approving_owner_user_id', (SELECT user_id FROM owner_record WHERE id = 1), 'performed_via', 'wrangler d1 execute', `
+    + `'approved_by', ${q(name)}, 'approving_owner_user_id', ${ownerSource}, 'performed_via', 'wrangler d1 execute', `
     + `'reset', 'sessions ended; unused sign-in links invalidated')`;
   return [
     `-- Post-restore security reset. Generated ${now}. TARGET: the RESTORED database ${o.database}${o.databaseUuid ? ` (${o.databaseUuid})` : ""} ONLY.`,
