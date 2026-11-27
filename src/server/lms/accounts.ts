@@ -6,6 +6,8 @@ import { nowIso } from "../http";
 import { createUser, getUserByEmail, audit, type User } from "./data/users";
 import { createEnrolment, findEnrolment, setEnrolmentOrder } from "./data/enrolments";
 import { newStudentNo } from "./ids";
+import { resolveProgramme } from "../catalogue";
+import { snapshotEnrolmentDurations } from "./data/catalogue";
 
 export async function ensureStudentAccount(env: AppEnv, reg: RegistrationRow, order: OrderRow): Promise<User | null> {
   if (!env.DB) return null;
@@ -23,8 +25,12 @@ export async function ensureStudentAccount(env: AppEnv, reg: RegistrationRow, or
     const e = await findEnrolment(db, user.id, order.programme_slug);
     if (e) { await setEnrolmentOrder(db, e.id, order.id); return user; }
     const now = nowIso();
-    await createEnrolment(db, { id: crypto.randomUUID(), student_id: user.id, programme_slug: order.programme_slug, instructor_id: null, status: "active",
+    const enrolmentId = crypto.randomUUID();
+    await createEnrolment(db, { id: enrolmentId, student_id: user.id, programme_slug: order.programme_slug, instructor_id: null, status: "active",
       order_id: order.id, started_at: now, completed_at: null, created_at: now });
+    // Record the programme's durations as they are today, so a later catalogue change never alters this student's period.
+    const prog = await resolveProgramme(db, order.programme_slug);
+    if (prog) await snapshotEnrolmentDurations(db, enrolmentId, prog.trainingMonths, prog.internshipMonths);
     return user;
   } catch (e) {
     // The LMS tables may not exist yet (migration 0003 not applied): payments must still succeed.

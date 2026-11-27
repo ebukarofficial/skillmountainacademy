@@ -28,19 +28,20 @@ export type Area =
   | "people"       // the user directory (read) used by several screens
   | "users"        // creating, changing, suspending and inviting accounts; administrator groups; MFA resets
   | "security"     // audit log, platform status, test email
+  | "catalogue"    // programme catalogue: schools, drafts, prices, order (publishing also needs the owner or a delegate)
   | "owner";       // the owner console: bootstrap, permanent removals, removal approvals (the owner only)
 
 type Grant = { read: Area[]; write: Area[] };
-const ALL_AREAS: Area[] = ["any", "overview", "admissions", "orders", "finance", "academic", "records", "faculty", "support", "people", "users", "security"];
+const ALL_AREAS: Area[] = ["any", "overview", "admissions", "orders", "finance", "academic", "records", "faculty", "support", "people", "users", "security", "catalogue"];
 
 export const GRANTS: Record<AdminRole, Grant> = {
   super:      { read: ALL_AREAS, write: ALL_AREAS },
   admissions: { read: ["any", "overview", "admissions", "orders", "people"], write: ["any", "admissions"] },
   finance:    { read: ["any", "overview", "orders", "finance", "people"], write: ["any", "finance"] },
-  academic:   { read: ["any", "overview", "academic", "records", "people"], write: ["any", "academic"] },
+  academic:   { read: ["any", "overview", "academic", "records", "people", "catalogue"], write: ["any", "academic", "catalogue"] },
   faculty:    { read: ["any", "overview", "faculty", "people"], write: ["any", "faculty"] },
   support:    { read: ["any", "overview", "records", "support", "people"], write: ["any", "support"] },
-  reporting:  { read: ["any", "overview", "admissions", "orders", "finance", "academic", "records", "faculty"], write: ["any"] },
+  reporting:  { read: ["any", "overview", "admissions", "orders", "finance", "academic", "records", "faculty", "catalogue"], write: ["any"] },
 };
 
 // [method, path, area]. GET = read; anything else = write.
@@ -101,6 +102,15 @@ const TABLE: [string, string, Area][] = [
   ["POST", "/api/app/owner/users/:id/remove", "owner"], ["GET", "/api/app/owner/removal-requests", "owner"],
   ["POST", "/api/app/owner/removal-requests/:id", "owner"],
   ["GET", "/api/app/owner/legacy-admins", "owner"], ["PUT", "/api/app/owner/policy", "owner"],
+
+  // Programme catalogue (Stage B). Publishing, pausing and retiring are "catalogue" writes AND, in the handler, need the
+  // owner or a Super Administrator the owner has delegated (catalogue policy), from a session that passed the code.
+  ["GET", "/api/app/admin/catalogue", "catalogue"],
+  ["POST", "/api/app/admin/catalogue/programmes", "catalogue"], ["PATCH", "/api/app/admin/catalogue/programmes/:slug", "catalogue"],
+  ["PUT", "/api/app/admin/catalogue/order", "catalogue"],
+  ["POST", "/api/app/admin/catalogue/programmes/:slug/publish", "catalogue"], ["POST", "/api/app/admin/catalogue/programmes/:slug/pause", "catalogue"],
+  ["POST", "/api/app/admin/catalogue/programmes/:slug/retire", "catalogue"],
+  ["PUT", "/api/app/owner/catalogue-policy", "owner"],
 ];
 
 const MAP = new Map(TABLE.map(([m, p, a]) => [`${m} ${p}`, a]));

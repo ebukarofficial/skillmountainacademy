@@ -4,7 +4,7 @@
 //  - 05:00 UTC: instalments, next 14 days of class sessions, clean-up
 // Work per run is capped so the job stays inside the Workers Free plan limits (50 external requests and 50 D1 queries per run).
 import { runRetention } from "./lms/retention";
-import { PROGRAMMES } from "../../lib/config.ts";
+import { programmeName } from "../../lib/config.ts";
 import { lagosDate, money } from "../../lib/pricing.ts";
 import type { AppEnv } from "./env";
 import { button, letter, notice, sendEmail, table } from "./email";
@@ -34,7 +34,7 @@ export async function runSchedule(env: AppEnv, now = new Date(), _cron = "*/5 * 
     const rows = await repo.instalmentsToNotify(today, lagosDate(now, 3), MAX_NOTICES_PER_RUN);
     const at = now.toISOString();
     for (const i of rows) {
-      const name = PROGRAMMES.find((p) => p.slug === i.programme_slug)?.name ?? i.programme_slug;
+      const name = programmeName(i.programme_slug);
       const link = canLink ? await payLink(env, i.reference) : null;
       const isLink = i.due_date <= today;
       const facts = table([["Programme", name], ["Part", `${i.seq} of 3`], ["Amount", money(i.amount_kobo / 100, "NGN")], ["Due", i.due_date], ["Reference", i.order_reference]]);

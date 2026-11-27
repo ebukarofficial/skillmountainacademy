@@ -155,10 +155,13 @@ route("PUT", "/api/app/admin/settings/engagement", ["admin"], async (c) => {
 });
 
 // ---------- monitoring ----------
-// Training then internship: the phase is worked out from the start date and the programme's published durations.
+// Training then internship: the phase is worked out from the start date and the durations recorded when the student
+// enrolled (migration 0011), falling back to the programme's current published durations for older records.
 export function phaseOf(e: Enrolment, now = Date.now()) {
-  const p = findProgramme(e.programme_slug);
-  if (!p) return null;
+  const current = findProgramme(e.programme_slug);
+  const training = e.training_months ?? current?.trainingMonths, internship = e.internship_months ?? current?.internshipMonths;
+  if (training == null || internship == null) return null;
+  const p = { trainingMonths: training, internshipMonths: internship };
   const started = Date.parse(e.started_at);
   const month = 30.44 * 86400_000;
   const elapsed = Math.max(0, (now - started) / month);

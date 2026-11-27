@@ -15,6 +15,7 @@ import { getUser, isApproved, type User } from "../data/users";
 import { notify, type Recipient } from "../notify";
 import { DAYS, addDays, isDate, isTime, lagosDate, lagosText, lagosToIso, weekdayOf } from "../time";
 import { instructorPublic } from "../views";
+import { snapshotEnrolmentDurations } from "../data/catalogue";
 
 export const MEET_RE = /^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}(\?[\w=&-]{0,60})?$/;
 const progName = (slug: string) => findProgramme(slug)?.name ?? slug;
@@ -85,6 +86,8 @@ route("POST", "/api/app/admin/enrolments", ["admin"], async (c) => {
   const now = nowIso();
   const e: Enrolment = { id: crypto.randomUUID(), student_id: studentId, programme_slug: programme, instructor_id: instructorId, status: "active", order_id: null, started_at: now, completed_at: null, created_at: now };
   await createEnrolment(c.db, e);
+  const prog = PROGRAMMES.find((p) => p.slug === programme)!;
+  await snapshotEnrolmentDurations(c.db, e.id, prog.trainingMonths, prog.internshipMonths);
   await c.audit("enrolment.create", "enrolment", e.id, { studentId, programme, instructorId });
   return ok({ enrolment: e }, 201);
 });

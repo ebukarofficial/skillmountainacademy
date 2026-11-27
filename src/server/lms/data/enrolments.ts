@@ -4,6 +4,8 @@ import { all, insert, one, run, update, type DB } from "./base";
 export type Enrolment = {
   id: string; student_id: string; programme_slug: string; instructor_id: string | null; status: "active" | "paused" | "completed" | "withdrawn";
   order_id: string | null; started_at: string; completed_at: string | null; created_at: string;
+  // Durations recorded when the enrolment started (migration 0011); null on an older database or an older record.
+  training_months?: number | null; internship_months?: number | null;
 };
 export const getEnrolment = (db: DB, id: string) => one<Enrolment>(db, "SELECT * FROM enrolments WHERE id = ?1", id);
 export const findEnrolment = (db: DB, studentId: string, slug: string) => one<Enrolment>(db, "SELECT * FROM enrolments WHERE student_id = ?1 AND programme_slug = ?2", studentId, slug);

@@ -37,5 +37,14 @@
     "ownerApprovalRequired": true,
     "ownerApproved": false,
     "ownerDecision": "If pending in production and an 'ai-automation' programme row already exists, its price (NGN 300,000 in the file) and durations would be overwritten. Confirm the intended price with the owner before approving."
+  },
+  "0011_catalogue.sql": {
+    "sha256": "03b329c5dd9040e822f2a8f56cd992a3641c20208ad1562d2c1365042551b8f6",
+    "reviewedBy": "Claude (Expansion Stage B engineering review, 27 Nov 2026)",
+    "reviewedAt": "2026-11-27",
+    "summary": "Additive catalogue migration: new tables schools and programme_drafts (seeded with the 6 schools and 21 unpublished 2027 drafts; ON CONFLICT DO NOTHING, nothing overwritten), new columns on programmes and enrolments. UPDATEs write only the NEW columns of the nine live programme rows (display text, order) and fill the new enrolment duration snapshot from current programme durations; one UPDATE clears Cloud Engineering's was_kobo (crossed-out NGN 700,000 seeded by 0002, never shown on the live website). No price or duration of a live programme changes.",
+    "ownerApprovalRequired": true,
+    "ownerApproved": false,
+    "ownerDecision": "Before applying in production: (1) confirm Cloud Engineering should have no crossed-out price (the live website shows none; the database row from 0002 has NGN 700,000); (2) confirm existing enrolments should keep their current durations as a permanent snapshot. Stage B authorises local and staging only."
   }
 }

@@ -14,4 +14,5 @@ import "./routes/onboarding";
 import "./routes/desk";
 import "./routes/records";
 import "./routes/engagement";
+import "./routes/catalogue";
 export { handleLms } from "./api";

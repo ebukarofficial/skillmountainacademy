@@ -1,5 +1,5 @@
 {
-  "migration": "0010_owner_integrity.sql",
+  "migration": "0011_catalogue.sql",
   "migrations": [
     "0001_init.sql",
     "0002_seed_programmes.sql",
@@ -10,7 +10,8 @@
     "0007_refinement.sql",
     "0008_security.sql",
     "0009_owner.sql",
-    "0010_owner_integrity.sql"
+    "0010_owner_integrity.sql",
+    "0011_catalogue.sql"
   ],
   "schema": [
     {
@@ -23,7 +24,7 @@
       "type": "table",
       "name": "programmes",
       "tbl_name": "programmes",
-      "sql": "CREATE TABLE programmes (\n  slug              TEXT PRIMARY KEY,\n  name              TEXT NOT NULL,\n  price_kobo        INTEGER NOT NULL,\n  was_kobo          INTEGER,\n  timed_price_kobo  INTEGER,\n  group_price_kobo  INTEGER,\n  training_months   INTEGER NOT NULL,\n  internship_months INTEGER NOT NULL,\n  level             TEXT NOT NULL,\n  updated_at        TEXT NOT NULL\n)"
+      "sql": "CREATE TABLE programmes (\n  slug              TEXT PRIMARY KEY,\n  name              TEXT NOT NULL,\n  price_kobo        INTEGER NOT NULL,\n  was_kobo          INTEGER,\n  timed_price_kobo  INTEGER,\n  group_price_kobo  INTEGER,\n  training_months   INTEGER NOT NULL,\n  internship_months INTEGER NOT NULL,\n  level             TEXT NOT NULL,\n  updated_at        TEXT NOT NULL\n, school_slug TEXT REFERENCES schools(slug), tag TEXT, tone TEXT, blurb TEXT, description TEXT, learn_json TEXT NOT NULL DEFAULT '[]', curriculum_json TEXT NOT NULL DEFAULT '[]', final_project TEXT, audience TEXT, track TEXT, full_payment_only INTEGER NOT NULL DEFAULT 0, price_usd_cents INTEGER CHECK (price_usd_cents IS NULL OR price_usd_cents > 0), status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('published', 'paused', 'retired')), published_at TEXT, position INTEGER NOT NULL DEFAULT 0, created_at TEXT, updated_by TEXT, retired_at TEXT, retired_by TEXT, retired_reason TEXT)"
     },
     {
       "type": "table",
@@ -173,7 +174,7 @@
       "type": "table",
       "name": "enrolments",
       "tbl_name": "enrolments",
-      "sql": "CREATE TABLE enrolments (\n  id             TEXT PRIMARY KEY,\n  student_id     TEXT NOT NULL REFERENCES users(id),\n  programme_slug TEXT NOT NULL,\n  instructor_id  TEXT REFERENCES users(id),\n  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'withdrawn')),\n  order_id       TEXT,                -- orders.id from the website checkout, if any\n  started_at     TEXT NOT NULL,\n  completed_at   TEXT,\n  created_at     TEXT NOT NULL,\n  UNIQUE (student_id, programme_slug)\n)"
+      "sql": "CREATE TABLE enrolments (\n  id             TEXT PRIMARY KEY,\n  student_id     TEXT NOT NULL REFERENCES users(id),\n  programme_slug TEXT NOT NULL,\n  instructor_id  TEXT REFERENCES users(id),\n  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'withdrawn')),\n  order_id       TEXT,                -- orders.id from the website checkout, if any\n  started_at     TEXT NOT NULL,\n  completed_at   TEXT,\n  created_at     TEXT NOT NULL, training_months INTEGER, internship_months INTEGER,\n  UNIQUE (student_id, programme_slug)\n)"
     },
     {
       "type": "index",
@@ -504,6 +505,30 @@
       "name": "audit_log_min_retention",
       "tbl_name": "audit_log",
       "sql": "CREATE TRIGGER audit_log_min_retention BEFORE DELETE ON audit_log\nWHEN OLD.at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-365 days')\nBEGIN\n  SELECT RAISE(ABORT, 'audit entries younger than 365 days cannot be deleted');\nEND"
+    },
+    {
+      "type": "table",
+      "name": "schools",
+      "tbl_name": "schools",
+      "sql": "CREATE TABLE schools (\n  slug TEXT PRIMARY KEY,\n  code TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tab_label TEXT NOT NULL,\n  tone TEXT NOT NULL,\n  position INTEGER NOT NULL DEFAULT 0,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "idx_programmes_status",
+      "tbl_name": "programmes",
+      "sql": "CREATE INDEX idx_programmes_status ON programmes(status, position)"
+    },
+    {
+      "type": "table",
+      "name": "programme_drafts",
+      "tbl_name": "programme_drafts",
+      "sql": "CREATE TABLE programme_drafts (\n  slug TEXT PRIMARY KEY,\n  name TEXT NOT NULL,\n  school_slug TEXT NOT NULL REFERENCES schools(slug),\n  blurb TEXT,\n  description TEXT,\n  learn_json TEXT NOT NULL DEFAULT '[]',\n  curriculum_json TEXT NOT NULL DEFAULT '[]',\n  final_project TEXT,\n  training_months INTEGER NOT NULL CHECK (training_months BETWEEN 1 AND 24),\n  internship_months INTEGER NOT NULL CHECK (internship_months BETWEEN 0 AND 12),\n  price_usd_cents INTEGER CHECK (price_usd_cents IS NULL OR price_usd_cents > 0),\n  price_kobo INTEGER CHECK (price_kobo IS NULL OR price_kobo > 0),\n  level TEXT,\n  audience TEXT,\n  full_payment_only INTEGER NOT NULL DEFAULT 0,\n  position INTEGER NOT NULL DEFAULT 0,\n  source TEXT,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL,\n  updated_by TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "idx_programme_drafts_school",
+      "tbl_name": "programme_drafts",
+      "sql": "CREATE INDEX idx_programme_drafts_school ON programme_drafts(school_slug, position)"
     }
   ]
 }
