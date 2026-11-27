@@ -3,7 +3,7 @@
 // daily, and we fetch only every 12 hours). If it fails, the CC0 currency-api feed on jsDelivr is tried. If both fail,
 // the last known rates stay in KV, so prices keep showing.
 import { CURRENCIES, convertParts, currencyForCountry, planParts, priceNaira, type Currency, type Rates } from "../../../lib/pricing.ts";
-import { findProgramme } from "../../../lib/config.ts";
+import { LIFECYCLE_MESSAGE, lifecycleOf, resolveProgramme } from "../catalogue";
 import type { AppEnv } from "../env";
 import { json } from "../http";
 
@@ -77,7 +77,9 @@ export async function handleGeo(req: Request, env: AppEnv): Promise<Response> {
 // and currency are returned separately and shown before payment.
 export async function handleQuote(req: Request, env: AppEnv): Promise<Response> {
   const u = new URL(req.url);
-  const prog = findProgramme(u.searchParams.get("programme"));
+  const life = await lifecycleOf(env.DB, u.searchParams.get("programme"));
+  if (life && life !== "published" && life !== "unknown") return json({ ok: false, error: "programme_unavailable", message: LIFECYCLE_MESSAGE[life] }, 409);
+  const prog = await resolveProgramme(env.DB, u.searchParams.get("programme"));
   if (!prog) return json({ ok: false, error: "invalid", message: "Unknown programme." }, 400);
   const cc = (u.searchParams.get("country") || (req as Request & { cf?: { country?: string } }).cf?.country || "").toUpperCase();
   const country = /^[A-Z]{2}$/.test(cc) ? cc : null;

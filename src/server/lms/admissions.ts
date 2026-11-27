@@ -1,23 +1,30 @@
 // Admissions and capacity, computed from the database. The public sees only open / upcoming / closed / full;
 // capacity figures stay inside the admin API.
-import { PROGRAMMES } from "../../../lib/config.ts";
+import { PROGRAMMES, programmeName } from "../../../lib/config.ts";
 import { admissionStatus, capacity, DEFAULT_SETTING, type Capacity, type PublicStatus, type Setting } from "../../../lib/admissions.ts";
 import { ApiError } from "../http";
+import { assertLifecycleAllowsNew, lifecycles, type Lifecycle } from "../catalogue";
 import { allAssignments, allSettings, enrolledCounts, listPeriods, type Assignment, type PeriodRow } from "./data/admissions";
 
-export type ProgrammeAdmission = { slug: string; name: string; setting: Setting; status: PublicStatus; capacity: Capacity; assignments: Assignment[] };
+// lifecycle (Stage C): the catalogue state, which always wins. Admissions (open / scheduled / closed / full) only apply
+// to a PUBLISHED programme; a paused or retired programme is reported as closed whatever its admissions setting says.
+export type ProgrammeAdmission = { slug: string; name: string; lifecycle: Lifecycle; setting: Setting; status: PublicStatus; capacity: Capacity; assignments: Assignment[] };
 
 const counts = (a: Assignment) => a.status === "active" && (a.verification === null || a.verification === "approved");
 
 export async function programmeAdmissions(db: D1Database, now = new Date()): Promise<{ list: ProgrammeAdmission[]; periods: PeriodRow[] }> {
   const since = new Date(now.getTime() - 90 * 86400_000).toISOString();
-  const [settings, periods, enrolled, assignments] = await Promise.all([allSettings(db), listPeriods(db, since), enrolledCounts(db), allAssignments(db)]);
-  const list = PROGRAMMES.map((p) => {
-    const row = settings.find((s) => s.programme_slug === p.slug);
+  const [settings, periods, enrolled, assignments, life] = await Promise.all([allSettings(db), listPeriods(db, since), enrolledCounts(db), allAssignments(db), lifecycles(db)]);
+  // Every live catalogue programme (published, paused, retired), plus the bundled list on a database older than 0011.
+  const slugs = [...new Set([...PROGRAMMES.map((p) => p.slug), ...[...(life?.entries() ?? [])].filter(([, l]) => l !== "draft").map(([s]) => s)])];
+  const list = slugs.map((slug) => {
+    const lifecycle: Lifecycle = life?.get(slug) ?? "published";
+    const row = settings.find((s) => s.programme_slug === slug);
     const setting: Setting = row ? { mode: row.mode, enforce_capacity: row.enforce_capacity, reserved: row.reserved, default_instructor_cap: row.default_instructor_cap, listed: row.listed } : DEFAULT_SETTING;
-    const mine = assignments.filter((a) => a.programme_slug === p.slug);
-    const cap = capacity(mine.filter(counts), setting.default_instructor_cap, enrolled.find((e) => e.programme_slug === p.slug)?.n ?? 0, setting.reserved);
-    return { slug: p.slug, name: p.name, setting, status: admissionStatus(p.slug, setting, periods, now, cap), capacity: cap, assignments: mine };
+    const mine = assignments.filter((a) => a.programme_slug === slug);
+    const cap = capacity(mine.filter(counts), setting.default_instructor_cap, enrolled.find((e) => e.programme_slug === slug)?.n ?? 0, setting.reserved);
+    const status: PublicStatus = lifecycle === "published" ? admissionStatus(slug, setting, periods, now, cap) : { state: "closed", listed: false };
+    return { slug, name: programmeName(slug), lifecycle, setting, status, capacity: cap, assignments: mine };
   });
   return { list, periods };
 }
@@ -32,6 +39,7 @@ export async function publicAdmissions(db: D1Database): Promise<Record<string, P
 // (migration 0004 not applied), registration carries on as before.
 export async function assertCanRegister(db: D1Database | undefined, slug: string) {
   if (!db) return;
+  await assertLifecycleAllowsNew(db, slug); // paused / retired / draft: refused before admissions are even consulted
   let status: PublicStatus | undefined;
   try {
     status = (await publicAdmissions(db))[slug];

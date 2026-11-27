@@ -15,6 +15,7 @@ import { handleLms } from "./server/lms";
 import { onEmailFailure } from "./server/email";
 import { logError } from "./server/lms/data/users";
 import { handleCspReport } from "./server/routes/csp";
+import { publishedCatalogue } from "./server/catalogue";
 
 // Every email that fails is written to the error log (Admin > Platform > Recent errors) with Resend's reason.
 const recordEmailFailures = (env: AppEnv) => { if (env.DB) onEmailFailure((subject, reason) => logError(env.DB!, "email", `"${subject}" was not sent. ${reason}`)); };
@@ -30,9 +31,18 @@ async function status(_req: Request, env: AppEnv): Promise<Response> {
   return json({ ok: true, ready, flags: FLAGS, schema: schemaStatus(applied) }, 200, { "cache-control": "no-store" });
 }
 
+// GET /api/catalogue: the PUBLISHED programme catalogue (Stage B), read by the build-time export and available to the
+// website. Drafts, paused and retired programmes are never included (retired programmes contribute only their name).
+// "source" says whether it came from the database or from the bundled fallback list (database older than 0011).
+async function catalogue(_req: Request, env: AppEnv): Promise<Response> {
+  const c = await publishedCatalogue(env.DB);
+  return json({ ok: true, ...c }, 200, { "cache-control": "public, max-age=60" });
+}
+
 const ROUTES: Record<string, Partial<Record<"GET" | "POST", Handler>>> = {
   "/api/status": { GET: status },
   "/api/geo": { GET: handleGeo },
+  "/api/catalogue": { GET: catalogue },
   "/api/quote": { GET: handleQuote },
   "/api/hold": { GET: handleHold },
   "/api/register": { POST: handleRegister },

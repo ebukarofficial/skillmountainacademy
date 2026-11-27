@@ -96,3 +96,11 @@ export const userNames = async (db: DB, ids: string[]) => {
 // the enrolment falls back to the programme's current durations, exactly as before.
 export const snapshotEnrolmentDurations = (db: DB, enrolmentId: string, training: number, internship: number) =>
   db.prepare("UPDATE enrolments SET training_months = ?2, internship_months = ?3 WHERE id = ?1 AND training_months IS NULL").bind(enrolmentId, training, internship).run().then(() => true, () => false);
+
+// Stage C: a programme's lifecycle and admissions history, from the existing audit log (no second history store).
+export const programmeHistory = (db: DB, slug: string) => all<{ at: string; action: string; detail: string | null; actor_name: string | null }>(db,
+  `SELECT a.at, a.action, a.detail, u.full_name AS actor_name FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
+   WHERE a.target_id = ?1 AND (a.action LIKE 'catalogue.%' OR a.action LIKE 'admissions.%') ORDER BY a.at DESC LIMIT 200`, slug);
+export const activeEnrolmentCounts = (db: DB) => all<{ programme_slug: string; active: number; paused: number; finished: number }>(db,
+  `SELECT programme_slug, SUM(status = 'active') AS active, SUM(status = 'paused') AS paused, SUM(status IN ('completed', 'withdrawn')) AS finished
+   FROM enrolments GROUP BY programme_slug`);

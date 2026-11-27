@@ -19,7 +19,8 @@ import { ok, requireStrongAuth, route, type Ctx } from "../api";
 import { Checker } from "../../validate";
 import { isSuper } from "../permissions";
 import { getSetting, putSetting } from "../data/engagement";
-import { applyDraft, enrolmentCount, getDraft, getLive, getSchool, insertDraft, listDrafts, listLive, listSchools, reorder, retireLive, setLiveStatus, updateDraft,
+import { programmeAdmissions } from "../admissions";
+import { activeEnrolmentCounts, programmeHistory, applyDraft, enrolmentCount, getDraft, getLive, getSchool, insertDraft, listDrafts, listLive, listSchools, reorder, retireLive, setLiveStatus, updateDraft,
   userNames, type DraftFields, type DraftRow, type LiveRow } from "../data/catalogue";
 import { invalidateCatalogue, publishProblems, RESERVED_SLUGS, SLUG_RE } from "../../catalogue";
 import { readRates } from "../../routes/geo";
@@ -111,7 +112,8 @@ async function auditPrices(c: Ctx, slug: string, stage: "draft" | "published", b
 }
 
 route("GET", "/api/app/admin/catalogue", ["admin"], async (c) => {
-  const [schools, live, drafts, policy, rates] = await Promise.all([listSchools(c.db), listLive(c.db), listDrafts(c.db), getPolicy(c), readRates(c.env)]);
+  const [schools, live, drafts, policy, rates, adm, enrolled] = await Promise.all([listSchools(c.db), listLive(c.db), listDrafts(c.db), getPolicy(c), readRates(c.env),
+    programmeAdmissions(c.db).then((r) => r.list).catch(() => []), activeEnrolmentCounts(c.db)]);
   const names = await userNames(c.db, [...new Set([...live.map((l) => l.updated_by), ...drafts.map((d) => d.updated_by)].filter((x): x is string => !!x))]);
   const byLive = new Map(live.map((l) => [l.slug, l])), byDraft = new Map(drafts.map((d) => [d.slug, d]));
   const slugs = [...new Set([...live.map((l) => l.slug), ...drafts.map((d) => d.slug)])];
@@ -125,6 +127,11 @@ route("GET", "/api/app/admin/catalogue", ["admin"], async (c) => {
       problems: d ? publishProblems(d) : [], missingNgn: !current.price_kobo, missingUsd: !current.price_usd_cents,
       international: { USD: internationalAmount(usd, "USD", rates), GBP: internationalAmount(usd, "GBP", rates), EUR: internationalAmount(usd, "EUR", rates) },
       updatedAt: (d ?? l)!.updated_at, updatedBy: (d ?? l)?.updated_by ? names.get((d ?? l)!.updated_by!) ?? "Unknown" : null,
+      // Stage C: admissions (separate from the lifecycle) and current enrolment / capacity. A programme that is not
+      // published shows its admissions setting but is closed to new students whatever that setting is.
+      admissions: (() => { const a = adm.find((x) => x.slug === slug); return a ? { mode: a.setting.mode, state: a.status.state, opensAt: a.status.opensAt ?? null,
+        enforceCapacity: !!a.setting.enforce_capacity, full: a.capacity.full, capacity: a.capacity } : null; })(),
+      enrolment: (() => { const e = enrolled.find((x) => x.programme_slug === slug); return { active: Number(e?.active ?? 0), paused: Number(e?.paused ?? 0), finished: Number(e?.finished ?? 0) }; })(),
     };
   }).sort((a, b) => a.position - b.position || a.slug.localeCompare(b.slug));
   return ok({
@@ -243,4 +250,24 @@ route("PUT", "/api/app/owner/catalogue-policy", ["admin"], async (c) => {
   await putSetting(c.db, POLICY_KEY, { superMayPublish: b.superMayPublish }, c.user.id, nowIso());
   await c.audit("owner.catalogue_policy", "settings", POLICY_KEY, { from: before, to: { superMayPublish: b.superMayPublish } });
   return ok({ policy: { superMayPublish: b.superMayPublish } });
+});
+
+// Stage C: resume a paused programme exactly as it was published (without applying any pending draft). Same publisher
+// rule as publish, pause and retire: the owner, or a delegated Super Administrator, with the authenticator code.
+route("POST", "/api/app/admin/catalogue/programmes/:slug/resume", ["admin"], async (c) => {
+  const slug = c.params.slug;
+  await requirePublisher(c, "resume", slug);
+  const l = await getLive(c.db, slug);
+  if (l?.status !== "paused") throw new ApiError(409, "not_paused", l ? `This programme is ${l.status}; only a paused programme can be resumed.` : "That programme was not found.");
+  if (!(Number.isInteger(l.price_kobo) && l.price_kobo > 0)) throw new ApiError(409, "incomplete", "This programme cannot be resumed. Missing: local tuition (NGN).");
+  await setLiveStatus(c.db, slug, ["paused"], "published", c.user.id, nowIso());
+  invalidateCatalogue();
+  await c.audit("catalogue.resume", "programme", slug, { from: "paused", to: "published" });
+  return ok({ slug, status: "published" });
+});
+
+// Stage C: the lifecycle and admissions history of one programme (audit log).
+route("GET", "/api/app/admin/catalogue/programmes/:slug/history", ["admin"], async (c) => {
+  const rows = await programmeHistory(c.db, c.params.slug);
+  return ok({ history: rows.map((r) => ({ at: r.at, action: r.action, by: r.actor_name, detail: (() => { try { return JSON.parse(r.detail ?? "null"); } catch { return null; } })() })) });
 });

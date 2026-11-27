@@ -1,6 +1,7 @@
 // POST /api/register: saves a registration, its order and its instalments in D1 (one atomic batch), then emails
 // the learner and the owner (Resend) and mirrors the registration to the Google Sheet. Payment starts in payments.ts.
-import { EDUCATION, ENGLISH, FLAGS, BANK, duration, findProgramme, type Programme } from "../../../lib/config.ts";
+import { EDUCATION, ENGLISH, FLAGS, BANK, duration, type Programme } from "../../../lib/config.ts";
+import { assertLifecycleAllowsNew, resolveProgramme } from "../catalogue";
 import { dueDays, lagosDate, money, planParts, priceNaira, type Currency, type Plan, CURRENCIES } from "../../../lib/pricing.ts";
 import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
@@ -43,7 +44,10 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   if (body.website) return json({ ok: true, reference: `SMA-${randomCode(12)}`, method: "bank" });
 
   const repo = new Repo(env.DB);
-  const prog = findProgramme(String(body.programme ?? ""));
+  // Priced from the published catalogue in the database (bundled list only on a database older than 0011).
+  // Lifecycle first (Stage C): a draft, paused or retired programme takes no registrations, whatever admissions say.
+  await assertLifecycleAllowsNew(env.DB, String(body.programme ?? ""));
+  const prog = await resolveProgramme(env.DB, String(body.programme ?? ""));
   if (!prog) throw new ApiError(400, "invalid", "Please choose a programme.");
   // Admissions closed, not yet open, or the programme is full: nothing is saved and nothing is charged.
   await assertCanRegister(env.DB, prog.slug);
@@ -64,7 +68,7 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   await repo.limitOrThrow(`reg:${ipH}`, 5, 600);
   await repo.limitOrThrow(`reg-email:${learner.email}`, 5, 3600);
 
-  // The price is ALWAYS computed here from lib/config.ts and the hold cookie. Any amount sent by the browser is ignored.
+  // The price is ALWAYS computed here from the published catalogue and the hold cookie. Any amount sent by the browser is ignored.
   const hold = await activeHoldFor(req, env, repo, prog);
   const groupSize = members.length + 1;
   const total = priceNaira(prog, { holdActive: !!hold, groupSize });

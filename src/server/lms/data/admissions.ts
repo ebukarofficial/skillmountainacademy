@@ -56,3 +56,23 @@ export const publicFaculty = (db: DB) => all<Candidate & { programmes: string | 
   `SELECT u.*,
      (SELECT GROUP_CONCAT(programme_slug) FROM instructor_programmes WHERE instructor_id = u.id) AS programmes
    FROM users u WHERE u.role = 'instructor' AND u.status = 'active' AND u.verification = 'approved' AND u.public_profile = 1 ORDER BY u.full_name LIMIT 200`);
+
+// ---------- Stage C: individual instructor capacity and assignment checks (read-only queries) ----------
+export const eligibility = (db: DB, instructorId: string, slug: string) =>
+  one<{ max_students: number | null }>(db, "SELECT max_students FROM instructor_programmes WHERE instructor_id = ?1 AND programme_slug = ?2", instructorId, slug);
+// Current students (active or paused enrolments, as everywhere else) per programme for one instructor.
+export const loadOf = (db: DB, instructorId: string) => all<{ programme_slug: string; n: number }>(db,
+  "SELECT programme_slug, COUNT(*) AS n FROM enrolments WHERE instructor_id = ?1 AND status IN ('active', 'paused') GROUP BY programme_slug", instructorId);
+export const currentEnrolmentsFor = (db: DB, studentId: string, slug: string) => all<{ id: string; instructor_id: string | null; status: string }>(db,
+  "SELECT id, instructor_id, status FROM enrolments WHERE student_id = ?1 AND programme_slug = ?2 AND status IN ('active', 'paused')", studentId, slug);
+
+// Every instructor with their eligibility and their assigned enrolments, for the capacity report and the exceptions.
+export type InstructorRow = { id: string; full_name: string; email: string; status: string; verification: string | null };
+export const instructorsWithWork = (db: DB) => all<InstructorRow>(db,
+  `SELECT id, full_name, email, status, verification FROM users WHERE role = 'instructor'
+     OR id IN (SELECT instructor_id FROM enrolments WHERE instructor_id IS NOT NULL) ORDER BY full_name`);
+export const allEligibility = (db: DB) => all<{ instructor_id: string; programme_slug: string; max_students: number | null }>(db,
+  "SELECT instructor_id, programme_slug, max_students FROM instructor_programmes");
+export type AssignedEnrolment = { id: string; student_id: string; programme_slug: string; instructor_id: string | null; status: string };
+export const assignedEnrolments = (db: DB) => all<AssignedEnrolment>(db,
+  "SELECT id, student_id, programme_slug, instructor_id, status FROM enrolments ORDER BY created_at");

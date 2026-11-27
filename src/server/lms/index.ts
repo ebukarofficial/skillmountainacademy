@@ -15,4 +15,5 @@ import "./routes/desk";
 import "./routes/records";
 import "./routes/engagement";
 import "./routes/catalogue";
+import "./routes/capacity";
 export { handleLms } from "./api";

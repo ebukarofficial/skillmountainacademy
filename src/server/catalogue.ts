@@ -9,6 +9,7 @@
 // * Rules for drafts and publication (validation, reserved slugs). Prices never come from the browser.
 import { PROGRAMMES, findProgramme, LEGACY_SLUGS, safeTone, type Programme } from "../../lib/config.ts";
 import type { CatalogueSnapshot, SnapshotProgramme, SnapshotSchool } from "../../lib/catalogue-types.ts";
+import { ApiError } from "./http";
 import { publicSchools, publishedRows, retiredRows, type DraftRow, type LiveRow } from "./lms/data/catalogue";
 
 type DB = D1Database;
@@ -92,4 +93,45 @@ export function publishProblems(d: Pick<DraftRow, "name" | "school_slug" | "trai
   if (!d.level?.trim()) p.push("level");
   if (parseList(d.learn_json).length < 3) p.push("at least 3 learning outcomes");
   return p;
+}
+
+// ---------- lifecycle (Stage C) ----------
+// A programme's catalogue lifecycle, which ALWAYS takes precedence over its admissions setting:
+//   published -> admissions decide (open / scheduled / closed / full)
+//   paused | retired | draft -> no new registrations or new students, whatever admissions say
+// null means the catalogue tables are not there (database older than 0011): the bundled list decides, as before.
+export type Lifecycle = "published" | "paused" | "retired" | "draft" | "unknown";
+export async function lifecycleOf(db: DB | undefined, slug: string | null | undefined): Promise<Lifecycle | null> {
+  if (!db || !slug) return null;
+  const s = LEGACY_SLUGS[slug] ?? slug;
+  try {
+    const live = await db.prepare("SELECT status FROM programmes WHERE slug = ?1").bind(s).first<{ status: string | null }>();
+    if (live) return (live.status ?? "published") as Lifecycle;
+    const draft = await db.prepare("SELECT 1 AS x FROM programme_drafts WHERE slug = ?1").bind(s).first();
+    return draft ? "draft" : "unknown";
+  } catch { return null; }
+}
+export async function lifecycles(db: DB | undefined): Promise<Map<string, Lifecycle> | null> {
+  if (!db) return null;
+  try {
+    const [live, drafts] = await Promise.all([
+      db.prepare("SELECT slug, status FROM programmes").all<{ slug: string; status: string | null }>(),
+      db.prepare("SELECT slug FROM programme_drafts").all<{ slug: string }>(),
+    ]);
+    const m = new Map<string, Lifecycle>(drafts.results.map((d) => [d.slug, "draft"]));
+    for (const r of live.results) m.set(r.slug, (r.status ?? "published") as Lifecycle);
+    return m;
+  } catch { return null; }
+}
+export const LIFECYCLE_MESSAGE: Record<Exclude<Lifecycle, "published">, string> = {
+  paused: "This programme is paused, so it is not taking new registrations at the moment. Students already enrolled keep full access.",
+  retired: "This programme has been retired and no longer takes registrations. Students already enrolled keep full access to their records.",
+  draft: "This programme is not open yet.",
+  unknown: "Please choose a programme.",
+};
+// Throws when the lifecycle forbids new registrations or new students.
+export async function assertLifecycleAllowsNew(db: DB | undefined, slug: string) {
+  const l = await lifecycleOf(db, slug);
+  if (l === null || l === "published") return;
+  throw new ApiError(l === "unknown" ? 400 : 409, l === "unknown" ? "invalid" : "programme_unavailable", LIFECYCLE_MESSAGE[l]);
 }

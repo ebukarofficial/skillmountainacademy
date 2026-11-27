@@ -111,6 +111,11 @@ const TABLE: [string, string, Area][] = [
   ["POST", "/api/app/admin/catalogue/programmes/:slug/publish", "catalogue"], ["POST", "/api/app/admin/catalogue/programmes/:slug/pause", "catalogue"],
   ["POST", "/api/app/admin/catalogue/programmes/:slug/retire", "catalogue"],
   ["PUT", "/api/app/owner/catalogue-policy", "owner"],
+  // Stage C: lifecycle history and resume (resume follows the catalogue publisher rule in its handler), instructor
+  // capacity and assignment options (the Academic group, who allocate instructors), and the owner's capacity policy.
+  ["POST", "/api/app/admin/catalogue/programmes/:slug/resume", "catalogue"], ["GET", "/api/app/admin/catalogue/programmes/:slug/history", "catalogue"],
+  ["GET", "/api/app/admin/capacity", "academic"], ["GET", "/api/app/admin/assignment-options", "academic"],
+  ["PUT", "/api/app/owner/capacity-policy", "owner"],
 ];
 
 const MAP = new Map(TABLE.map(([m, p, a]) => [`${m} ${p}`, a]));

@@ -16,6 +16,8 @@ import { notify, type Recipient } from "../notify";
 import { DAYS, addDays, isDate, isTime, lagosDate, lagosText, lagosToIso, weekdayOf } from "../time";
 import { instructorPublic } from "../views";
 import { snapshotEnrolmentDurations } from "../data/catalogue";
+import { requireAssignmentAllowed } from "../capacity";
+import { assertLifecycleAllowsNew } from "../../catalogue";
 
 export const MEET_RE = /^https:\/\/meet\.google\.com\/[a-z]{3}-[a-z]{4}-[a-z]{3}(\?[\w=&-]{0,60})?$/;
 const progName = (slug: string) => findProgramme(slug)?.name ?? slug;
@@ -82,7 +84,10 @@ route("POST", "/api/app/admin/enrolments", ["admin"], async (c) => {
   const st = await getUser(c.db, studentId);
   if (!st || st.role !== "student") throw new ApiError(400, "invalid", "That user is not a student.");
   if (await findEnrolment(c.db, studentId, programme)) throw new ApiError(409, "exists", "This student is already enrolled on this programme.");
+  // Stage C: a new student goes only to a published programme (lifecycle beats admissions).
+  await assertLifecycleAllowsNew(c.db, programme);
   const instructorId = await validInstructor(c, b.instructorId);
+  if (instructorId) await requireAssignmentAllowed(c.db, { instructorId, programme, studentId });
   const now = nowIso();
   const e: Enrolment = { id: crypto.randomUUID(), student_id: studentId, programme_slug: programme, instructor_id: instructorId, status: "active", order_id: null, started_at: now, completed_at: null, created_at: now };
   await createEnrolment(c.db, e);
@@ -112,6 +117,19 @@ route("PATCH", "/api/app/admin/enrolments/:id", ["admin"], async (c) => {
     ch.done();
     if (patch.status === "completed") patch.completed_at = nowIso();
   }
+  // Stage C: every change of instructor is checked again on the server, and moving a student away from an instructor
+  // needs a reason. The enrolment, classes, attendance, coursework, grades and messages all stay with the enrolment.
+  const changing = "instructor_id" in patch && patch.instructor_id !== e.instructor_id;
+  let reason: string | null = null;
+  if (changing) {
+    if (patch.instructor_id) await requireAssignmentAllowed(c.db, { instructorId: patch.instructor_id, programme: e.programme_slug, studentId: e.student_id, enrolmentId: e.id,
+      previousInstructorId: e.instructor_id, enrolmentStatus: e.status });
+    if (e.instructor_id) {
+      const ch = new Checker();
+      reason = ch.req(b.reason, "A reason for changing or removing the instructor", 500);
+      ch.done();
+    }
+  }
   await updateEnrolment(c.db, e.id, patch);
   if ("instructor_id" in patch && patch.instructor_id !== e.instructor_id) {
     await reassignFutureSessions(c.db, e.id, patch.instructor_id ?? null, nowIso());
@@ -127,6 +145,8 @@ route("PATCH", "/api/app/admin/enrolments/:id", ["admin"], async (c) => {
     if (st) c.exec.waitUntil(notify(c.env, c.db, [rcp(st)], { kind: "programme.completed", title: `Congratulations: you have completed ${progName(e.programme_slug)}`,
       body: `The Academy has recorded that you completed ${progName(e.programme_slug)}. Your learning space stays open, with your work, feedback and progress record.`, link: "/app/?tab=progress" }));
   }
+  if (changing) await c.audit(e.instructor_id ? "enrolment.reassign" : "enrolment.assign", "enrolment", e.id,
+    { studentId: e.student_id, programme: e.programme_slug, previousInstructorId: e.instructor_id, newInstructorId: patch.instructor_id ?? null, reason, by: c.user.id });
   await c.audit("enrolment.update", "enrolment", e.id, patch);
   return ok({ enrolment: await getEnrolment(c.db, e.id) });
 });

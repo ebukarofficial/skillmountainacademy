@@ -9,6 +9,7 @@ import { ApiError, json, nowIso } from "../../http";
 import { Checker } from "../../validate";
 import { notFound, ok, parseJsonCol, publicRoute, route, type Ctx } from "../api";
 import { programmeAdmissions, publicAdmissions } from "../admissions";
+import { lifecycleOf } from "../../catalogue";
 import {
   cancelPeriod, createPeriod, deleteAssignment, getCandidate, getPeriod, getSetting, instructorAssignments, instructorLoad, listCandidates, publicFaculty, upsertAssignment, upsertSetting,
   type Candidate,
@@ -21,6 +22,8 @@ import { notify } from "../notify";
 import { instructorProfile } from "../views";
 
 const SLUGS = PROGRAMMES.map((p) => p.slug);
+// Stage C: any programme in the catalogue (including ones published after the last build and drafts being prepared).
+const known = async (db: D1Database, slug: string) => { if (SLUGS.includes(slug)) return true; const l = await lifecycleOf(db, slug); return !!l && l !== "unknown"; };
 const isoOrThrow = (ch: Checker, v: unknown, label: string) => {
   const s = String(v ?? "");
   const t = Date.parse(s);
@@ -61,7 +64,7 @@ route("GET", "/api/app/admin/admissions", ["admin"], async (c) => {
 
 route("PATCH", "/api/app/admin/admissions/:slug", ["admin"], async (c) => {
   const slug = c.params.slug;
-  if (!SLUGS.includes(slug)) throw notFound("That programme");
+  if (!(await known(c.db, slug))) throw notFound("That programme");
   const b = await c.body();
   const cur = await getSetting(c.db, slug);
   const ch = new Checker();
@@ -81,7 +84,8 @@ route("PATCH", "/api/app/admin/admissions/:slug", ["admin"], async (c) => {
 route("POST", "/api/app/admin/admissions/periods", ["admin"], async (c) => {
   const b = await c.body();
   const ch = new Checker();
-  const slug = b.programme ? ch.oneOf(b.programme, SLUGS, "a programme") : null;
+  const slug = b.programme ? String(b.programme) : null;
+  if (slug && !(await known(c.db, slug))) ch.errors.push("Please choose a programme.");
   const opens = isoOrThrow(ch, b.opensAt, "Opening date");
   const closes = isoOrThrow(ch, b.closesAt, "Closing date");
   if (opens && closes && closes <= opens) ch.errors.push("The closing date must be after the opening date.");
@@ -105,7 +109,7 @@ route("DELETE", "/api/app/admin/admissions/periods/:id", ["admin"], async (c) =>
 route("PUT", "/api/app/admin/instructors/:id/programmes/:slug", ["admin"], async (c) => {
   const u = await getUser(c.db, c.params.id);
   if (!u || u.role !== "instructor") throw notFound("That instructor");
-  if (!SLUGS.includes(c.params.slug)) throw notFound("That programme");
+  if (!(await known(c.db, c.params.slug))) throw notFound("That programme");
   const b = await c.body();
   const ch = new Checker();
   const max = b.maxStudents === null || b.maxStudents === undefined || b.maxStudents === "" ? null : ch.int(b.maxStudents, 0, 500, "Maximum students");

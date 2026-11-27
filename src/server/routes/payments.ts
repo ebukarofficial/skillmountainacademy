@@ -1,7 +1,7 @@
 // Paystack: start a payment (secret key stays here, server-side), receive the signed webhook, record payments
 // exactly once, and serve the payment links for instalments 2 and 3.
 // Docs: https://paystack.com/docs/api/transaction/#initialize  https://paystack.com/docs/payments/webhooks/
-import { PROGRAMMES, duration } from "../../../lib/config.ts";
+import { PROGRAMMES, duration, programmeName } from "../../../lib/config.ts";
 import { money } from "../../../lib/pricing.ts";
 import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
@@ -14,7 +14,7 @@ import { ensureStudentAccount } from "../lms/accounts";
 import { sendSignInLink } from "../lms/routes/auth";
 
 const PAYSTACK = "https://api.paystack.co";
-const progName = (slug: string) => PROGRAMMES.find((p) => p.slug === slug)?.name ?? slug;
+const progName = (slug: string) => programmeName(slug);
 
 // Each attempt gets its own Paystack reference: <instalment reference>-<4 characters>. Paystack refuses to reuse a reference.
 const INST_REF = /^(SMA-(?:BT-)?[A-Z0-9]{12}-P\d)(?:-[A-Z0-9]{4})?$/;

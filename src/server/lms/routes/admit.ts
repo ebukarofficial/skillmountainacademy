@@ -14,6 +14,8 @@ import { getUser, getUserByEmail, isApproved } from "../data/users";
 import { findEnrolment, updateEnrolment } from "../data/enrolments";
 import { recordManualPayment } from "../data/reports";
 import { programmeAdmissions } from "../admissions";
+import { requireAssignmentAllowed } from "../capacity";
+import { assertLifecycleAllowsNew } from "../../catalogue";
 
 route("POST", "/api/app/admin/admit", ["admin"], async (c) => {
   const b = await c.body();
@@ -43,6 +45,10 @@ route("POST", "/api/app/admin/admit", ["admin"], async (c) => {
     const ins = await getUser(db, instructorId);
     if (!ins || ins.role !== "instructor" || ins.status !== "active" || !isApproved(ins)) throw new ApiError(400, "invalid", "Choose an approved, active instructor.");
   }
+  // Stage C: admins may admit beyond the admissions status, but never to a draft, paused or retired programme, and the
+  // instructor must be eligible for it (capacity follows the owner's policy: warnings only until D-11 is decided).
+  await assertLifecycleAllowsNew(db, p.slug);
+  if (instructorId) await requireAssignmentAllowed(db, { instructorId, programme: p.slug, studentId: existing?.id ?? "new-student" });
   // Admins may admit beyond the public status (for example a payment taken before admissions closed); it is recorded.
   const status = (await programmeAdmissions(db)).list.find((x) => x.slug === p.slug)?.status.state ?? "open";
 
