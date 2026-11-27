@@ -10,7 +10,7 @@ import { BankDone, ServerPayment, useBackend } from "./server-pay";
 import { useHold } from "../hold";
 import { useAdmission } from "../admissions-status";
 import { ChargeNote, CountrySelect, PayCurrency } from "../currency";
-import { BankDetails, CloudBadges, CurriculumModal, FOCUS, PHOTO, naira, postForm, postSheet } from "../components";
+import { BankDetails, CloudBadges, CurriculumModal, focusFor, naira, photoFor, postForm, postSheet } from "../components";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global { interface Window { PaystackPop: any } }
@@ -301,7 +301,7 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
         <p className="text-sm font-medium text-white/60">Your order</p>
         <div className="mt-4 flex gap-4">
           <div className={`relative h-24 w-20 shrink-0 overflow-hidden rounded-md bg-gradient-to-br ${p.tone}`}>
-            <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name}`} fill sizes="80px" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
+            <Image src={photoFor(p.slug)} alt={`A learner studying ${p.name}`} fill sizes="80px" className="object-cover" style={{ objectPosition: focusFor(p.slug) }} />
           </div>
           <div>
             <h2 className="font-display text-xl font-bold">{p.name}</h2>

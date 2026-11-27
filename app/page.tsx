@@ -8,7 +8,7 @@ import logoMark from "@/assets/sma-logo.png";
 import { BUSINESS, CFG, FAQ_GROUPS, faqList, PROGRAMMES, PROGRAMME_COUNT, REVIEW_SHOTS, duration, type Programme } from "@/lib/config";
 import { MENTORS, REVIEWS, SHOW_MENTORS, SHOW_REVIEWS } from "@/lib/content";
 import { BRAND } from "@/lib/institution";
-import { FOCUS, Intro, PHOTO, Reveal, SMA_PHOTO, SocialIcon, postSheet } from "./components";
+import { Intro, Reveal, SMA_PHOTO, SocialIcon, focusFor, photoFor, postSheet } from "./components";
 import { Arrow, Eyebrow, ProgrammeGrid, Rule, SERIF, SectionHead, btnOutline, btnPrimary } from "./brand";
 import { useAdmission } from "./admissions-status";
 import { SiteHeader } from "./header";
@@ -23,7 +23,7 @@ const progName = (slug: string) => PROGRAMMES.find((p) => p.slug === slug)?.name
 type Slide = { id: string; name: string; tone: string; photo: StaticImageData; prog: Programme };
 const SLIDES: Slide[] = [
   ...PROGRAMMES.map((p) => ({
-    id: p.slug, name: p.name, tone: p.tone, photo: PHOTO[p.slug], prog: p,
+    id: p.slug, name: p.name, tone: p.tone, photo: photoFor(p.slug), prog: p,
   })),
 ];
 
@@ -131,7 +131,7 @@ export default function Home() {
               return (
                 <div key={sl.id} onClick={() => setActive(i)} onMouseEnter={() => setActive(i)} role="button" tabIndex={0} aria-label={sl.name} onKeyDown={(e) => e.key === "Enter" && setActive(i)}
                   className={`relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br ${sl.tone} transition-all duration-700 ease-out ${on ? "min-w-0 flex-[9]" : "hidden min-w-0 flex-[1] cursor-pointer md:block"}`}>
-                  <Image src={sl.photo} alt={`A learner studying ${sl.name} online with Skill Mountain Academy`} fill priority={i === 0} sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[sl.id] }} />
+                  <Image src={sl.photo} alt={`A learner studying ${sl.name} online with Skill Mountain Academy`} fill priority={i === 0} sizes="(max-width: 768px) 90vw, 40vw" className="object-cover" style={{ objectPosition: focusFor(sl.id) }} />
                   <div className={`absolute inset-0 bg-gradient-to-t from-ink/70 via-transparent transition-opacity duration-500 ${on ? "opacity-100" : "opacity-40"}`} />
                   {on ? (
                     <div className="pop absolute inset-x-0 bottom-0 p-4 text-white sm:p-5">

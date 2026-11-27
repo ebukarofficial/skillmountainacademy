@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { BUSINESS, MESSAGE, PROGRAMMES, SITE_URL, duration, type Programme } from "@/lib/config";
 import { learnList } from "@/lib/curricula";
 import { programmeCopy } from "@/lib/programme-content";
-import { FOCUS, PHOTO } from "@/lib/photos";
+import { focusFor, photoFor } from "@/lib/photos";
 import { CloudBadges, PANEL_BG } from "../../components";
 import { HoldPrice } from "../../hold";
 import { CountrySelect } from "../../currency";
@@ -100,7 +100,7 @@ export default async function ProgrammePage({ params }: Params) {
               </div>
             </div>
             <div className={`relative h-80 overflow-hidden rounded-lg bg-gradient-to-br sm:h-[30rem] ${p.tone}`}>
-              <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name} online`} fill priority sizes="(max-width: 1024px) 90vw, 40vw" className="object-cover" style={{ objectPosition: FOCUS[p.slug] }} />
+              <Image src={photoFor(p.slug)} alt={`A learner studying ${p.name} online`} fill priority sizes="(max-width: 1024px) 90vw, 40vw" className="object-cover" style={{ objectPosition: focusFor(p.slug) }} />
             </div>
           </div>
           <dl className="mx-auto grid max-w-6xl gap-x-8 border-t border-ink/10 px-5 sm:grid-cols-2 lg:grid-cols-3">

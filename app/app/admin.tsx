@@ -10,6 +10,7 @@ import { MaterialsManager } from "./shared";
 import { AdmissionsAdmin, RecruitmentAdmin } from "./admissions-admin";
 import { AssistantEnquiries, CallRequests } from "./desk-admin";
 import { CurrencySettings, Monitoring } from "./monitoring-admin";
+import { CatalogueAdmin } from "./catalogue-admin";
 import { MfaSettings } from "./mfa";
 import { OwnerConsole } from "./owner";
 import { RetentionSettings } from "./security-admin";
@@ -517,7 +518,7 @@ const TITLES: Record<Tab, [string, string?]> = {
 // Which dashboard sections an administrator group sees. DISPLAY ONLY: the server checks every request (permissions.ts).
 type Access = { role: string | null; owner?: boolean; areas: { read: string[]; write: string[] } } | null;
 const TAB_AREAS: Partial<Record<Tab, string[]>> = {
-  overview: ["overview"], students: ["records", "support", "academic"], instructors: ["faculty"], programmes: ["academic", "finance"],
+  overview: ["overview"], students: ["records", "support", "academic"], instructors: ["faculty"], programmes: ["academic", "finance", "catalogue"],
   admissions: ["admissions"], payments: ["finance", "orders"], records: ["academic", "records"], allocation: ["academic"], attendance: ["academic"],
   assessments: ["academic"], materials: ["academic"], content: ["academic", "admissions"], reports: ["overview"], owner: ["owner"],
 };
@@ -529,7 +530,7 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
   const [paySeg, setPaySeg] = useState<"summary" | "orders">("summary");
   const [insSeg, setInsSeg] = useState<"verification" | "activity" | "accounts">("verification");
   const [stuSeg, setStuSeg] = useState<"monitoring" | "accounts">("monitoring");
-  const [progSeg, setProgSeg] = useState<"content" | "investment">("content");
+  const [progSeg, setProgSeg] = useState<"content" | "investment" | "catalogue">("content");
   const allNav: NavItem<Tab>[] = [
     { id: "overview", label: "Overview", icon: "home" },
     { id: "students", label: "Students", icon: "users" },
@@ -563,8 +564,9 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
         {insSeg === "verification" ? <RecruitmentAdmin /> : insSeg === "activity" ? <Instructors /> : <Users fixedRole="instructor" title="Instructor accounts" addRoles={["instructor"]} />}
       </>}
       {tab === "programmes" && <>
-        <Segments value={progSeg} onChange={setProgSeg} items={[["content", "Modules and topics"], ["investment", "Investment and currency"]]} />
-        {progSeg === "content" ? <Courses /> : <CurrencySettings />}
+        <Segments value={progSeg} onChange={setProgSeg} items={[["content", "Modules and topics"], ["investment", "Investment and currency"],
+          ...(mayRead(access, ["catalogue"]) ? [["catalogue", "Catalogue"] as ["catalogue", string]] : [])]} />
+        {progSeg === "content" ? <Courses /> : progSeg === "catalogue" ? <CatalogueAdmin /> : <CurrencySettings />}
       </>}
       {tab === "admissions" && <>
         <Segments value={admSeg} onChange={setAdmSeg} items={[["admit", "Admit a student"], ["intake", "Intake and capacity"], ["calls", "Call requests"], ["enquiries", "Assistant enquiries"]]} />

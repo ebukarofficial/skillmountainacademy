@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PROGRAMMES, duration, type Programme } from "@/lib/config";
-import { FOCUS, PHOTO } from "@/lib/photos";
+import { focusFor, photoFor } from "@/lib/photos";
 import { ListedOnly } from "./admissions-status";
 
 // Serif headline face (loaded in app/layout.tsx as --font-serif).
@@ -64,7 +64,7 @@ export function ProgrammeCard({ p, priority = false }: { p: Programme; priority?
     <ListedOnly slug={p.slug}>
       <article className="group relative flex h-full flex-col overflow-hidden rounded-lg border border-ink/10 bg-white transition duration-300 hover:border-ink/25 hover:shadow-xl hover:shadow-ink/10">
         <div className={`relative aspect-[16/10] overflow-hidden bg-gradient-to-br ${p.tone}`}>
-          <Image src={PHOTO[p.slug]} alt={`A learner studying ${p.name}`} fill priority={priority} sizes="(max-width: 640px) 92vw, (max-width: 1024px) 46vw, 30vw" className="object-cover transition duration-700 group-hover:scale-[1.02] motion-reduce:transition-none" style={{ objectPosition: FOCUS[p.slug] }} />
+          <Image src={photoFor(p.slug)} alt={`A learner studying ${p.name}`} fill priority={priority} sizes="(max-width: 640px) 92vw, (max-width: 1024px) 46vw, 30vw" className="object-cover transition duration-700 group-hover:scale-[1.02] motion-reduce:transition-none" style={{ objectPosition: focusFor(p.slug) }} />
         </div>
         <div className="flex flex-1 flex-col p-5 sm:p-6">
           <p className="text-sm font-semibold text-brand-red">{p.tag}</p>

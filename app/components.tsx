@@ -6,7 +6,7 @@ import { Money, QuotePrice } from "./currency";
 
 // The investment and payment panel colour set by the final brief (#F8F8F9).
 export const PANEL_BG = "bg-[#f8f8f9]";
-export { FOCUS, PHOTO, SMA_PHOTO } from "@/lib/photos";
+export { FOCUS, PHOTO, SMA_PHOTO, focusFor, photoFor } from "@/lib/photos";
 export { naira } from "@/lib/format";
 
 // "AWS" and "Azure" text badges for Cloud track programmes (text only, no third-party logos).
