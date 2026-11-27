@@ -19,7 +19,11 @@ type Item = {
   live: (Fields & { publishedAt: string | null; retiredAt: string | null; retiredReason: string | null }) | null; draft: Fields | null;
   problems: string[]; missingNgn: boolean; missingUsd: boolean; international: { USD: number | null; GBP: number | null; EUR: number | null };
   updatedAt: string; updatedBy: string | null;
+  admissions: { mode: "open" | "scheduled" | "closed"; state: "open" | "upcoming" | "closed" | "full"; opensAt: string | null; enforceCapacity: boolean; full: boolean;
+    capacity: { total: number; enrolled: number; reserved: number; available: number } } | null;
+  enrolment: { active: number; paused: number; finished: number };
 };
+const ADMISSION_LABEL = { open: "Admissions open", upcoming: "Admissions scheduled", closed: "Admissions closed", full: "Full" } as const;
 type School = { slug: string; code: string; name: string; tab: string; tone: string };
 type Data = { schools: School[]; programmes: Item[]; policy: { superMayPublish: boolean }; canPublish: boolean; isOwner: boolean;
   counts: { total: number; published: number; drafts: number; newDrafts: number; changesToLive: number; missingNgn: number } };
@@ -74,6 +78,7 @@ export function CatalogueAdmin() {
                   <div className="flex flex-wrap items-center gap-2">
                     <button type="button" onClick={() => setOpen(open === p.slug ? null : p.slug)} className="text-left font-semibold text-ink hover:underline">{p.name}</button>
                     <Badge s={p.status} />
+                    {p.status === "published" && p.admissions && <span className="rounded-md bg-ink/5 px-2 py-0.5 text-xs font-semibold text-ink/75">{ADMISSION_LABEL[p.admissions.state]}</span>}
                     {p.hasDraft && p.status !== "draft" && <Badge s="unpublished changes" />}
                     {p.missingNgn && <span className="rounded-md bg-brand-red/10 px-2 py-0.5 text-xs font-semibold text-brand-red">NGN price missing</span>}
                     {p.missingUsd && <span className="rounded-md bg-brand-orange/15 px-2 py-0.5 text-xs font-semibold text-ink">USD price missing</span>}
@@ -120,6 +125,7 @@ function Detail({ item, data, reload }: { item: Item; data: Data; reload: () => 
     <div className="mt-3 space-y-4 rounded-xl bg-ink/[0.03] p-4">
       {item.problems.length > 0 && <p className="text-sm text-brand-red">Cannot be published yet. Missing: {item.problems.join(", ")}.</p>}
       {item.live?.retiredAt && <p className="text-sm text-ink/70">Retired {when(item.live.retiredAt)}: {item.live.retiredReason}</p>}
+      <Lifecycle item={item} reload={reload} />
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="text-sm text-ink/80">
           <p><strong>School:</strong> {school?.name ?? "none (current catalogue)"}</p>
@@ -133,7 +139,8 @@ function Detail({ item, data, reload }: { item: Item; data: Data; reload: () => 
       </div>
       <div className="flex flex-wrap gap-2">
         {item.status !== "retired" && <Btn small kind="ghost" onClick={() => setEdit((v) => !v)}>{edit ? "Close editor" : "Edit draft"}</Btn>}
-        {data.canPublish && (item.hasDraft || item.status === "paused") && <Btn small disabled={act.busy || (item.hasDraft && item.problems.length > 0)} onClick={() => post("publish", {}, "Published.")}>{item.hasDraft ? "Publish" : "Resume"}</Btn>}
+        {data.canPublish && item.hasDraft && <Btn small disabled={act.busy || item.problems.length > 0} onClick={() => post("publish", {}, "Published.")}>Publish</Btn>}
+        {data.canPublish && item.status === "paused" && <Btn small kind="ghost" disabled={act.busy} onClick={() => post("resume", {}, "Resumed as it was published.")}>Resume</Btn>}
         {data.canPublish && item.status === "published" && <Btn small kind="ghost" disabled={act.busy} onClick={() => post("pause", {}, "Paused: hidden and closed to registration.")}>Pause</Btn>}
         {data.canPublish && item.live && item.status !== "retired" && (
           <span className="flex items-center gap-2">
@@ -205,5 +212,45 @@ function Editor({ schools, item, onDone }: { schools: School[]; item: Item | nul
       <label className="flex items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" checked={v.fullPaymentOnly} onChange={(e) => setV((x) => ({ ...x, fullPaymentOnly: e.target.checked }))} /> Full payment only (no instalments)</label>
       <div className="sm:col-span-2 flex items-center gap-3"><Btn onClick={save} disabled={act.busy}>Save draft</Btn><Msg text={act.msg.text} kind={act.msg.kind} /></div>
     </div>
+  );
+}
+
+// Stage C: lifecycle and admissions are separate. Admissions apply only to a published programme; a paused or retired
+// programme takes no new students whatever its admissions setting says. Enrolled students always keep their access.
+function Lifecycle({ item, reload }: { item: Item; reload: () => void }) {
+  const act = useAction();
+  const [hist, setHist] = useState(false);
+  const a = item.admissions;
+  const setMode = (mode: string) => act.run(() => api(`/api/app/admin/admissions/${item.slug}`, { method: "PATCH", body: { mode } }), mode === "scheduled" ? "Scheduled: add the opening period in the Admissions tab." : "Admissions updated.", reload);
+  return (
+    <div className="rounded-lg border border-ink/10 bg-white p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <span><strong>Lifecycle:</strong> {item.status}</span>
+        <span><strong>Admissions:</strong> {a ? (item.status === "published" ? ADMISSION_LABEL[a.state] : `${a.mode} (inactive: the programme is ${item.status})`) : "not set up"}</span>
+        <span><strong>Students:</strong> {item.enrolment.active} active, {item.enrolment.paused} paused, {item.enrolment.finished} finished</span>
+        {a && <span><strong>Capacity:</strong> {a.capacity.total ? `${a.capacity.available} of ${a.capacity.total} places left` : "no instructors assigned"}{a.enforceCapacity ? "" : " (not enforced)"}{a.full && a.enforceCapacity ? " · full" : ""}</span>}
+      </div>
+      {item.status === "published" && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(["open", "scheduled", "closed"] as const).map((m) => <Btn key={m} small kind={a?.mode === m ? "dark" : "ghost"} disabled={act.busy || a?.mode === m} onClick={() => setMode(m)}>{m === "open" ? "Open admissions" : m === "scheduled" ? "Schedule admissions" : "Close admissions"}</Btn>)}
+        </div>
+      )}
+      <button type="button" className="mt-2 text-xs underline" onClick={() => setHist((v) => !v)}>{hist ? "Hide history" : "Status history"}</button>
+      {hist && <History slug={item.slug} />}
+      <Msg text={act.msg.text} kind={act.msg.kind} />
+    </div>
+  );
+}
+
+function History({ slug }: { slug: string }) {
+  const { data, error } = useLoad<{ history: { at: string; action: string; by: string | null; detail: Record<string, unknown> | null }[] }>(`/api/app/admin/catalogue/programmes/${slug}/history`);
+  if (error) return <Msg text={error} />;
+  if (!data) return <Empty>Loading…</Empty>;
+  if (!data.history.length) return <Empty>No changes recorded yet.</Empty>;
+  return (
+    <ul className="mt-2 space-y-1 text-xs text-ink/75">
+      {data.history.map((h, i) => <li key={i}>{when(h.at)} · <b>{h.action.replace(/^(catalogue|admissions)\./, "")}</b>{h.by ? ` by ${h.by}` : ""}
+        {h.detail && "reason" in h.detail && h.detail.reason ? ` · ${String(h.detail.reason)}` : ""}{h.detail && "after" in h.detail && h.action === "admissions.update" ? ` · ${JSON.stringify((h.detail.after as Record<string, unknown>).mode)}` : ""}</li>)}
+    </ul>
   );
 }

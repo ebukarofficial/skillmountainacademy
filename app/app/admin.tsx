@@ -11,6 +11,7 @@ import { AdmissionsAdmin, RecruitmentAdmin } from "./admissions-admin";
 import { AssistantEnquiries, CallRequests } from "./desk-admin";
 import { CurrencySettings, Monitoring } from "./monitoring-admin";
 import { CatalogueAdmin } from "./catalogue-admin";
+import { AssignInstructor, CapacityReport } from "./capacity-admin";
 import { MfaSettings } from "./mfa";
 import { OwnerConsole } from "./owner";
 import { RetentionSettings } from "./security-admin";
@@ -182,11 +183,14 @@ function Enrolments() {
             <div className="flex flex-wrap items-center justify-between gap-2"><span><b>{e.student_name}</b> · {name(e.programme_slug)}<span className="block text-sm text-ink/60">Instructor: {e.instructor_name ?? "not assigned"}</span></span>
               <span className="flex items-center gap-2"><Badge s={e.status} /><Btn small kind="ghost" onClick={() => setOpen(open === e.id ? null : e.id)}>{open === e.id ? "Close" : "Manage"}</Btn></span></div>
             {open === e.id && <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <form className="space-y-2" onSubmit={(ev) => { ev.preventDefault(); const f = Object.fromEntries(new FormData(ev.currentTarget)); run(() => api(`/api/app/admin/enrolments/${e.id}`, { method: "PATCH", body: { instructorId: f.instructorId || null, status: f.status } }), "Saved.", reload); }}>
-                <Field label="Instructor"><select name="instructorId" defaultValue={e.instructor_id ?? ""} className={inputCls}><option value="">Not assigned</option>{instructors.data?.users.map((u) => <option key={u.id} value={u.id}>{u.fullName}</option>)}</select></Field>
-                <Field label="Status"><select name="status" defaultValue={e.status} className={inputCls}>{["active", "paused", "completed", "withdrawn"].map((s) => <option key={s}>{s}</option>)}</select></Field>
-                <Btn small type="submit" disabled={busy}>Save</Btn>
-              </form>
+              <div className="space-y-4">
+                {/* Stage C: the server checks eligibility, approval, the programme's lifecycle and capacity before showing and saving a choice. */}
+                <AssignInstructor enrolmentId={e.id} currentInstructorId={e.instructor_id} onDone={reload} />
+                <form className="space-y-2" onSubmit={(ev) => { ev.preventDefault(); const f = Object.fromEntries(new FormData(ev.currentTarget)); run(() => api(`/api/app/admin/enrolments/${e.id}`, { method: "PATCH", body: { status: f.status } }), "Saved.", reload); }}>
+                  <Field label="Status"><select name="status" defaultValue={e.status} className={inputCls}>{["active", "paused", "completed", "withdrawn"].map((s) => <option key={s}>{s}</option>)}</select></Field>
+                  <Btn small type="submit" disabled={busy}>Save status</Btn>
+                </form>
+              </div>
               <form className="space-y-2" onSubmit={(ev) => { ev.preventDefault(); const f = Object.fromEntries(new FormData(ev.currentTarget)) as Record<string, string>; run(() => api(`/api/app/admin/enrolments/${e.id}/timetable`, { method: "POST", body: { weekday: Number(f.weekday), startTime: f.startTime, durationMin: Number(f.durationMin), effectiveFrom: f.from || undefined } }), "Weekly time saved; classes for the next 14 days were created and both were told.", reload); }}>
                 <p className="text-sm font-bold">Fixed weekly class time</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -577,7 +581,7 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
         {paySeg === "summary" ? <Finance /> : <Orders />}
       </>}
       {tab === "records" && <Academics />}
-      {tab === "allocation" && <Enrolments />}
+      {tab === "allocation" && <div className="space-y-6"><Enrolments /><CapacityReport /></div>}
       {tab === "attendance" && <Attendance />}
       {tab === "assessments" && <Assessments />}
       {tab === "materials" && <Materials />}
