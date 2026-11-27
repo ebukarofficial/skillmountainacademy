@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { admissionStatus, capacity, statusLabel, DEFAULT_SETTING } from "../lib/admissions.ts";
 import { read } from "./helpers.ts";
 import { registration, learner, startWorker } from "./worker-harness.ts";
-import { REQUIRED, setup, signIn } from "./lms-helpers.ts";
+import { REQUIRED, setup, signIn, eligible } from "./lms-helpers.ts";
 
 let w: Awaited<ReturnType<typeof startWorker>>;
 before(async () => { w = await startWorker(); });
@@ -146,6 +146,7 @@ test("instructor onboarding: invited candidates sign in only to complete their p
 
   // Cannot be assigned students.
   const st = await make("student", "cand-st@example.com", "Cand Student");
+  await eligible(admin, id, "graphics");
   const e = await admin.send("POST", "/api/app/admin/enrolments", { studentId: st, programme: "graphics", instructorId: id });
   assert.equal(e.status, 400);
 

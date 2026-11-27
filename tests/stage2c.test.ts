@@ -6,7 +6,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { build } from "esbuild";
 import { startWorker, SECRETS } from "./worker-harness.ts";
-import { signIn as helperSignIn, session, approve, type Session } from "./lms-helpers.ts";
+import { signIn as helperSignIn, session, approve, type Session, eligible } from "./lms-helpers.ts";
 import { stepOf, totpAt } from "../src/server/lms/mfa-crypto.ts";
 
 type W = Awaited<ReturnType<typeof startWorker>>;
@@ -216,6 +216,7 @@ test("removing an instructor revokes access only: every academic record stays, t
   const ins = await make("instructor", "ri@example.com", "Removed Instructor");
   const ins2 = await make("instructor", "ri2@example.com", "New Instructor");
   await approve(owner, ins); await approve(owner, ins2);
+  await eligible(owner, ins, "webdev");
   const en = (await owner.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: stu, programme: "webdev", instructorId: ins })).enrolment.id;
   const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
   await db.batch([
@@ -247,6 +248,7 @@ test("removing an instructor revokes access only: every academic record stays, t
   assert.notEqual((await verify(w, oldLink, "10.77.2.2")).r.status, 200, "older sign-in link revoked");
   assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ins}`, { status: "active" })).status, 403, "cannot be reactivated");
   assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ins}`, { role: "admin" })).status, 403);
+  await eligible(owner, ins, "graphics");
   assert.equal((await owner.send("POST", "/api/app/admin/enrolments", { studentId: stu, programme: "graphics", instructorId: ins })).status, 400, "cannot be given new students");
   // Until reassigned, the removed instructor receives no more email (no Meet links or student details).
   const mark = w.calls.length;
@@ -257,7 +259,8 @@ test("removing an instructor revokes access only: every academic record stays, t
   assert.ok(mails.some((m) => m.body.includes("rs@example.com")), "the student is told");
   assert.ok(!mails.some((m) => m.body.includes("ri@example.com")), "the removed instructor is not");
   // Reassignment: future classes move to the new instructor; the completed class keeps its history.
-  await owner.json("PATCH", `/api/app/admin/enrolments/${en}`, { instructorId: ins2 });
+  await eligible(owner, ins2, "webdev"); // Stage C: eligibility and a reason are required for a change of instructor
+  await owner.json("PATCH", `/api/app/admin/enrolments/${en}`, { instructorId: ins2, reason: "Instructor change" });
   const cls = await db.prepare("SELECT id, status, instructor_id FROM class_sessions WHERE enrolment_id = ?1 ORDER BY starts_at").bind(en).all<{ id: string; status: string; instructor_id: string }>();
   assert.equal(cls.results.find((c) => c.id === "past-1")!.instructor_id, ins, "history keeps the original instructor");
   for (const c of cls.results.filter((x) => x.status === "scheduled")) assert.equal(c.instructor_id, ins2, "future classes reassigned");

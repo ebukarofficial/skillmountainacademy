@@ -45,3 +45,6 @@ export async function setup(w: W) {
 
 export const REQUIRED = { identity: { done: true }, credentials: { done: true }, technical: { done: true } };
 export const approve = (admin: Session, id: string) => admin.json("PATCH", `/api/app/admin/recruitment/${id}`, { checks: REQUIRED, stage: "approved", sendInvite: false });
+// Stage C: an instructor must be approved to teach a programme (instructor_programmes) before receiving its students.
+export const eligible = (admin: Session, instructorId: string, ...slugs: string[]) =>
+  Promise.all(slugs.map((slug) => admin.json("PUT", `/api/app/admin/instructors/${instructorId}/programmes/${slug}`, {})));

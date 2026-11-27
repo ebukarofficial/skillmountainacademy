@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { build } from "esbuild";
 import { startWorker, SECRETS } from "./worker-harness.ts";
-import { signIn as helperSignIn, session, type Session } from "./lms-helpers.ts";
+import { signIn as helperSignIn, session, type Session, eligible } from "./lms-helpers.ts";
 import { stepOf, totpAt } from "../src/server/lms/mfa-crypto.ts";
 
 type W = Awaited<ReturnType<typeof startWorker>>;
@@ -239,6 +239,7 @@ test("live class: idle sign-out during a Meet class creates no missed class and 
   const st = (await owner.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "learner@example.com", role: "student", fullName: "Live Learner", sendInvite: false })).user.id;
   const ins = (await owner.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "teacher@example.com", role: "instructor", fullName: "Live Teacher", sendInvite: false })).user.id;
   await owner.json("PATCH", `/api/app/admin/recruitment/${ins}`, { checks: { identity: { done: true }, credentials: { done: true }, technical: { done: true } }, stage: "approved", sendInvite: false });
+  await eligible(owner, ins, "webdev");
   const en = (await owner.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: st, programme: "webdev", instructorId: ins })).enrolment.id;
   const db = await w.db();
   // A 60-minute class that started 20 minutes ago, with a Meet link.

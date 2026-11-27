@@ -4,7 +4,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startWorker, learner, registration } from "./worker-harness.ts";
-import { setup, signIn, type Session } from "./lms-helpers.ts";
+import { setup, signIn, type Session, eligible } from "./lms-helpers.ts";
 import { read } from "./helpers.ts";
 import { currencyForCountry } from "../lib/pricing.ts";
 
@@ -23,6 +23,7 @@ before(async () => {
   ids.ins = await s.make("instructor", "ref-ins@example.com", "Ada Instructor");
   ids.ins2 = await s.make("instructor", "ref-ins2@example.com", "Other Instructor");
   ids.stu = await s.make("student", "ref-stu@example.com", "Bola Student");
+  await eligible(admin, ids.ins, "ai-automation");
   ids.en = (await admin.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: ids.stu, programme: "ai-automation", instructorId: ids.ins })).enrolment.id;
   ins = await signIn(w, "ref-ins@example.com");
   stu = await signIn(w, "ref-stu@example.com");

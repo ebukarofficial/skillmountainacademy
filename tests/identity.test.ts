@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startWorker } from "./worker-harness.ts";
-import { setup, signIn } from "./lms-helpers.ts";
+import { setup, signIn, eligible } from "./lms-helpers.ts";
 
 let w: Awaited<ReturnType<typeof startWorker>>;
 before(async () => { w = await startWorker(); });
@@ -31,6 +31,7 @@ test("staff and students get unique, sequential institutional numbers", async ()
 test("admin admits a student who paid offline: records, registration number, payment, emails; no duplicates", async () => {
   const { admin, make } = await setup(w);
   const ins = await make("instructor", "admit-ins@example.com", "Admit Instructor");
+  await eligible(admin, ins, "cloud"); // Stage C: the instructor must be approved for the programme
   const before = w.calls.length;
   const r = await admin.json<{ student: { id: string; studentNo: string }; order: { reference: string; paidNaira: number; totalNaira: number } }>("POST", "/api/app/admin/admit", {
     firstName: "Ada", surname: "Okafor", email: "ada.offline@example.com", phone: "08030000000", country: "Nigeria", programme: "cloud", plan: "parts", paidParts: 1, paymentReference: "UBA 12345", instructorId: ins,

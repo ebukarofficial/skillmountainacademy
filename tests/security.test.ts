@@ -6,7 +6,7 @@ import { createHash, createHmac } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { startWorker, SECRETS } from "./worker-harness.ts";
-import { setup, signIn as helperSignIn, session, type Session } from "./lms-helpers.ts";
+import { setup, signIn as helperSignIn, session, type Session, eligible } from "./lms-helpers.ts";
 import { base32Encode, stepOf, totpAt, verifyTotp } from "../src/server/lms/mfa-crypto.ts";
 import { checkContent, checkUpload, DOC_TYPES, unsafeName } from "../src/server/lms/upload-rules.ts";
 import { buildRules, inlineScriptHashes, policyFor } from "../scripts/csp.mts";
@@ -57,7 +57,9 @@ before(async () => {
   ids.stuB = await s.make("student", "sec-b@example.com", "Student B");
   ids.insA = await s.make("instructor", "sec-ia@example.com", "Instructor A");
   ids.insB = await s.make("instructor", "sec-ib@example.com", "Instructor B");
+  await eligible(admin, ids.insA, "webdev");
   ids.enA = (await admin.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: ids.stuA, programme: "webdev", instructorId: ids.insA })).enrolment.id;
+  await eligible(admin, ids.insB, "graphics");
   ids.enB = (await admin.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: ids.stuB, programme: "graphics", instructorId: ids.insB })).enrolment.id;
 });
 after(async () => { await w.dispose(); await wm.dispose(); });

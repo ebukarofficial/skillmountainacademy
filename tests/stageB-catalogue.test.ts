@@ -98,9 +98,10 @@ test("public: /api/catalogue lists published programmes only, identical to today
   for (const d of PROGRAMMES_2027.filter((p) => !p.reuses)) assert.doesNotMatch(text, new RegExp(`"${d.slug}"`), `draft ${d.slug} is not public`);
   assert.doesNotMatch(text, /Agentic Systems|Full-Stack Engineering|price_kobo|updated_by/, "no draft titles or internal fields");
   // Registration and quotes refuse a draft.
-  assert.equal((await quote("python")).status, 400);
+  // Stage C: a draft is refused with an explicit "not available" (409) rather than an unknown programme.
+  assert.equal((await quote("python")).status, 409);
   const r = await w.post("/api/register", registration({ programme: "python", method: "bank", learner: { ...registration().learner, email: "draft@example.com" } }));
-  assert.equal(r.status, 400);
+  assert.deepEqual([r.status, await errOf(r)], [409, "programme_unavailable"]);
 });
 
 test("public: the export validates and renders only safe values; the committed snapshot is the empty (seed) state", async () => {
@@ -142,7 +143,7 @@ test("permissions: every catalogue route is in the default-deny table; groups ge
   const m = await import(`data:text/javascript;base64,${Buffer.from(r.outputFiles[0].text).toString("base64")}`);
   const routes = (m.routeList() as { method: string; path: string }[]).filter((x) => /catalogue/.test(x.path));
   const table = new Set((m.permissionTable() as { method: string; path: string }[]).map((p) => `${p.method} ${p.path}`));
-  assert.equal(routes.length, 8);
+  assert.equal(routes.length, 10, "8 from Stage B plus resume and history (Stage C)");
   for (const x of routes) assert.ok(table.has(`${x.method} ${x.path}`), `${x.method} ${x.path} missing from the permission table`);
   const may = m.adminMay as (role: string | null, method: string, path: string) => boolean;
   assert.equal(may("finance", "GET", "/api/app/admin/catalogue"), false);
@@ -228,7 +229,7 @@ test("publication: the owner may delegate to Super Administrators; the delegate 
 test("publication: pause hides and closes registration; resume restores; retire keeps the name for records and old links", async () => {
   await owner.json("POST", "/api/app/admin/catalogue/programmes/python/pause");
   assert.equal((await publicCatalogue()).programmes.some((p) => p.slug === "python"), false);
-  assert.equal((await quote("python")).status, 400, "registration closed while paused");
+  assert.equal((await quote("python")).status, 409, "registration closed while paused");
   await owner.json("POST", "/api/app/admin/catalogue/programmes/python/publish"); // resume
   assert.equal((await publicCatalogue()).programmes.some((p) => p.slug === "python"), true);
   assert.deepEqual((await audits("catalogue.unpublish", "python")).length, 1);

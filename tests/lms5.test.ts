@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startWorker } from "./worker-harness.ts";
-import { setup, signIn, type Session } from "./lms-helpers.ts";
+import { setup, signIn, type Session, eligible } from "./lms-helpers.ts";
 import { read } from "./helpers.ts";
 
 let w: Awaited<ReturnType<typeof startWorker>>;
@@ -25,6 +25,7 @@ before(async () => {
   ids.stu = await s.make("student", "s5@example.com", "Kemi Student");
   ids.other = await s.make("student", "s5b@example.com", "No Programme");
   [ins, stu, other] = await Promise.all(["i5", "s5", "s5b"].map((n) => signIn(w, `${n}@example.com`)));
+  await eligible(admin, insUser, "cybersecurity");
   await admin.json("POST", "/api/app/admin/enrolments", { studentId: ids.stu, programme: "cybersecurity", instructorId: insUser });
   await admin.json("POST", "/api/app/resources", { programme: "cybersecurity", kind: "document", title: "Phishing basics",
     textContent: "Phishing is a social engineering attack. Check the sender domain, hover over links, and never share one-time passwords." });

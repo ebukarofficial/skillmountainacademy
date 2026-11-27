@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startWorker } from "./worker-harness.ts";
-import { setup, signIn, type Session } from "./lms-helpers.ts";
+import { setup, signIn, type Session, eligible } from "./lms-helpers.ts";
 import { checkUpload, DOC_TYPES, MAX_FILE_MB, MAX_PHOTO_MB, PHOTO_TYPES } from "../src/server/lms/upload-rules.ts";
 
 let w: Awaited<ReturnType<typeof startWorker>>;
@@ -21,7 +21,9 @@ before(async () => {
   ids.stu = await s.make("student", "s3@example.com", "Segun Student");
   ids.stuB = await s.make("student", "s3b@example.com", "Other Student");
   [ins, insB, stu, stuB] = await Promise.all(["i3", "i3b", "s3", "s3b"].map((n) => signIn(w, `${n}@example.com`)));
+  await eligible(admin, ids.ins, "webdev");
   ids.en = (await admin.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: ids.stu, programme: "webdev", instructorId: ids.ins })).enrolment.id;
+  await eligible(admin, ids.insB, "graphics");
   await admin.json("POST", "/api/app/admin/enrolments", { studentId: ids.stuB, programme: "graphics", instructorId: ids.insB });
 });
 after(async () => { await w.dispose(); });
@@ -154,6 +156,7 @@ test("uploads not set up (no R2): clear 503, typed answers still work", async ()
     const s = await setup(x);
     const insId = await s.make("instructor", "ix@example.com", "Ix");
     const stuId = await s.make("student", "sx@example.com", "Sx");
+    await eligible(s.admin, insId, "cloud");
     await s.admin.json("POST", "/api/app/admin/enrolments", { studentId: stuId, programme: "cloud", instructorId: insId });
     const i = await signIn(x, "ix@example.com");
     const st = await signIn(x, "sx@example.com");

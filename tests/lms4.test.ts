@@ -3,7 +3,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { SECRETS, learner, registration, startWorker } from "./worker-harness.ts";
-import { setup, signIn, type Session } from "./lms-helpers.ts";
+import { setup, signIn, type Session, eligible } from "./lms-helpers.ts";
 
 let w: Awaited<ReturnType<typeof startWorker>>;
 let admin: Session, ins: Session, insB: Session, stu: Session;
@@ -18,7 +18,9 @@ before(async () => {
   ids.stu = await s.make("student", "s4@example.com", "Tunde Student");
   ids.stuB = await s.make("student", "s4b@example.com", "Other Student");
   [ins, insB, stu] = await Promise.all(["i4", "i4b", "s4"].map((n) => signIn(w, `${n}@example.com`)));
+  await eligible(admin, ids.ins, "uiux");
   ids.en = (await admin.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: ids.stu, programme: "uiux", instructorId: ids.ins })).enrolment.id;
+  await eligible(admin, ids.insB, "devops");
   await admin.json("POST", "/api/app/admin/enrolments", { studentId: ids.stuB, programme: "devops", instructorId: ids.insB });
 });
 after(async () => { await w.dispose(); });

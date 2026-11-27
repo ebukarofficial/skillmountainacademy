@@ -2,7 +2,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startWorker } from "./worker-harness.ts";
-import { setup, signIn, type Session } from "./lms-helpers.ts";
+import { setup, signIn, type Session, eligible } from "./lms-helpers.ts";
 
 let w: Awaited<ReturnType<typeof startWorker>>;
 let admin: Session, insA: Session, insB: Session, stuA: Session, stuB: Session;
@@ -23,7 +23,9 @@ before(async () => {
   ids.stuA = await s.make("student", "stua@example.com", "Chidi Student");
   ids.stuB = await s.make("student", "stub@example.com", "Dayo Student");
   [insA, insB, stuA, stuB] = await Promise.all(["insa", "insb", "stua", "stub"].map((n) => signIn(w, `${n}@example.com`)));
+  await eligible(admin, ids.insA, "cloud");
   ids.enA = (await admin.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: ids.stuA, programme: "cloud", instructorId: ids.insA })).enrolment.id;
+  await eligible(admin, ids.insB, "graphics");
   ids.enB = (await admin.json<{ enrolment: { id: string } }>("POST", "/api/app/admin/enrolments", { studentId: ids.stuB, programme: "graphics", instructorId: ids.insB })).enrolment.id;
 });
 after(async () => { await w.dispose(); });
@@ -164,12 +166,13 @@ test("daily run creates upcoming classes once (no duplicates)", async () => {
 });
 
 test("reassigning the instructor moves future classes and clears their Meet links", async () => {
-  await admin.json("PATCH", `/api/app/admin/enrolments/${ids.enA}`, { instructorId: ids.insB });
+  await eligible(admin, ids.insB, "cloud"); // Stage C: the new instructor must be approved for the programme
+  await admin.json("PATCH", `/api/app/admin/enrolments/${ids.enA}`, { instructorId: ids.insB, reason: "Instructor availability" });
   const fut = await rows<{ instructor_id: string; meet_url: string | null }>("SELECT instructor_id, meet_url FROM class_sessions WHERE enrolment_id = ? AND status = 'scheduled' AND starts_at > ?", ids.enA, new Date().toISOString());
   assert.ok(fut.length > 0 && fut.every((f) => f.instructor_id === ids.insB && f.meet_url === null));
   const past = await rows<{ instructor_id: string }>("SELECT instructor_id FROM class_sessions WHERE enrolment_id = ? AND status = 'completed'", ids.enA);
   assert.ok(past.every((p) => p.instructor_id === ids.insA), "history keeps the original instructor");
-  await admin.json("PATCH", `/api/app/admin/enrolments/${ids.enA}`, { instructorId: ids.insA });
+  await admin.json("PATCH", `/api/app/admin/enrolments/${ids.enA}`, { instructorId: ids.insA, reason: "Back to the original instructor" });
 });
 
 test("notifications: mark read only affects your own", async () => {
