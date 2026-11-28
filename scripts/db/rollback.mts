@@ -107,6 +107,11 @@ export const COMPAT: Record<string, MigrationCompat> = {
     checks: [{ id: "approval_executions_running", area: "security", description: "approved requests whose action is running right now (an older Worker would not fence them)", onFail: "action",
       sql: "SELECT COUNT(*) AS n FROM approval_requests WHERE execution_status = 'executing'",
       remediation: "wait until no approved action is running (or reconcile interrupted ones) before rolling back below 0017" }] },
+  "0018_payment_reconciliation.sql": { olderWorker: "check",
+    areas: { schema: "additive evidence and outcome columns on payment_attempts, and triggers that stay in force", data: "an older Worker stores no Paystack evidence, so the triggers refuse its releases (fail closed), and it does not show attempts that need reconciliation; a checkout blocked by a trigger fails with an error instead of the 'being checked' message" },
+    checks: [{ id: "payments_need_reconciliation", area: "data", description: "payment attempts flagged for reconciliation and not yet reviewed (an older Worker does not show them)", onFail: "action",
+      sql: "SELECT COUNT(*) AS n FROM payment_attempts WHERE outcome = 'reconcile' AND resolved_by IS NULL",
+      remediation: "review every attempt flagged for reconciliation (record the decision) before rolling back below 0018" }] },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));

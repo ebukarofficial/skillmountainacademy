@@ -45,7 +45,7 @@ export const POLICY: Record<string, TablePolicy> = {
     "execution_status", "execution_claimed_at", "execution_claimed_by", "execution_attempts", "execution_claim_id"),
     payload: "json_object", reason: "text", decision_comment: "text", execution_result: "text" } },
   execution_fences: { columns: { ...keep("claim_id", "approval_id", "owner_check", "effect_check", "committed_at") } },
-  payment_attempts: { columns: { ...keep("id", "order_id", "instalment_id", "attempt", "state", "claimed_at", "updated_at", "released_reason"), reference: "ref", authorization_url: "null", access_code: "null", detail: "null", released_by: "null" } },
+  payment_attempts: { columns: { ...keep("id", "order_id", "instalment_id", "attempt", "state", "claimed_at", "updated_at", "released_reason", "version", "verified_status", "verified_at", "verified_version", "first_verified_at", "outcome", "resolved_reason"), reference: "ref", authorization_url: "null", access_code: "null", detail: "null", released_by: "null", resolved_by: "null" } },
   orders: { columns: { ...keep("id", "created_at", "registration_id", "programme_slug", "plan", "method", "total_kobo", "regular_kobo", "hold_id", "group_size", "display_currency", "fx_rate", "fx_at", "status",
     "residence_country", "ip_country", "pricing_tier", "tuition_currency", "tuition_minor", "charge_currency", "pricing_snapshot",
     "request_fingerprint"), reference: "ref", idempotency_key: "null", payment_init: "null" } },
