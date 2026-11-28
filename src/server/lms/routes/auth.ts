@@ -24,6 +24,7 @@ import { areasFor, ownerEmail } from "../permissions";
 import { ACTIVITY_THROTTLE_SECONDS, policyFor } from "../session-policy";
 import { selfView } from "../views";
 import { newStaffNo } from "../ids";
+import { getOwnerRecord } from "../data/owner";
 
 const TOKEN_MINUTES = 15;
 const INVITE_MINUTES = 24 * 60;
@@ -122,7 +123,13 @@ publicRoute("POST", "/api/auth/request", async (c) => {
   let user = await getUserByEmail(c.db, email);
   // First sign-in of an owner listed in ADMIN_EMAILS creates their admin account.
   // The owner (OWNER_EMAIL) is bootstrapped the same way; their group is set later by the owner set-up, never here.
-  if (!user && (portal === null || portal === "admin") && [...adminEmails(c.env.ADMIN_EMAILS), ownerEmail(c.env)].filter(Boolean).includes(email)) {
+  // Owner email transition safety: once the owner is bootstrapped, a NEW OWNER_EMAIL address never gets an account
+  // created here. The existing owner account keeps its identity and is moved to the new address by the documented
+  // transition (scripts/owner/transition-email.mts); until then nobody is the owner ("mismatch"), and no duplicate
+  // administrator account appears for the new address.
+  const rec = !user && email === ownerEmail(c.env) ? await getOwnerRecord(c.db).catch(() => null) : null;
+  const blocked = !!rec && rec !== "missing_table" && rec.email.toLowerCase() !== email;
+  if (!user && !blocked && (portal === null || portal === "admin") && [...adminEmails(c.env.ADMIN_EMAILS), ownerEmail(c.env)].filter(Boolean).includes(email)) {
     user = { id: crypto.randomUUID(), email, role: "admin", status: "active", full_name: "SMA Admin", phone: null, bio: null, photo_key: null, student_no: null,
       specialization: null, qualifications: null, links: null, registration_id: null, created_at: nowIso(), last_login_at: null,
       staff_no: (await newStaffNo(c.db, "admin")) ?? undefined };

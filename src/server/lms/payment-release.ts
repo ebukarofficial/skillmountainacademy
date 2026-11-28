@@ -5,6 +5,7 @@ import { ApiError } from "../http";
 import type { Ctx } from "./api";
 import { Repo, type PaymentAttempt } from "../repo";
 import { auditStmt } from "./data/users";
+import { releaseConditions } from "./policy-sql";
 import { CLAIM_TTL_MS, verifyReference, verifyWithPaystack } from "../routes/payments";
 
 // Every check short of the release itself. Paystack is asked first; a payment it reports as successful is recorded
@@ -53,5 +54,7 @@ export async function planRelease(c: Ctx, attemptId: string, o: { reason: string
     // The batch commits only if THIS run moved the attempt to released (not a release made by anyone else).
     effect: { sql: "SELECT 1 FROM payment_attempts WHERE id = ?2 AND state = 'released' AND released_reason = ?3 AND updated_at = ?4", binds: [a.id, reason, at] },
     result: "payment attempt released",
+    // Stage E.3: checkReleasable again at commit time (the Paystack verification above stays read-only and before it).
+    conditions: releaseConditions({ attemptId: a.id, requesterId: o.releasedBy, claimedBefore: new Date(Date.now() - CLAIM_TTL_MS).toISOString() }),
   };
 }

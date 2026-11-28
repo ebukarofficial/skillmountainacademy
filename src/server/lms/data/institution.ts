@@ -48,8 +48,7 @@ export const endAssignment = (db: DB, id: string, by: string, reason: string, at
 export const listInvitations = (db: DB) => all<Invitation>(db, "SELECT * FROM staff_invitations ORDER BY created_at DESC LIMIT 300");
 export const getInvitation = (db: DB, id: string) => one<Invitation>(db, "SELECT * FROM staff_invitations WHERE id = ?1", id);
 export const invitationByHash = (db: DB, hash: string) => one<Invitation>(db, "SELECT * FROM staff_invitations WHERE token_hash = ?1", hash);
-export const createInvitation = (db: DB, i: Invitation) => run(db, `INSERT INTO staff_invitations (id, email, full_name, role, admin_role, department_slug, position, token_hash, status, expires_at, created_at, created_by)
-  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, ?10, ?11)`, i.id, i.email, i.full_name, i.role, i.admin_role, i.department_slug, i.position, i.token_hash, i.expires_at, i.created_at, i.created_by);
+export const createInvitation = (db: DB, i: Invitation) => run(db, `INSERT INTO staff_invitations (id, email, full_name, role, admin_role, department_slug, position, token_hash, status, expires_at, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, ?10, ?11)`, i.id, i.email, i.full_name, i.role, i.admin_role, i.department_slug, i.position, i.token_hash, i.expires_at, i.created_at, i.created_by);
 // Compare-and-set: only a pending invitation changes state, so it can be used, declined, revoked or expired once.
 export const moveInvitation = (db: DB, id: string, to: Invitation["status"], f: { by?: string | null; reason?: string | null; userId?: string | null }, at: string) =>
   run(db, "UPDATE staff_invitations SET status = ?2, decided_at = ?3, decided_by = ?4, revoke_reason = ?5, accepted_user_id = ?6 WHERE id = ?1 AND status = 'pending'",
@@ -67,14 +66,10 @@ export async function acceptInvitationAtomic(db: DB, a: Acceptance): Promise<boo
   const mine = "EXISTS (SELECT 1 FROM staff_invitations WHERE id = ?1 AND status = 'accepted' AND accepted_user_id = ?2)";
   const res = await batch(db, [
     stmt(db, "UPDATE staff_invitations SET status = 'accepted', decided_at = ?3, accepted_user_id = ?2 WHERE id = ?1 AND status = 'pending' AND expires_at > ?3", a.invitationId, a.userId, a.at),
-    stmt(db, `INSERT INTO users (id, email, role, status, full_name, created_at, staff_no, verification, admin_role)
-      SELECT ?2, ?3, ?4, 'active', ?5, ?6, ?7, ?8, ?9 WHERE ${mine}`, a.invitationId, a.userId, a.email, a.role, a.fullName, a.at, a.staffNo, a.verification, a.adminRole),
-    stmt(db, `INSERT INTO staff_assignments (id, user_id, department_slug, position, reason, created_at, created_by)
-      SELECT ?3, ?2, ?4, ?5, ?6, ?7, ?8 WHERE ?4 IS NOT NULL AND ?5 IS NOT NULL AND ${mine}`, a.invitationId, a.userId, a.assignmentId, a.departmentSlug, a.position, `invitation ${a.invitationId}`, a.at, a.createdBy),
-    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash)
-      SELECT ?3, ?4, ?2, 'invite.accepted', 'staff_invitation', ?1, ?5, ?6 WHERE ${mine}`, a.invitationId, a.userId, crypto.randomUUID(), a.at, a.auditAccepted, a.ipHash),
-    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash)
-      SELECT ?3, ?4, ?5, 'staff.joined', 'user', ?2, ?6, NULL WHERE ${mine}`, a.invitationId, a.userId, crypto.randomUUID(), a.at, a.createdBy, a.auditJoined),
+    stmt(db, `INSERT INTO users (id, email, role, status, full_name, created_at, staff_no, verification, admin_role) SELECT ?2, ?3, ?4, 'active', ?5, ?6, ?7, ?8, ?9 WHERE ${mine}`, a.invitationId, a.userId, a.email, a.role, a.fullName, a.at, a.staffNo, a.verification, a.adminRole),
+    stmt(db, `INSERT INTO staff_assignments (id, user_id, department_slug, position, reason, created_at, created_by) SELECT ?3, ?2, ?4, ?5, ?6, ?7, ?8 WHERE ?4 IS NOT NULL AND ?5 IS NOT NULL AND ${mine}`, a.invitationId, a.userId, a.assignmentId, a.departmentSlug, a.position, `invitation ${a.invitationId}`, a.at, a.createdBy),
+    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash) SELECT ?3, ?4, ?2, 'invite.accepted', 'staff_invitation', ?1, ?5, ?6 WHERE ${mine}`, a.invitationId, a.userId, crypto.randomUUID(), a.at, a.auditAccepted, a.ipHash),
+    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash) SELECT ?3, ?4, ?5, 'staff.joined', 'user', ?2, ?6, NULL WHERE ${mine}`, a.invitationId, a.userId, crypto.randomUUID(), a.at, a.createdBy, a.auditJoined),
   ]);
   return (res[0]?.meta?.changes ?? 0) === 1;
 }
@@ -82,8 +77,7 @@ export async function acceptInvitationAtomic(db: DB, a: Acceptance): Promise<boo
 // ---------- approval requests ----------
 export const getApproval = (db: DB, id: string) => one<ApprovalRequest>(db, "SELECT * FROM approval_requests WHERE id = ?1", id);
 export const listApprovals = (db: DB) => all<ApprovalRequest>(db, "SELECT * FROM approval_requests ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC LIMIT 300");
-export const createApproval = (db: DB, r: ApprovalRequest) => run(db, `INSERT INTO approval_requests (id, category, target_type, target_id, payload, reason, requested_by, approver, status, expires_at, created_at, updated_at)
-  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, ?10, ?10)`, r.id, r.category, r.target_type, r.target_id, r.payload, r.reason, r.requested_by, r.approver, r.expires_at, r.created_at);
+export const createApproval = (db: DB, r: ApprovalRequest) => run(db, `INSERT INTO approval_requests (id, category, target_type, target_id, payload, reason, requested_by, approver, status, expires_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, ?10, ?10)`, r.id, r.category, r.target_type, r.target_id, r.payload, r.reason, r.requested_by, r.approver, r.expires_at, r.created_at);
 // A decision other than approval: nothing will ever execute (execution_status stays not_applicable).
 export const decideApproval = (db: DB, id: string, to: "rejected" | "cancelled" | "expired", by: string | null, comment: string | null, at: string) =>
   run(db, "UPDATE approval_requests SET status = ?2, decided_by = ?3, decision_comment = ?4, decided_at = ?5, updated_at = ?5 WHERE id = ?1 AND status = 'pending'", id, to, by, comment, at);
@@ -95,26 +89,26 @@ export const approveRequest = (db: DB, id: string, by: string, comment: string |
 // was interrupted (still "executing" after staleBefore). Rejected, cancelled and expired requests can never be claimed.
 // Reclaiming replaces the claim id, so the earlier run can no longer pass its fence (fenceStmt) and cannot commit.
 export const claimExecution = (db: DB, id: string, by: string, at: string, staleBefore: string | null, claimId: string) =>
-  run(db, `UPDATE approval_requests SET execution_status = 'executing', execution_claim_id = ?5, execution_claimed_at = ?3, execution_claimed_by = ?2,
-      execution_attempts = execution_attempts + 1, updated_at = ?3
-    WHERE id = ?1 AND status = 'approved' AND (execution_status = 'awaiting_execution'
-      OR (?4 IS NOT NULL AND (execution_status = 'failed' OR (execution_status = 'executing' AND execution_claimed_at < ?4))))`, id, by, at, staleBefore, claimId);
+  run(db, `UPDATE approval_requests SET execution_status = 'executing', execution_claim_id = ?5, execution_claimed_at = ?3, execution_claimed_by = ?2, execution_attempts = execution_attempts + 1, updated_at = ?3 WHERE id = ?1 AND status = 'approved' AND (execution_status = 'awaiting_execution' OR (?4 IS NOT NULL AND (execution_status = 'failed' OR (execution_status = 'executing' AND execution_claimed_at < ?4))))`, id, by, at, staleBefore, claimId);
 
 // ---- fencing (Stage E.2): the statements that make an action commit only for the current claim ----
 const OWNS = "EXISTS (SELECT 1 FROM approval_requests WHERE id = ?2 AND status = 'approved' AND execution_status = 'executing' AND execution_claim_id = ?1)";
 // First statement of the batch. NOT NULL makes the whole batch roll back when this run no longer owns the claim; the
 // primary key makes a claim commit at most once.
 export const fenceStmt = (db: DB, claimId: string, approvalId: string, at: string) =>
-  stmt(db, `INSERT INTO execution_fences (claim_id, approval_id, owner_check, effect_check, committed_at)
-    SELECT ?1, ?2, CASE WHEN ${OWNS} THEN 'current' ELSE NULL END, 'pending', ?3`, claimId, approvalId, at);
+  stmt(db, `INSERT INTO execution_fences (claim_id, approval_id, owner_check, effect_check, committed_at) SELECT ?1, ?2, CASE WHEN ${OWNS} THEN 'current' ELSE NULL END, 'pending', ?3`, claimId, approvalId, at);
 // After the action's statements: rolls the whole batch back unless the intended result is in place (for example the
 // payment attempt really moved to "released" by this run). existsSql uses ?2, ?3, … for its own values.
 export const effectStmt = (db: DB, claimId: string, existsSql: string, ...binds: (string | number | null)[]) =>
   stmt(db, `UPDATE execution_fences SET effect_check = CASE WHEN EXISTS (${existsSql}) THEN 'confirmed' ELSE NULL END WHERE claim_id = ?1`, claimId, ...binds);
+// Stage E.3: the commit-time validation, right after the fence. `check` is a CASE expression from policy-sql.ts that is
+// 'validated' only when every rule still holds; otherwise it yields NULL into a NOT NULL column, which fails the
+// statement and rolls back the whole batch (a conditional UPDATE that matched no row would not).
+export const validateStmt = (db: DB, claimId: string, check: { sql: string; vals: (string | number | null)[] }) =>
+  stmt(db, `UPDATE execution_fences SET effect_check = ${check.sql} WHERE claim_id = ?1`, claimId, ...check.vals);
 // The completion, inside the same batch, for the claim that just passed its fence.
 export const completeStmt = (db: DB, approvalId: string, claimId: string, result: string, at: string) =>
-  stmt(db, `UPDATE approval_requests SET execution_status = 'completed', execution_result = ?3, executed_at = ?4, updated_at = ?4
-    WHERE id = ?1 AND execution_claim_id = ?2 AND execution_status = 'executing'`, approvalId, claimId, result, at);
+  stmt(db, `UPDATE approval_requests SET execution_status = 'completed', execution_result = ?3, executed_at = ?4, updated_at = ?4 WHERE id = ?1 AND execution_claim_id = ?2 AND execution_status = 'executing'`, approvalId, claimId, result, at);
 export const fenceFor = (db: DB, claimId: string) => one<{ claim_id: string; approval_id: string; committed_at: string }>(db, "SELECT * FROM execution_fences WHERE claim_id = ?1", claimId);
 export const fencesFor = (db: DB, approvalId: string) => all<{ claim_id: string; committed_at: string }>(db, "SELECT claim_id, committed_at FROM execution_fences WHERE approval_id = ?1 ORDER BY committed_at", approvalId);
 // Records a run's outcome other than a committed action (completed without changes, or failed), with its audit entry,
@@ -122,11 +116,9 @@ export const fencesFor = (db: DB, approvalId: string) => all<{ claim_id: string;
 export async function recordOutcome(db: DB, approvalId: string, claimId: string, outcome: "completed" | "failed", result: string, at: string,
   auditRow: { actor_id: string; action: string; detail: unknown; ip_hash: string | null }): Promise<boolean> {
   const res = await batch(db, [
-    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash)
-      SELECT ?3, ?4, ?5, ?6, 'approval_request', ?2, ?7, ?8 WHERE ${OWNS}`, claimId, approvalId, crypto.randomUUID(), at, auditRow.actor_id, auditRow.action,
+    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash) SELECT ?3, ?4, ?5, ?6, 'approval_request', ?2, ?7, ?8 WHERE ${OWNS}`, claimId, approvalId, crypto.randomUUID(), at, auditRow.actor_id, auditRow.action,
       JSON.stringify(auditRow.detail).slice(0, 2000), auditRow.ip_hash),
-    stmt(db, `UPDATE approval_requests SET execution_status = ?3, execution_result = ?4, executed_at = CASE WHEN ?3 = 'completed' THEN ?5 ELSE executed_at END, updated_at = ?5
-      WHERE id = ?2 AND execution_claim_id = ?1 AND execution_status = 'executing' AND status = 'approved'`, claimId, approvalId, outcome, result, at),
+    stmt(db, `UPDATE approval_requests SET execution_status = ?3, execution_result = ?4, executed_at = CASE WHEN ?3 = 'completed' THEN ?5 ELSE executed_at END, updated_at = ?5 WHERE id = ?2 AND execution_claim_id = ?1 AND execution_status = 'executing' AND status = 'approved'`, claimId, approvalId, outcome, result, at),
   ]);
   return (res[1]?.meta?.changes ?? 0) === 1;
 }
@@ -136,6 +128,4 @@ export const escalateApproval = (db: DB, id: string, at: string) =>
 export const historyFor = (db: DB, targetId: string) => all<{ at: string; action: string; actor_name: string | null; detail: string | null }>(db,
   "SELECT a.at, a.action, u.full_name AS actor_name, a.detail FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id WHERE a.target_id = ?1 ORDER BY a.at", targetId);
 export const accessHistory = (db: DB, userId: string) => all<{ at: string; action: string; actor_name: string | null; detail: string | null }>(db,
-  `SELECT a.at, a.action, u.full_name AS actor_name, a.detail FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
-   WHERE a.target_id = ?1 AND (a.action LIKE 'admin.%' OR a.action LIKE 'user.%' OR a.action LIKE 'owner.%' OR a.action LIKE 'staff.%' OR a.action LIKE 'invite.%' OR a.action LIKE 'auth.%')
-   ORDER BY a.at DESC LIMIT 200`, userId);
+  `SELECT a.at, a.action, u.full_name AS actor_name, a.detail FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id WHERE a.target_id = ?1 AND (a.action LIKE 'admin.%' OR a.action LIKE 'user.%' OR a.action LIKE 'owner.%' OR a.action LIKE 'staff.%' OR a.action LIKE 'invite.%' OR a.action LIKE 'auth.%') ORDER BY a.at DESC LIMIT 200`, userId);
