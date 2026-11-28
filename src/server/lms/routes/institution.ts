@@ -29,11 +29,10 @@ import {
   DEFAULT_APPROVALS, EVALUATED_ONLY, EXECUTABLE, appointHead, assertAssignable, assertOneDepartment, executeApproved, EXECUTION_STALE_MS, getApprovalPolicy, getInstitutionPolicy, mayDecide,
   openApproval, ruleFor, saveApprovalPolicy, saveInstitutionPolicy, type ApprovalPolicy, type Category, type CategoryRule, type InstitutionPolicy, type PaymentReleaseRule,
 } from "../institution";
-import { sendStaffInvitation, startSession } from "./auth";
+import { b64u, sendStaffInvitation, startSession } from "./auth";
 
 const INVITE_HOURS = 24;
 const SLUG = /^[a-z][a-z0-9-]{1,39}$/;
-const b64u = (n: number) => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(n)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const inviteHash = (token: string) => sha256(`i|${token}`);
 
 // ---------- who may manage what ----------

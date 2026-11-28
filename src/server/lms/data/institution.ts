@@ -33,16 +33,14 @@ export const headedBy = (db: DB, userId: string) => one<Assignment>(db, "SELECT 
 export const currentHead = (db: DB, slug: string) => one<Assignment>(db, "SELECT * FROM staff_assignments WHERE department_slug = ?1 AND position = 'head' AND ended_at IS NULL", slug);
 export const assignmentHistory = (db: DB, userId: string) => all<Assignment>(db, "SELECT * FROM staff_assignments WHERE user_id = ?1 ORDER BY created_at", userId);
 export const getAssignment = (db: DB, id: string) => one<Assignment>(db, "SELECT * FROM staff_assignments WHERE id = ?1", id);
-export const createAssignment = (db: DB, a: Omit<Assignment, "ended_at" | "ended_by" | "end_reason">) =>
-  run(db, "INSERT INTO staff_assignments (id, user_id, department_slug, position, reason, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-    a.id, a.user_id, a.department_slug, a.position, a.reason, a.created_at, a.created_by);
 export const createAssignmentStmt = (db: DB, a: Omit<Assignment, "ended_at" | "ended_by" | "end_reason">) =>
   stmt(db, "INSERT INTO staff_assignments (id, user_id, department_slug, position, reason, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     a.id, a.user_id, a.department_slug, a.position, a.reason, a.created_at, a.created_by);
 export const endAssignmentStmt = (db: DB, id: string, by: string, reason: string, at: string) =>
   stmt(db, "UPDATE staff_assignments SET ended_at = ?2, ended_by = ?3, end_reason = ?4 WHERE id = ?1 AND ended_at IS NULL", id, at, by, reason);
-export const endAssignment = (db: DB, id: string, by: string, reason: string, at: string) =>
-  run(db, "UPDATE staff_assignments SET ended_at = ?2, ended_by = ?3, end_reason = ?4 WHERE id = ?1 AND ended_at IS NULL", id, at, by, reason);
+// Plain forms of the statements above, for changes made on their own (one statement, one definition of the SQL).
+export const createAssignment = async (db: DB, a: Omit<Assignment, "ended_at" | "ended_by" | "end_reason">) => (await createAssignmentStmt(db, a).run()).meta.changes ?? 0;
+export const endAssignment = async (db: DB, id: string, by: string, reason: string, at: string) => (await endAssignmentStmt(db, id, by, reason, at).run()).meta.changes ?? 0;
 
 // ---------- invitations ----------
 export const listInvitations = (db: DB) => all<Invitation>(db, "SELECT * FROM staff_invitations ORDER BY created_at DESC LIMIT 300");

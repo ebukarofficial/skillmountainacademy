@@ -236,9 +236,6 @@ export class Repo {
     const sql = field === "reminder_sent_at" ? "UPDATE instalments SET reminder_sent_at = ?2 WHERE id = ?1" : "UPDATE instalments SET link_sent_at = ?2 WHERE id = ?1";
     return guard(() => this.db.prepare(sql).bind(id, at).run());
   }
-  cleanupRateLimits(beforeEpoch: number) {
-    return guard(() => this.db.prepare("DELETE FROM rate_limits WHERE window_start < ?1").bind(beforeEpoch).run());
-  }
 
   // ---------- holds ----------
   getHold(visitorHash: string, slug: string) {
