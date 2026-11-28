@@ -5,10 +5,11 @@ import { isBootstrapped } from "../data/owner";
 import { ApiError, nowIso } from "../../http";
 import { Checker } from "../../validate";
 import { ALL, notFound, ok, page, route, requireStrongAuth } from "../api";
-import { canSignIn, createUser, deleteUserSessions, getUser, getUserByEmail, listAudit, listUsers, updateUser, type Role, type User } from "../data/users";
+import { canSignIn, createUser, deleteUserSessions, revokeTokens, getUser, getUserByEmail, listAudit, listUsers, updateUser, type Role, type User } from "../data/users";
 import { adminView, selfView } from "../views";
 import { sendSignInLink } from "./auth";
 import { newStaffNo, newStudentNo } from "../ids";
+import { ruleFor } from "../institution";
 
 const ROLES: Role[] = ["student", "instructor", "admin"];
 
@@ -160,6 +161,18 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   // code (never an email link alone). Ordinary student and instructor edits are unaffected.
   if (adminRole !== undefined || (patch.role === "admin" && u.role !== "admin") || (u.role === "admin" && touchesAccount && u.id !== c.user.id))
     await requireStrongAuth(c, "admin.account_change", u.id);
+  // Stage E: a staff member's access (status, role or administrator group) changes only with a recorded reason, and,
+  // where the owner has switched on an approval rule, only through an approved request (the owner acts directly).
+  const groupChanging = adminRole !== undefined && adminRole !== (u.admin_role ?? null);
+  const reinstating = patch.status === "active" && u.status === "suspended";
+  const isStaff = u.role !== "student" || (patch.role !== undefined && patch.role !== "student");
+  const accessChange = isStaff && ((patch.status !== undefined && patch.status !== u.status) || (patch.role !== undefined && patch.role !== u.role) || groupChanging);
+  if (!c.isOwner && groupChanging && (await ruleFor(c.db, "staff_group_change")))
+    throw new ApiError(409, "approval_required", "Changing an administrator group needs approval. Submit an approval request instead.");
+  if (!c.isOwner && reinstating && isStaff && (await ruleFor(c.db, "staff_reinstatement")))
+    throw new ApiError(409, "approval_required", "Reactivating a suspended staff account needs approval. Submit an approval request instead.");
+  const reason = accessChange ? String(b.reason ?? "").trim().slice(0, 500) : "";
+  if (accessChange && !reason) throw new ApiError(400, "reason_required", "Give a reason for changing this staff member's access.");
   if (patch.role === "student" && !u.student_no) patch.student_no = await newStudentNo(c.db);
   if (patch.role === "admin" && !u.staff_no) patch.staff_no = (await newStaffNo(c.db, "admin")) ?? undefined;
   // Becoming an instructor means going through verification first (unless they were approved before).
@@ -171,7 +184,11 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   if (groupChanged || becameAdmin) await c.audit("admin.group_assigned", "user", u.id, { from: u.admin_role ?? null, to: adminRole ?? "reporting" });
   // Suspension, a role change or a new administrator group takes effect at once: every session of that person ends.
   if (patch.status === "suspended" || (patch.role && patch.role !== u.role) || groupChanged) await deleteUserSessions(c.db, u.id);
-  await c.audit("user.update", "user", u.id, { ...patch, ...(adminRole !== undefined ? { adminRole } : {}) });
+  // A suspended person's unused sign-in links stop working too.
+  if (patch.status === "suspended") await revokeTokens(c.db, u.id, nowIso());
+  await c.audit("user.update", "user", u.id, { ...patch, ...(adminRole !== undefined ? { adminRole } : {}), ...(reason ? { reason } : {}) });
+  if (accessChange) await c.audit("staff.access_changed", "user", u.id, { reason,
+    from: { status: u.status, role: u.role, adminRole: u.admin_role ?? null }, to: { status: patch.status ?? u.status, role: patch.role ?? u.role, adminRole: adminRole ?? (becameAdmin ? "reporting" : u.admin_role ?? null) } });
   return ok({ user: adminView((await getUser(c.db, u.id))!) });
 });
 

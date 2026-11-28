@@ -18,4 +18,5 @@ import "./routes/catalogue";
 import "./routes/capacity";
 import "./routes/pricing";
 import "./routes/payment-attempts";
+import "./routes/institution";
 export { handleLms } from "./api";

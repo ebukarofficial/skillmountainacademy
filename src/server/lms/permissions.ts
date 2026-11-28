@@ -121,6 +121,17 @@ const TABLE: [string, string, Area][] = [
   // Stage D.1.1: Finance reconciles uncertain Paystack checkout attempts (release also needs the authenticator code).
   ["GET", "/api/app/admin/payments/attempts", "finance"], ["POST", "/api/app/admin/payments/attempts/:id/check", "finance"],
   ["POST", "/api/app/admin/payments/attempts/:id/release", "finance"],
+  // Stage E: institution. "users" routes are further limited in their handlers to the owner, or a Super Administrator
+  // the owner has authorised by policy. Approvals are "any" because each handler checks the specific authority
+  // (requester, approver, owner); the department view shows a person only their own department.
+  ["GET", "/api/app/admin/institution", "users"], ["GET", "/api/app/admin/users/:id/access-history", "users"],
+  ["POST", "/api/app/admin/departments", "users"], ["PATCH", "/api/app/admin/departments/:slug", "users"],
+  ["POST", "/api/app/admin/departments/:slug/members", "users"], ["POST", "/api/app/admin/assignments/:id/end", "users"],
+  ["GET", "/api/app/admin/invitations", "users"], ["POST", "/api/app/admin/invitations", "users"], ["POST", "/api/app/admin/invitations/:id/revoke", "users"],
+  ["GET", "/api/app/admin/department", "any"],
+  ["GET", "/api/app/admin/approvals", "any"], ["GET", "/api/app/admin/approvals/:id", "any"], ["POST", "/api/app/admin/approvals", "any"],
+  ["POST", "/api/app/admin/approvals/:id/decision", "any"], ["POST", "/api/app/admin/approvals/:id/cancel", "any"], ["POST", "/api/app/admin/approvals/:id/escalate", "any"],
+  ["PUT", "/api/app/owner/institution-policy", "owner"], ["PUT", "/api/app/owner/approval-policy", "owner"],
 ];
 
 const MAP = new Map(TABLE.map(([m, p, a]) => [`${m} ${p}`, a]));

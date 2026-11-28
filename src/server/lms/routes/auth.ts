@@ -145,7 +145,15 @@ publicRoute("POST", "/api/auth/verify", async (c) => {
   const userId = await consumeToken(c.db, await sha256(`t|${token}`), now);
   const user = userId ? await getUser(c.db, userId) : null;
   if (!user || !canSignIn(user)) throw new ApiError(400, "invalid_link", "This sign-in link has expired or was already used. Please request a new one.");
-  // Session fixation: any session cookie the browser already had is discarded; the new token is generated here.
+  const { cookie, mfa } = await startSession(c, user, "auth.login");
+  return ok({ role: user.role, mfaRequired: mfa }, 200, { "set-cookie": cookie });
+});
+
+// Starts a session for a person who has just proved control of their email (a sign-in link or an accepted staff
+// invitation). Session fixation: any session cookie the browser already had is discarded; the new token is made here.
+// Administrators with an authenticator app get a session limited to the code check until they enter a code.
+export async function startSession(c: { db: D1Database; req: Request; env: Parameters<typeof policyFor>[1]; ipHash: string }, user: User, action: string) {
+  const now = nowIso();
   const old = getCookie(c.req, SESSION_COOKIE);
   if (old && old.length <= 200) await deleteSession(c.db, await sha256(`s|${old}`));
   const policy = policyFor(user.role, c.env);
@@ -154,9 +162,25 @@ publicRoute("POST", "/api/auth/verify", async (c) => {
   await createSession(c.db, { token_hash: await sha256(`s|${session}`), user_id: user.id, created_at: now, expires_at: new Date(Date.now() + policy.absoluteHours * 3600_000).toISOString(),
     last_seen_at: now, user_agent: (c.req.headers.get("user-agent") || "").slice(0, 200), mfa_pending: mfa ? 1 : 0 });
   await updateUser(c.db, user.id, { last_login_at: now });
-  await audit(c.db, { actor_id: user.id, action: mfa ? "auth.login.mfa_pending" : "auth.login", target_type: "user", target_id: user.id, ip_hash: c.ipHash });
-  return ok({ role: user.role, mfaRequired: !!mfa }, 200, { "set-cookie": sessionCookie(session, policy.absoluteHours * 3600) });
-});
+  await audit(c.db, { actor_id: user.id, action: mfa ? `${action}.mfa_pending` : action, target_type: "user", target_id: user.id, ip_hash: c.ipHash });
+  return { cookie: sessionCookie(session, policy.absoluteHours * 3600), mfa: !!mfa };
+}
+
+// Stage E staff invitation: one email to one person, with a single-use link that expires. The token is passed in by the
+// caller, which stores only its hash; it is never logged or returned by any API.
+export function sendStaffInvitation(env: Parameters<typeof sendEmail>[0], to: { email: string; fullName: string }, token: string, roleLabel: string, expiresAt: string) {
+  const site = siteUrl(env);
+  const link = `${site}/app/invite/?t=${token}`;
+  return sendEmail(env, {
+    to: to.email,
+    subject: "Your invitation to join Skill Mountain Academy staff",
+    html: layout(`Dear ${esc(to.fullName.split(" ")[0])}`, `<p>Skill Mountain Academy has invited you to join its staff as <b>${esc(roleLabel)}</b>.</p>
+      <p>Open the link below to review the invitation and accept or decline it. The link works once and expires on ${esc(new Date(expiresAt).toUTCString())}.</p>
+      ${button(link, "Review my invitation")}
+      <p style="opacity:.7;font-size:14px">If you were not expecting this, ignore this email. Nobody can join with your address without this link.</p>`,
+      { headline: "You are invited", kind: "admin" }),
+  });
+}
 
 publicRoute("POST", "/api/auth/logout", async (c) => {
   const t = getCookie(c.req, SESSION_COOKIE);
