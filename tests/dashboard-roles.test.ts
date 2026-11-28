@@ -170,8 +170,8 @@ test("14-16 owner email: the new address resolves to the EXISTING owner identity
     const old = await signIn(x, OLD);
     const st0 = await old.json<{ isOwner: boolean; state: string }>("GET", "/api/app/owner/status");
     assert.deepEqual([st0.isOwner, st0.state], [false, "mismatch"], "the former address is no longer the owner");
-    // The transition: same account, same id, same history.
-    for (const sql of ownerEmailTransitionSql(OLD, NEW, new Date().toISOString())) await db.prepare(sql).run();
+    // The transition (one atomic batch): same account, same id, same history.
+    await db.batch(ownerEmailTransitionSql(OLD, NEW, new Date().toISOString()).map((q) => db.prepare(q)));
     assert.equal((await old.send("GET", "/api/me")).status, 401, "the former address's sessions ended");
     const neu = await signIn(x, NEW);
     const me = await neu.json<{ user: { id: string; email: string } }>("GET", "/api/me");
@@ -189,9 +189,9 @@ test("14-16 owner email: the new address resolves to the EXISTING owner identity
     await new Promise((res) => setTimeout(res, 200));
     assert.equal(x.calls.slice(before).filter((c) => c.url.includes("api.resend.com") && c.body.includes(OLD)).length, 0, "no sign-in link for the former address");
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = ?1").bind(OLD).first<{ n: number }>())!.n, 0);
-    // The owner record is protected again, and running the transition twice changes nothing.
+    // The owner record is protected again, and a second run is refused and changes nothing.
     await assert.rejects(db.prepare("UPDATE owner_record SET email = 'x@example.com' WHERE id = 1").run(), /owner_record is fixed/);
-    for (const sql of ownerEmailTransitionSql(OLD, NEW, new Date().toISOString())) await db.prepare(sql).run();
+    await assert.rejects(db.batch(ownerEmailTransitionSql(OLD, NEW, new Date().toISOString()).map((q) => db.prepare(q))), /NOT NULL constraint failed: audit_log\.at/);
     assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'owner.email_transition'").first<{ n: number }>())!.n, 1, "idempotent");
     assert.equal((await neu.send("GET", "/api/me")).status, 200, "a second run ends no sessions");
   } finally { await x.dispose(); }
@@ -205,7 +205,7 @@ test("owner email transition refuses unsafe input and never takes over an existi
     const db = await x.db();
     await db.prepare("INSERT INTO users (id, email, role, status, full_name, created_at) VALUES ('o', 'old@example.com', 'admin', 'active', 'O', '2026-01-01'), ('someone', 'new@example.com', 'admin', 'active', 'S', '2026-01-01')").run();
     await db.prepare("INSERT INTO owner_record (id, user_id, email, bootstrapped_at) VALUES (1, 'o', 'old@example.com', '2026-01-01')").run();
-    for (const sql of ownerEmailTransitionSql("old@example.com", "new@example.com", new Date().toISOString())) await db.prepare(sql).run();
+    await assert.rejects(db.batch(ownerEmailTransitionSql("old@example.com", "new@example.com", new Date().toISOString()).map((q) => db.prepare(q))), /NOT NULL constraint failed: audit_log\.at/);
     const rec = await db.prepare("SELECT user_id, email FROM owner_record WHERE id = 1").first<{ user_id: string; email: string }>();
     assert.deepEqual(rec, { user_id: "o", email: "old@example.com" }, "the address belongs to someone else: nothing moved");
     assert.equal((await db.prepare("SELECT email FROM users WHERE id = 'o'").first<{ email: string }>())!.email, "old@example.com");
