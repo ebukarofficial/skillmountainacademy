@@ -6,7 +6,9 @@
 import { findProgramme } from "../../../../lib/config.ts";
 import { dueDays, lagosDate, planParts, priceNaira, type Plan } from "../../../../lib/pricing.ts";
 import { ApiError, nowIso, randomCode } from "../../http";
-import { Repo, type InstalmentRow, type OrderRow, type RegistrationRow } from "../../repo";
+import { orderIntegritySupported, Repo, type InstalmentRow, type OrderRow, type RegistrationRow } from "../../repo";
+import { buildSnapshot, countryCodeServer, getFxPolicy, quoteTuition, resolveCountry, snapshotProblems } from "../../pricing";
+import { readRates } from "../../routes/geo";
 import { Checker } from "../../validate";
 import { afterPayment } from "../../routes/payments";
 import { ok, route } from "../api";
@@ -72,7 +74,17 @@ route("POST", "/api/app/admin/admit", ["admin"], async (c) => {
     id: crypto.randomUUID(), order_id: order.id, seq: i + 1, amount_kobo: n * 100, due_date: lagosDate(now, days[i] ?? 0),
     reference: `${ref}-P${i + 1}`, status: "due", reminder_sent_at: null, link_sent_at: null, paid_at: null,
   }));
-  await repo.createRegistration({ people: [reg], order, instalments });
+  // Stage D.1: an admin admission is priced too (the local naira tuition, recorded by Admissions), so it carries the same
+  // complete pricing record, written in the same transaction as the order. No pricing record, no admission.
+  if (!(await orderIntegritySupported(db))) throw new ApiError(503, "registration_unavailable", "Admissions cannot record new orders until the database is updated (migrations 0012 and 0013).");
+  const [rates, fx] = await Promise.all([readRates(c.env), getFxPolicy(db)]);
+  const q = quoteTuition({ prog: p, totalNaira: total, plan, country: resolveCountry(countryCodeServer(country ?? ""), null), rates, fx });
+  const snapshot = buildSnapshot({ ...q, charge: { ...q.charge, available: true, reason: null } }, p, "admin_admission", plan);
+  const missing = snapshotProblems(snapshot);
+  if (missing.length) throw new ApiError(500, "pricing_snapshot_incomplete", `The pricing record is incomplete (${missing.join(", ")}). Nothing was saved.`);
+  await repo.createRegistration({ people: [reg], order, instalments, pricing: {
+    residence_country: snapshot.country.residence, ip_country: null, pricing_tier: q.tier, tuition_currency: q.tuition.currency, tuition_minor: q.tuition.minor,
+    charge_currency: "NGN", pricing_snapshot: JSON.stringify(snapshot), idempotency_key: null, request_fingerprint: null } });
   const note = reference ? `-${reference.replace(/[^\w-]/g, "").slice(0, 40)}` : "";
   for (const inst of instalments.slice(0, paidParts)) {
     await recordManualPayment(db, { id: crypto.randomUUID(), orderId: order.id, instalmentId: inst.id, ref: `BANK-${inst.reference}${note}`, amountKobo: inst.amount_kobo, paidAt: at });

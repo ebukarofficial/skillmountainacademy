@@ -2,12 +2,12 @@
 // the learner and the owner (Resend) and mirrors the registration to the Google Sheet. Payment starts in payments.ts.
 import { EDUCATION, ENGLISH, FLAGS, BANK, duration, type Programme } from "../../../lib/config.ts";
 import { assertLifecycleAllowsNew, resolveProgramme } from "../catalogue";
-import { getFxPolicy, ipCountry, quoteTuition, recordPricingSnapshot, resolveCountry, snapshotOf, validCountry, countryCodeServer } from "../pricing";
+import { buildSnapshot, getFxPolicy, ipCountry, quoteTuition, resolveCountry, snapshotProblems, validCountry, countryCodeServer } from "../pricing";
 import { dueDays, lagosDate, money, planParts, priceNaira, type Currency, type Plan } from "../../../lib/pricing.ts";
 import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
 import { ApiError, clientIp, json, nowIso, randomCode, readJson, sameOrigin } from "../http";
-import { Repo, type InstalmentRow, type OrderRow, type RegistrationRow } from "../repo";
+import { orderIntegritySupported, Repo, type InstalmentRow, type OrderRow, type RegistrationRow } from "../repo";
 import { verifyTurnstile } from "../turnstile";
 import { ipPseudonym } from "../privacy";
 import { Checker } from "../validate";
@@ -65,7 +65,22 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   if (rawLearner.countryCode && !validCountry(rawLearner.countryCode)) c.errors.push("Please choose a valid country of residence.");
   if (body.termsAccepted !== true) c.errors.push("Please accept the Terms and Conditions.");
   const members = readMembers(c, body.members, prog);
+  // Stage D.1: one key per checkout attempt (sent by the website). Optional for older pages, which then get no
+  // de-duplication of retries, exactly as before.
+  const idemKey = body.idempotencyKey == null || body.idempotencyKey === "" ? null : String(body.idempotencyKey);
+  if (idemKey !== null && !/^[A-Za-z0-9-]{16,100}$/.test(idemKey)) c.errors.push("Please refresh the page and try again.");
   c.done();
+
+  // The order can only be created on a database that holds its pricing record (migrations 0012 and 0013). Otherwise
+  // nothing is saved and nothing is charged (deploy order: migrate first, then the Worker).
+  if (!env.DB || !(await orderIntegritySupported(env.DB))) throw new ApiError(503, "registration_unavailable", "Registration is briefly unavailable while the system is updated. Please try again shortly or contact Admissions.");
+  const fingerprint = await sha256Hex(JSON.stringify({ programme: prog.slug, plan, method, email: learner.email.toLowerCase(), members: members.map((m) => m.email.toLowerCase()).sort() }));
+  // A retry of a request that already succeeded (same key) returns that order: no second order, no second payment.
+  // It is answered before the security check because a Turnstile token cannot be used twice.
+  if (idemKey) {
+    const prior = await repo.getOrderByIdempotencyKey(idemKey);
+    if (prior) return replay(env, repo, prior, fingerprint, prog);
+  }
 
   const ip = clientIp(req);
   await verifyTurnstile(env, body.turnstileToken, ip);
@@ -111,20 +126,71 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
     id: crypto.randomUUID(), order_id: order.id, seq: i + 1, amount_kobo: n * 100, due_date: lagosDate(now, days[i] ?? 0),
     reference: `${reference}-P${i + 1}`, status: "due", reminder_sent_at: null, link_sent_at: null, paid_at: null,
   }));
-  await repo.createRegistration({ people, order, instalments });
-  // Stage D snapshot (migration 0012). Best effort: on an older database the order is exactly as before.
-  await recordPricingSnapshot(env.DB, order.id, { residence: country.residence, network: country.network, tier: q.tier, tuitionCurrency: q.tuition.currency,
-    tuitionMinor: q.tuition.minor, snapshot: snapshotOf(q, prog) });
+  // Stage D.1: the complete pricing snapshot is checked BEFORE anything is written, then saved in the same order row,
+  // in the same D1 batch (one transaction) as the registration and the instalments: all of it, or none of it.
+  const snapshot = buildSnapshot(q, prog, "registration", plan);
+  const missing = snapshotProblems(snapshot);
+  if (missing.length) {
+    console.error("pricing snapshot incomplete", missing);
+    throw new ApiError(500, "pricing_snapshot_incomplete", "We could not prepare your registration. Nothing was saved or charged. Please try again or contact Admissions.");
+  }
+  try {
+    await repo.createRegistration({ people, order, instalments, pricing: {
+      residence_country: country.residence, ip_country: country.network, pricing_tier: q.tier, tuition_currency: q.tuition.currency, tuition_minor: q.tuition.minor,
+      charge_currency: "NGN", pricing_snapshot: JSON.stringify(snapshot), idempotency_key: idemKey, request_fingerprint: fingerprint } });
+  } catch (e) {
+    // Two identical requests at the same moment: the unique key lets only one order exist; the other answers with it.
+    if (idemKey && /UNIQUE/i.test(String((e as Error)?.message))) {
+      const prior = await repo.getOrderByIdempotencyKey(idemKey);
+      if (prior) return replay(env, repo, prior, fingerprint, prog);
+    }
+    console.error("registration not saved", e);
+    throw new ApiError(500, "registration_not_saved", "We could not save your registration. Nothing was saved or charged. Please try again.");
+  }
 
+  // Only now, with the order and its pricing record safely stored: emails, the sheet mirror and the payment.
   ctx.waitUntil(afterRegister(env, { prog, learner, order, instalments, members, terms }));
-
-  const pay = method === "paystack" ? await startPayment(env, order, instalments[0], learner.email, `${siteUrl(env)}/checkout/?p=${prog.slug}&ref=${reference}`) : null;
+  const pay = method === "paystack" ? await beginPayment(env, repo, order, instalments[0], learner.email, prog.slug) : null;
   return json({
     ok: true, reference, method, plan, totalNaira: total, regularNaira: prog.price, holdApplied: !!hold,
     parts: instalments.map((i) => ({ seq: i.seq, naira: i.amount_kobo / 100, due: i.due_date })),
     payNowNaira: parts[0], chargeCurrency: "NGN", displayCurrency: currency, fxRate: order.fx_rate, tier: q.tier, country: country.country,
     authorizationUrl: pay?.authorizationUrl ?? null, accessCode: pay?.accessCode ?? null,
     bank: method === "bank" ? BANK : null,
+  });
+}
+
+const sha256Hex = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+
+// Starts the Paystack payment for part 1 and keeps it on the order, so a retry reuses it instead of opening another.
+async function beginPayment(env: AppEnv, repo: Repo, order: OrderRow, inst: InstalmentRow, email: string, slug: string) {
+  const pay = await startPayment(env, order, inst, email, `${siteUrl(env)}/checkout/?p=${slug}&ref=${order.reference}`);
+  await repo.savePaymentInit(order.id, JSON.stringify({ reference: pay.reference, authorizationUrl: pay.authorizationUrl, accessCode: pay.accessCode, at: nowIso() }))
+    .catch((e) => console.error("payment init not stored", e));
+  return pay;
+}
+
+// The answer to a retried registration: the SAME order, exactly as stored. A key reused for a different request is refused.
+async function replay(env: AppEnv, repo: Repo, prior: OrderRow & { request_fingerprint: string | null; payment_init: string | null }, fingerprint: string, prog: Programme): Promise<Response> {
+  if (prior.request_fingerprint !== fingerprint) throw new ApiError(409, "idempotency_conflict", "This checkout was already used for a different registration. Please refresh the page and start again.");
+  const instalments = await repo.instalments(prior.id);
+  let pay: { authorizationUrl: string; accessCode: string } | null = null;
+  if (prior.method === "paystack" && instalments[0]?.status !== "paid") {
+    const saved = prior.payment_init ? (JSON.parse(prior.payment_init) as { authorizationUrl: string; accessCode: string }) : null;
+    if (saved) pay = saved;
+    else {
+      // The first attempt saved the order but could not start the payment: start it now, once.
+      const reg = await repo.getRegistration(prior.registration_id);
+      if (reg?.email) pay = await beginPayment(env, repo, prior, instalments[0], reg.email, prog.slug);
+    }
+  }
+  const snap = await repo.pricingSummary(prior.id);
+  return json({
+    ok: true, replayed: true, reference: prior.reference, method: prior.method, plan: prior.plan, totalNaira: prior.total_kobo / 100, regularNaira: prior.regular_kobo / 100, holdApplied: !!prior.hold_id,
+    parts: instalments.map((i) => ({ seq: i.seq, naira: i.amount_kobo / 100, due: i.due_date })),
+    payNowNaira: (instalments[0]?.amount_kobo ?? 0) / 100, chargeCurrency: "NGN", displayCurrency: prior.display_currency, fxRate: prior.fx_rate,
+    tier: snap?.pricing_tier ?? null, country: snap?.residence_country ?? snap?.ip_country ?? null,
+    authorizationUrl: pay?.authorizationUrl ?? null, accessCode: pay?.accessCode ?? null, bank: prior.method === "bank" ? BANK : null,
   });
 }
 

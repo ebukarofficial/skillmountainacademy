@@ -110,10 +110,38 @@ export function quoteTuition(a: { prog: Programme & { priceUsdCents?: number | n
     presentation: naira("naira_only", "International tuition has not been set for this programme; it is charged in naira. No exchange rate is available for a guide amount."), charge, fx: fxBase };
 }
 
-// The JSON stored on an order (no personal data beyond country codes).
-export const snapshotOf = (q: TuitionQuote, prog: Programme & { priceUsdCents?: number | null }) => JSON.stringify({
-  v: 1, at: nowIso(), programme: prog.slug, country: q.country, tier: q.tier, tuitionCurrency: q.tuitionCurrency, tuition: q.tuition,
-  presentation: { kind: q.presentation.kind, currency: q.presentation.currency, totalMinor: q.presentation.totalMinor }, charge: { provider: q.charge.provider, currency: q.charge.currency, totalNaira: q.charge.totalNaira },
-  catalogue: { localNaira: prog.price, internationalUsdCents: prog.priceUsdCents ?? null }, fx: q.fx,
-});
-
+// The JSON stored on an order (no personal data beyond country codes). Every field the owner listed for Stage D.1:
+// residence and network country, how the country was resolved, tier, tuition currency and amount, display currency and
+// amount, charge currency and amount, the catalogue prices used, and the exchange-rate source, time, calculation and rounding.
+export type PricingSnapshot = {
+  v: 2; at: string; flow: "registration" | "admin_admission"; programme: string; plan: Plan;
+  country: CountryResolution; tier: TuitionQuote["tier"]; tuitionCurrency: Currency; tuition: TuitionQuote["tuition"];
+  display: { kind: Presentation; currency: Currency; totalMinor: number };
+  charge: { provider: "Paystack"; currency: "NGN"; totalNaira: number; partsNaira: number[] };
+  catalogue: { localNaira: number; internationalUsdCents: number | null; appliedNaira: number };
+  fx: TuitionQuote["fx"];
+};
+export function buildSnapshot(q: TuitionQuote, prog: Programme & { priceUsdCents?: number | null }, flow: PricingSnapshot["flow"], plan: Plan): PricingSnapshot {
+  return {
+    v: 2, at: nowIso(), flow, programme: prog.slug, plan, country: q.country, tier: q.tier, tuitionCurrency: q.tuitionCurrency, tuition: q.tuition,
+    display: { kind: q.presentation.kind, currency: q.presentation.currency, totalMinor: q.presentation.totalMinor },
+    charge: { provider: q.charge.provider, currency: q.charge.currency, totalNaira: q.charge.totalNaira, partsNaira: q.charge.partsNaira },
+    catalogue: { localNaira: prog.price, internationalUsdCents: prog.priceUsdCents ?? null, appliedNaira: q.charge.totalNaira }, fx: q.fx,
+  };
+}
+// Anything missing makes the registration fail BEFORE anything is written or charged.
+export function snapshotProblems(s: PricingSnapshot): string[] {
+  const p: string[] = [];
+  const int = (n: unknown) => Number.isInteger(n) && (n as number) >= 0;
+  if (!s.programme) p.push("programme");
+  if (!["residence", "network", "none"].includes(s.country?.source)) p.push("country resolution");
+  if (!["local", "international", "international_legacy_ngn"].includes(s.tier)) p.push("tier");
+  if (!s.tuitionCurrency || !s.tuition?.currency || (s.tuition.status === "set" || s.tuition.status === "international_price_not_set" ? !int(s.tuition.minor) : false)) p.push("tuition");
+  if (!s.display?.currency || !int(s.display.totalMinor)) p.push("display");
+  if (s.charge?.currency !== "NGN" || !int(s.charge.totalNaira) || s.charge.totalNaira <= 0 || s.charge.partsNaira.reduce((a, b) => a + b, 0) !== s.charge.totalNaira) p.push("charge");
+  if (!int(s.catalogue?.localNaira)) p.push("catalogue prices");
+  const converted = s.display?.kind === "guide_from_naira" || (s.display?.kind === "international_tuition" && s.display.currency !== "USD");
+  if (converted && (!s.fx?.source || !s.fx.fetchedAt || !s.fx.rate || !s.fx.calculation)) p.push("exchange-rate details");
+  if (s.display?.kind === "international_tuition" && s.display.currency !== "USD" && !s.fx?.rounding) p.push("rounding policy");
+  return p;
+}

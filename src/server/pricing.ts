@@ -27,9 +27,3 @@ export function countryCodeServer(name: string): string | null {
     return COUNTRY_CODES.find((c) => dn.of(c)?.toLowerCase() === n) ?? null;
   } catch { return null; }
 }
-
-export async function recordPricingSnapshot(db: D1Database | undefined, orderId: string, s: { residence: string | null; network: string | null; tier: string; tuitionCurrency: string; tuitionMinor: number | null; snapshot: string }) {
-  if (!db) return false;
-  return db.prepare(`UPDATE orders SET residence_country = ?2, ip_country = ?3, pricing_tier = ?4, tuition_currency = ?5, tuition_minor = ?6, charge_currency = 'NGN', pricing_snapshot = ?7
-    WHERE id = ?1 AND pricing_snapshot IS NULL`).bind(orderId, s.residence, s.network, s.tier, s.tuitionCurrency, s.tuitionMinor, s.snapshot).run().then(() => true, () => false);
-}

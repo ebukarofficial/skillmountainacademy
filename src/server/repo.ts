@@ -36,6 +36,22 @@ const ORDER_COLS: (keyof OrderRow)[] = [
   "id", "reference", "created_at", "registration_id", "programme_slug", "plan", "method", "total_kobo", "regular_kobo", "hold_id",
   "group_size", "display_currency", "fx_rate", "fx_at", "status",
 ];
+// Stage D/D.1 (migrations 0012, 0013): the pricing record written with every new order.
+export type PricingRecord = {
+  residence_country: string | null; ip_country: string | null; pricing_tier: string; tuition_currency: string; tuition_minor: number | null;
+  charge_currency: "NGN"; pricing_snapshot: string; idempotency_key: string | null; request_fingerprint: string | null;
+};
+const PRICING_COLS: (keyof PricingRecord)[] = ["residence_country", "ip_country", "pricing_tier", "tuition_currency", "tuition_minor", "charge_currency", "pricing_snapshot", "idempotency_key", "request_fingerprint"];
+let integrityColumns: boolean | null = null;
+// Whether this database can hold the pricing record (0012 and 0013 applied). Checked once per Worker instance.
+export async function orderIntegritySupported(db: D1Database): Promise<boolean> {
+  if (integrityColumns) return true;
+  try {
+    const cols = (await db.prepare("SELECT name FROM pragma_table_info('orders')").all<{ name: string }>()).results.map((r) => r.name);
+    integrityColumns = ["pricing_snapshot", "idempotency_key", "request_fingerprint", "payment_init"].every((c) => cols.includes(c));
+  } catch { integrityColumns = false; }
+  return integrityColumns;
+}
 const INST_COLS: (keyof InstalmentRow)[] = ["id", "order_id", "seq", "amount_kobo", "due_date", "reference", "status", "reminder_sent_at", "link_sent_at", "paid_at"];
 
 const insert = (table: string, cols: string[]) => `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols.map((_, i) => `?${i + 1}`).join(", ")})`;
@@ -73,15 +89,31 @@ export class Repo {
   }
 
   // ---------- registrations, orders, instalments: written together in one atomic batch ----------
-  async createRegistration(b: { people: RegistrationRow[]; order: OrderRow; instalments: InstalmentRow[] }): Promise<void> {
+  // One D1 batch = one SQL transaction (Cloudflare D1: "Batched statements are SQL transactions ... it aborts or rolls back
+  // the entire sequence"). Stage D.1: the order's pricing record is part of the order row itself, so the registration,
+  // the order WITH its pricing snapshot, and the instalments are written together or not at all.
+  async createRegistration(b: { people: RegistrationRow[]; order: OrderRow; instalments: InstalmentRow[]; pricing?: PricingRecord }): Promise<void> {
+    const orderCols = [...ORDER_COLS, ...(b.pricing ? PRICING_COLS : [])];
+    const orderVals = [...ORDER_COLS.map((c) => b.order[c] ?? null), ...(b.pricing ? PRICING_COLS.map((c) => b.pricing![c] ?? null) : [])];
     const stmts = [
       ...b.people.map((r) => this.db.prepare(insert("registrations", REG_COLS)).bind(...REG_COLS.map((c) => r[c] ?? null))),
-      this.db.prepare(insert("orders", ORDER_COLS)).bind(...ORDER_COLS.map((c) => b.order[c] ?? null)),
+      this.db.prepare(insert("orders", orderCols as string[])).bind(...orderVals),
       ...b.instalments.map((i) => this.db.prepare(insert("instalments", INST_COLS)).bind(...INST_COLS.map((c) => i[c] ?? null))),
     ];
     await guard(() => this.db.batch(stmts));
   }
 
+  getOrderByIdempotencyKey(key: string) {
+    return guard(() => this.db.prepare("SELECT * FROM orders WHERE idempotency_key = ?1").bind(key).first<OrderRow & { request_fingerprint: string | null; payment_init: string | null }>());
+  }
+  pricingSummary(orderId: string) {
+    return guard(() => this.db.prepare("SELECT pricing_tier, residence_country, ip_country FROM orders WHERE id = ?1").bind(orderId).first<{ pricing_tier: string | null; residence_country: string | null; ip_country: string | null }>());
+  }
+  // Stores the first Paystack initialisation for an order; a second one never overwrites it.
+  async savePaymentInit(orderId: string, init: string): Promise<boolean> {
+    const r = await guard(() => this.db.prepare("UPDATE orders SET payment_init = ?2 WHERE id = ?1 AND payment_init IS NULL").bind(orderId, init).run());
+    return (r.meta.changes ?? 0) > 0;
+  }
   getOrderByReference(ref: string) {
     return guard(() => this.db.prepare("SELECT * FROM orders WHERE reference = ?1").bind(ref).first<OrderRow>());
   }

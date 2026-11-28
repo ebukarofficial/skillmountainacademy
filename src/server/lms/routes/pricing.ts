@@ -14,7 +14,15 @@ import { readRates } from "../../routes/geo";
 route("GET", "/api/app/admin/pricing/diagnostics", ["admin"], async (c) => {
   const [policy, rates, cat] = await Promise.all([getFxPolicy(c.db), readRates(c.env), publishedCatalogue(c.db)]);
   const check = fxUsable(policy, rates);
+  // Stage D.1 detection: orders without a pricing record created after the first order that has one. Always 0 when the
+  // atomic write works; anything else needs investigation (for example an older Worker running against this database).
+  const integrity = await c.db.prepare(`SELECT
+      (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NULL AND created_at >= (SELECT MIN(created_at) FROM orders WHERE pricing_snapshot IS NOT NULL)) AS without_snapshot,
+      (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NOT NULL) AS with_snapshot,
+      (SELECT COUNT(*) FROM orders WHERE method = 'paystack' AND pricing_snapshot IS NOT NULL AND payment_init IS NULL AND status = 'pending') AS paystack_not_started`)
+    .first<{ without_snapshot: number; with_snapshot: number; paystack_not_started: number }>().catch(() => null);
   return ok({
+    integrity,
     policy, check, knownSources: FX_SOURCES, refresh: "every day at 05:00 and 17:00 UTC (src/server/cron.ts)",
     rates: rates ? { source: rates.source, fetchedAt: rates.fetchedAt, base: rates.base, perNgn: rates.rates,
       crossFromUsd: { GBP: rates.rates.GBP / rates.rates.USD, EUR: rates.rates.EUR / rates.rates.USD } } : null,
