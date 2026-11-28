@@ -179,7 +179,7 @@ test("older database: no pricing record can be stored, so no order is created an
     await db.prepare("INSERT INTO registrations (id, role, created_at, programme_slug, terms, first_name, email) VALUES ('hr1','learner','2026-10-01T10:00:00Z','cloud','t','Hist','hist@example.com')").run();
     await db.prepare("INSERT INTO orders (id, reference, created_at, registration_id, programme_slug, plan, method, total_kobo, regular_kobo, group_size, display_currency, status) VALUES ('ho1','SMA-HIST0000001','2026-10-01T10:00:00Z','hr1','cloud','full','bank',45000000,45000000,1,'USD','pending')").run();
     const before = await db.prepare("SELECT * FROM orders WHERE id = 'ho1'").first();
-    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql"]);
+    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql"]);
     const afterRow = await db.prepare("SELECT * FROM orders WHERE id = 'ho1'").first<Record<string, unknown>>();
     for (const [k, v] of Object.entries(before!)) assert.equal(afterRow![k], v, k);
     assert.deepEqual([afterRow!.pricing_snapshot, afterRow!.idempotency_key, afterRow!.payment_init, afterRow!.charge_currency], [null, null, null, null]);

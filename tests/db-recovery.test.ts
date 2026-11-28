@@ -78,9 +78,9 @@ after(() => rmSync(ROOT, { recursive: true, force: true }));
 
 test("backup: complete logical export (schema, every row, indexes, triggers) with a timestamped name and a data-free manifest", () => {
   const r = backup(full, dir("bk"));
-  assert.match(basename(r.file), /^skillmountainacademy-db-\d{8}T\d{6}Z-m0015\.sql$/);
+  assert.match(basename(r.file), /^skillmountainacademy-db-\d{8}T\d{6}Z-m0016\.sql$/);
   const m = r.manifest;
-  assert.deepEqual([m.migration.latest, m.migration.applied], ["0015_institution.sql", 15]);
+  assert.deepEqual([m.migration.latest, m.migration.applied], ["0016_approval_execution.sql", 16]);
   assert.deepEqual([...m.triggers].sort(), ["audit_log_min_retention", "audit_log_no_update", "owner_record_no_delete", "owner_record_no_update"]);
   assert.equal(m.critical.owner_record_rows, 1);
   assert.equal(m.critical.owner_record_user_is_admin, 1);
@@ -216,12 +216,12 @@ test("schema mismatch: an older database is reported as older_schema; hand-made 
   const b = backup(at9, dir("bk9"));
   const r = verifyRestore(b.file, { reportFile: `${b.file}.restore-report.json` });
   assert.equal(r.ok, true);
-  assert.deepEqual([r.compatibility.status, r.compatibility.pending], ["older_schema", ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql"]]);
+  assert.deepEqual([r.compatibility.status, r.compatibility.pending], ["older_schema", ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql"]]);
   // Preflight on the 0009 database with its verified backup: 0010 and 0011 pending. The only failure is the open owner
   // decision on 0011 (Stage B: local and staging only until the owner approves it for production).
   const st = captureState(at9);
   const pf = preflight({ state: st, backupFile: b.file });
-  assert.deepEqual([pf.result, pf.pending], ["FAIL", ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql"]]);
+  assert.deepEqual([pf.result, pf.pending], ["FAIL", ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql"]]);
   assert.equal(pf.failures.length, 1, pf.failures.join(" | "));
   assert.match(pf.failures[0], /0011_catalogue\.sql needs the owner's decision/);
   // Someone created a table by hand: the schema no longer matches what migrations 0001-0009 produce.
@@ -237,7 +237,7 @@ test("rehearsal: pending migrations applied to an isolated copy of the backup; s
   assert.deepEqual(r.files.map((f) => f.name), readdirSync("migrations").filter((x) => x.endsWith(".sql")).sort(), "the rehearsed migration files are recorded with their hashes");
   assert.equal(r.backupSha256, sha256File(join(dir("bk9"), b)));
   assert.equal(r.ok, true, JSON.stringify(r.checks.filter((c) => !c.ok)));
-  assert.deepEqual([r.from, r.to, r.applied], ["0009_owner.sql", "0015_institution.sql", ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql"]]);
+  assert.deepEqual([r.from, r.to, r.applied], ["0009_owner.sql", "0016_approval_execution.sql", ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql"]]);
   assert.deepEqual(r.newTables.map((t) => t.table).sort(), ["approval_requests", "departments", "owner_record", "payment_attempts", "programme_drafts", "schools", "staff_assignments", "staff_invitations"]);
   assert.deepEqual(r.newTables.find((t) => t.table === "owner_record"), { table: "owner_record", rows: 1 }, "the Stage 2B bootstrap is carried into owner_record");
   assert.deepEqual([r.newTables.find((t) => t.table === "programme_drafts")!.rows, r.newTables.find((t) => t.table === "schools")!.rows], [21, 6], "2027 drafts and schools");
@@ -283,7 +283,7 @@ test("two-phase restore: phase A IDENTICAL to the backup; phase B (security rese
 test("rollback facts are gathered from a real database with read-only counts and drive the decision", () => {
   const applied = query(full, "SELECT name FROM d1_migrations ORDER BY id")[0].map((x) => String(x.name));
   const facts = gatherFacts(full, "0007_refinement.sql", applied);
-  assert.deepEqual(Object.keys(facts).sort(), ["bootstrap_only_in_owner_record", "catalogue_published_changes", "institution_rules_active", "mfa_pending_sessions", "orders_with_pricing_snapshot", "payment_attempts_open", "removed_accounts"]);
+  assert.deepEqual(Object.keys(facts).sort(), ["approval_executions_open", "bootstrap_only_in_owner_record", "catalogue_published_changes", "institution_rules_active", "mfa_pending_sessions", "orders_with_pricing_snapshot", "payment_attempts_open", "removed_accounts"]);
   assert.equal(facts.removed_accounts, 1, "the seeded removed instructor is counted");
   assert.equal(facts.bootstrap_only_in_owner_record, 1, "the seeded owner set-up exists only in owner_record");
   const d = decideRollback({ candidateExpected: "0007_refinement.sql", dbApplied: applied, facts, ownerSecurityException: "Owner" });

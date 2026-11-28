@@ -131,7 +131,7 @@ test("public: a database older than 0011 (production today) falls back to the bu
     const db = await old.db();
     await db.prepare("INSERT INTO users (id, email, role, full_name, status, created_at) VALUES ('s1','s1@example.com','student','S One','active','2026-01-01')").run();
     await db.prepare("INSERT INTO enrolments (id, student_id, programme_slug, status, started_at, created_at) VALUES ('e-old','s1','marketing','active','2026-01-01','2026-01-01')").run();
-    assert.deepEqual(await old.applyPending(), ["0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql"]);
+    assert.deepEqual(await old.applyPending(), ["0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql"]);
     assert.deepEqual({ ...(await db.prepare("SELECT training_months, internship_months FROM enrolments WHERE id = 'e-old'").first()) }, { training_months: 3, internship_months: 3 });
   } finally { await old.dispose(); }
 });

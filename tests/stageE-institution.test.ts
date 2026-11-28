@@ -184,8 +184,11 @@ test("6 invitations are unique, single-use and expire; the token is never stored
   assert.deepEqual([u.role, u.admin_role], ["admin", "admissions"]);
   assert.match(u.staff_no, /^SMA\/ADM\//);
   assert.deepEqual((await sql<{ department_slug: string; position: string }>("SELECT department_slug, position FROM staff_assignments WHERE user_id = ?1", uid)).map((a) => [a.department_slug, a.position]), [["academic", "staff"]]);
-  // Single use.
-  await expectErr(pub("/api/auth/invitations/accept", { token }), 400, "invalid_invitation");
+  // Single use. Stage E.1: a repeated acceptance is answered "already accepted, sign in", with no new account and no
+  // session (it used to be refused as invalid; either way the link gives nothing a second time).
+  const again = await pub("/api/auth/invitations/accept", { token });
+  assert.deepEqual([again.status, ((await again.clone().json()) as { signedIn: boolean; alreadyAccepted: boolean }).signedIn, again.headers.getSetCookie().length], [200, false, 0]);
+  assert.equal((await sql("SELECT 1 FROM users WHERE email = 'new.admissions@example.com'")).length, 1);
   await expectErr(pub("/api/auth/invitations/preview", { token }), 400, "invalid_invitation");
   // Expiry.
   const second = await invite(owner, { email: "late@example.com", fullName: "Late Comer", role: "instructor" });
@@ -280,7 +283,7 @@ test("11 approval lifecycle: request, approve, execute, with history", async () 
   assert.deepEqual([d.executed, d.approval.status, !!d.approval.executed_at], [true, "approved", true]);
   assert.equal((await sql<{ admin_role: string }>("SELECT admin_role FROM users WHERE id = ?1", ids.aca))[0].admin_role, "faculty");
   const h = await owner.json<{ history: { action: string }[] }>("GET", `/api/app/admin/approvals/${request.id}`);
-  assert.deepEqual(h.history.map((x) => x.action), ["approval.requested", "approval.approved", "approval.executed"]);
+  assert.deepEqual(h.history.map((x) => x.action), ["approval.requested", "approval.approved", "approval.execution_started", "approval.executed"]);
   const [ga] = await audits("admin.group_assigned", ids.aca).then((x) => x.slice(-1));
   assert.deepEqual([ga.d.requestedBy, ga.d.approvedBy, ga.d.approvalRequest], [ids.sup, ids.owner, request.id]);
   await expectErr(owner.send("POST", `/api/app/admin/approvals/${request.id}/decision`, { decision: "approve" }), 409, "decided");
