@@ -5,8 +5,8 @@ import { PROGRAMMES, duration, programmeName } from "../../../lib/config.ts";
 import { money } from "../../../lib/pricing.ts";
 import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
-import { ApiError, clientIp, json, nowIso, randomCode, sha256 } from "../http";
-import { Repo, type InstalmentRow, type OrderRow } from "../repo";
+import { ApiError, clientIp, json, nowIso, sha256 } from "../http";
+import { orderIntegritySupported, Repo, type InstalmentRow, type OrderRow, type PaymentAttempt } from "../repo";
 import { ipPseudonym } from "../privacy";
 import { button, esc, layout, letter, notice, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
@@ -20,24 +20,101 @@ const progName = (slug: string) => programmeName(slug);
 const INST_REF = /^(SMA-(?:BT-)?[A-Z0-9]{12}-P\d)(?:-[A-Z0-9]{4})?$/;
 export const instalmentRefOf = (paystackRef: string) => INST_REF.exec(paystackRef)?.[1] ?? null;
 
-export async function startPayment(env: AppEnv, order: OrderRow, inst: InstalmentRow, email: string, callbackUrl: string) {
+// ---------- Paystack checkout initialisation (Stage D.1.1) ----------
+// Paystack's API reference documents no idempotency header for /transaction/initialize; it requires a unique reference.
+// So every call goes through initiatePayment(): a durable claim in D1 (payment_attempts, one active attempt per instalment)
+// is taken BEFORE Paystack is called, and the reference is deterministic per attempt. Outcomes are classified:
+//   initialized  Paystack returned a checkout -> stored and reused by every retry
+//   failed       Paystack answered with a definite refusal (HTTP 4xx, status false, not a duplicate) -> a new attempt is allowed
+//   uncertain    timeout, network error, 5xx, unreadable answer, "duplicate reference", or a crash -> NO automatic new attempt;
+//                Finance reconciles it (check with Paystack, then release with a reason)
+export const CLAIM_TTL_MS = 120_000; // a claim older than this without a result is treated as uncertain
+const PAYSTACK_TIMEOUT_MS = 20_000;
+export type InitResult = { reference: string; authorizationUrl: string; accessCode: string; reused: boolean };
+type Outcome = { kind: "ok"; url: string; code: string } | { kind: "failed"; detail: string } | { kind: "uncertain"; detail: string };
+
+async function callInitialize(env: AppEnv, order: OrderRow, inst: InstalmentRow, email: string, callbackUrl: string, reference: string): Promise<Outcome> {
+  let r: Response;
+  try {
+    r = await fetch(`${PAYSTACK}/transaction/initialize`, {
+      method: "POST", signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
+      headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        email, amount: inst.amount_kobo, currency: "NGN", reference, callback_url: callbackUrl, channels: ["card", "bank_transfer", "ussd", "bank"],
+        metadata: { order_id: order.id, instalment_id: inst.id, part: inst.seq, programme: progName(order.programme_slug), order_reference: order.reference },
+      }),
+    });
+  } catch (e) {
+    return { kind: "uncertain", detail: `no answer from Paystack (${(e as Error)?.name ?? "error"})` };
+  }
+  const j = (await r.json().catch(() => null)) as { status?: boolean; message?: string; data?: { authorization_url?: string; access_code?: string } } | null;
+  if (r.ok && j?.status && j.data?.authorization_url) return { kind: "ok", url: j.data.authorization_url, code: j.data.access_code ?? "" };
+  const msg = String(j?.message ?? "").slice(0, 200);
+  if (r.status >= 400 && r.status < 500 && j && j.status === false && !/duplicate/i.test(msg)) return { kind: "failed", detail: `Paystack refused (${r.status}): ${msg}` };
+  return { kind: "uncertain", detail: `unclear answer from Paystack (${r.status}): ${msg || "unreadable"}` };
+}
+
+const NEEDS_CHECK = "We could not confirm whether your Paystack payment page was opened. To make sure you are never charged twice, our team is checking it. Please try again in a few minutes, pay by bank transfer, or contact Admissions.";
+
+export async function initiatePayment(env: AppEnv, repo: Repo, order: OrderRow, inst: InstalmentRow, email: string, callbackUrl: string): Promise<InitResult> {
   if (!env.PAYSTACK_SECRET_KEY) throw new ApiError(503, "not_configured", "Online payment is not set up yet.");
   if (inst.status === "paid") throw new ApiError(409, "already_paid", "This part is already paid. Thank you.");
-  const reference = `${inst.reference}-${randomCode(4)}`;
-  const r = await fetch(`${PAYSTACK}/transaction/initialize`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      email, amount: inst.amount_kobo, currency: "NGN", reference, callback_url: callbackUrl, channels: ["card", "bank_transfer", "ussd", "bank"],
-      metadata: { order_id: order.id, instalment_id: inst.id, part: inst.seq, programme: progName(order.programme_slug), order_reference: order.reference },
-    }),
-  });
-  const j = (await r.json().catch(() => ({}))) as { status?: boolean; message?: string; data?: { authorization_url: string; access_code: string } };
-  if (!r.ok || !j.status || !j.data) {
-    console.error("paystack initialize failed", r.status, j.message);
+  if (!order.id || !(await orderIntegritySupported(repo.db))) throw new ApiError(503, "payment_unavailable", "Online payment is briefly unavailable. Please try again shortly or contact Admissions.");
+  // No pricing record, no online payment (historical orders made before Stage D excepted).
+  const integrity = await repo.paymentIntegrity(order.id);
+  if (!integrity.ok) {
+    console.error("payment refused: order has no pricing record", order.reference);
+    throw new ApiError(409, "payment_blocked", "This order cannot be paid online. Please contact Admissions, who will check it with you.");
+  }
+  // An attempt is already active for this instalment.
+  const active = await repo.activeAttempt(inst.id);
+  if (active) return reuseOrRefuse(repo, active);
+  const attempt = await repo.nextAttemptNo(inst.id);
+  const reference = `${inst.reference}-A${String(attempt).padStart(3, "0")}`;
+  const id = crypto.randomUUID();
+  if (!(await repo.claimAttempt({ id, order_id: order.id, instalment_id: inst.id, attempt, reference, at: new Date().toISOString() }))) {
+    // Another request claimed it a moment ago (or took this attempt number): never call Paystack ourselves.
+    const now = await repo.activeAttempt(inst.id);
+    if (now) return reuseOrRefuse(repo, now);
+    throw new ApiError(409, "payment_in_progress", "Your payment is being prepared. Please wait a moment and try again.");
+  }
+  const out = await callInitialize(env, order, inst, email, callbackUrl, reference);
+  if (out.kind === "ok") {
+    // A failed write here does NOT mean Paystack failed: the checkout is valid and is returned. The claim then stays
+    // 'claimed', becomes 'uncertain' after CLAIM_TTL_MS, and is reconciled; no automatic second attempt is made.
+    await repo.moveAttempt(id, ["claimed"], "initialized", { authorization_url: out.url, access_code: out.code }).catch((e) => console.error("payment attempt not stored after Paystack success", reference, e));
+    return { reference, authorizationUrl: out.url, accessCode: out.code, reused: false };
+  }
+  if (out.kind === "failed") {
+    await repo.moveAttempt(id, ["claimed"], "failed", { detail: out.detail }).catch((e) => console.error("payment attempt state not stored", reference, e));
+    console.error("paystack initialize refused", reference, out.detail);
     throw new ApiError(502, "payment_start_failed", "We could not start the Paystack payment. Your registration is saved; please try again or choose bank transfer.");
   }
-  return { reference, authorizationUrl: j.data.authorization_url, accessCode: j.data.access_code };
+  await repo.moveAttempt(id, ["claimed"], "uncertain", { detail: out.detail }).catch((e) => console.error("payment attempt state not stored", reference, e));
+  console.error("paystack initialize uncertain", reference, out.detail);
+  throw new ApiError(502, "payment_needs_check", NEEDS_CHECK);
+}
+
+async function reuseOrRefuse(repo: Repo, a: PaymentAttempt): Promise<InitResult> {
+  if (a.state === "initialized" && a.authorization_url) return { reference: a.reference, authorizationUrl: a.authorization_url, accessCode: a.access_code ?? "", reused: true };
+  if (a.state === "claimed" && Date.now() - Date.parse(a.claimed_at) < CLAIM_TTL_MS)
+    throw new ApiError(409, "payment_in_progress", "Your payment is being prepared. Please wait a moment and try again.");
+  // A stale claim (the request that owned it never finished) or an uncertain attempt: never retried automatically.
+  if (a.state === "claimed") await repo.moveAttempt(a.id, ["claimed"], "uncertain", { detail: "claim expired without a recorded result" });
+  throw new ApiError(409, "payment_needs_check", NEEDS_CHECK);
+}
+
+// Read-only check of an attempt's reference with Paystack (used by Finance's reconciliation).
+export async function verifyReference(env: AppEnv, reference: string): Promise<{ known: boolean | null; status: string | null; amount: number | null; currency: string | null; detail: string }> {
+  try {
+    const r = await fetch(`${PAYSTACK}/transaction/verify/${encodeURIComponent(reference)}`, { headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}` }, signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS) });
+    const j = (await r.json().catch(() => null)) as { status?: boolean; message?: string; data?: { status?: string; amount?: number; currency?: string } } | null;
+    if (r.ok && j?.status && j.data) return { known: true, status: j.data.status ?? null, amount: j.data.amount ?? null, currency: j.data.currency ?? null, detail: String(j.message ?? "") };
+    // Paystack does not document the answer for an unknown reference: anything else is "not confirmed", never "absent".
+    return { known: null, status: null, amount: null, currency: null, detail: `${r.status}: ${String(j?.message ?? "unreadable").slice(0, 200)}` };
+  } catch (e) {
+    return { known: null, status: null, amount: null, currency: null, detail: `no answer from Paystack (${(e as Error)?.name ?? "error"})` };
+  }
 }
 
 async function hmacHex(alg: "SHA-512" | "SHA-256", key: string, data: string): Promise<string> {
@@ -129,7 +206,7 @@ export async function handleWebhook(req: Request, env: AppEnv, ctx: ExecutionCon
 }
 
 // Asks Paystack directly (used when the learner returns from Paystack before the webhook has arrived).
-async function verifyWithPaystack(env: AppEnv, repo: Repo, ctx: ExecutionContext, reference: string) {
+export async function verifyWithPaystack(env: AppEnv, repo: Repo, ctx: ExecutionContext, reference: string) {
   if (!env.PAYSTACK_SECRET_KEY) return;
   const r = await fetch(`${PAYSTACK}/transaction/verify/${encodeURIComponent(reference)}`, { headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}` } });
   if (!r.ok) return;
@@ -174,6 +251,12 @@ export async function handlePayLink(req: Request, env: AppEnv): Promise<Response
   const order = (await repo.getOrder(inst.order_id))!;
   if (inst.status === "paid") return Response.redirect(`${site}/checkout/?p=${order.programme_slug}&ref=${order.reference}`, 302);
   const reg = (await repo.getRegistration(order.registration_id))!;
-  const pay = await startPayment(env, order, inst, reg.email, `${site}/checkout/?p=${order.programme_slug}&ref=${order.reference}`);
-  return Response.redirect(pay.authorizationUrl, 302);
+  try {
+    const pay = await initiatePayment(env, repo, order, inst, reg.email, `${site}/checkout/?p=${order.programme_slug}&ref=${order.reference}`);
+    return Response.redirect(pay.authorizationUrl, 302);
+  } catch (e) {
+    if (e instanceof ApiError && ["payment_in_progress", "payment_needs_check", "payment_start_failed", "payment_unavailable", "payment_blocked"].includes(e.code))
+      return Response.redirect(`${site}/?notice=pay-unavailable`, 302);
+    throw e;
+  }
 }

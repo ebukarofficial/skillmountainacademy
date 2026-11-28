@@ -19,8 +19,10 @@ route("GET", "/api/app/admin/pricing/diagnostics", ["admin"], async (c) => {
   const integrity = await c.db.prepare(`SELECT
       (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NULL AND created_at >= (SELECT MIN(created_at) FROM orders WHERE pricing_snapshot IS NOT NULL)) AS without_snapshot,
       (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NOT NULL) AS with_snapshot,
-      (SELECT COUNT(*) FROM orders WHERE method = 'paystack' AND pricing_snapshot IS NOT NULL AND payment_init IS NULL AND status = 'pending') AS paystack_not_started`)
-    .first<{ without_snapshot: number; with_snapshot: number; paystack_not_started: number }>().catch(() => null);
+      (SELECT COUNT(*) FROM orders o WHERE o.method = 'paystack' AND o.pricing_snapshot IS NOT NULL AND o.status = 'pending'
+         AND NOT EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = o.id AND a.state = 'initialized')) AS paystack_not_started,
+      (SELECT COUNT(*) FROM payment_attempts WHERE state = 'uncertain') AS attempts_uncertain`)
+    .first<{ without_snapshot: number; with_snapshot: number; paystack_not_started: number; attempts_uncertain: number }>().catch(() => null);
   return ok({
     integrity,
     policy, check, knownSources: FX_SOURCES, refresh: "every day at 05:00 and 17:00 UTC (src/server/cron.ts)",

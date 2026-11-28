@@ -54,7 +54,7 @@ export function fxUsable(policy: FxPolicy, rates: Rates | null, now = Date.now()
 }
 
 // ---------- the quote ----------
-export type Presentation = "local" | "international_tuition" | "international_benchmark_fallback" | "guide_from_naira" | "naira_only";
+export type Presentation = "local" | "international_tuition" | "international_benchmark_fallback" | "guide_from_naira" | "naira_only" | "admin_recorded_naira";
 export type TuitionQuote = {
   country: CountryResolution; tier: "local" | "international" | "international_legacy_ngn"; tuitionCurrency: Currency;
   // The tuition that applies, in its own currency (minor units), when there is one.
@@ -120,9 +120,15 @@ export type PricingSnapshot = {
   charge: { provider: "Paystack"; currency: "NGN"; totalNaira: number; partsNaira: number[] };
   catalogue: { localNaira: number; internationalUsdCents: number | null; appliedNaira: number };
   fx: TuitionQuote["fx"];
+  // Stage D.1.1: the tuition decision actually approved for this order. "country_rule" = the approved country rules,
+  // applied by the server. Admin admissions record their own basis and approver; no pricing exception policy exists, so
+  // exception is always null (an admission that would need one is refused).
+  decision: { basis: "country_rule" | "local_tuition" | "naira_tuition_no_international_price"; approvedBy: string | null; exception: null; payableNaira: number };
 };
-export function buildSnapshot(q: TuitionQuote, prog: Programme & { priceUsdCents?: number | null }, flow: PricingSnapshot["flow"], plan: Plan): PricingSnapshot {
+export function buildSnapshot(q: TuitionQuote, prog: Programme & { priceUsdCents?: number | null }, flow: PricingSnapshot["flow"], plan: Plan,
+  decision: Omit<PricingSnapshot["decision"], "payableNaira" | "exception"> = { basis: "country_rule", approvedBy: null }): PricingSnapshot {
   return {
+    decision: { ...decision, exception: null, payableNaira: q.charge.totalNaira },
     v: 2, at: nowIso(), flow, programme: prog.slug, plan, country: q.country, tier: q.tier, tuitionCurrency: q.tuitionCurrency, tuition: q.tuition,
     display: { kind: q.presentation.kind, currency: q.presentation.currency, totalMinor: q.presentation.totalMinor },
     charge: { provider: q.charge.provider, currency: q.charge.currency, totalNaira: q.charge.totalNaira, partsNaira: q.charge.partsNaira },
@@ -143,5 +149,9 @@ export function snapshotProblems(s: PricingSnapshot): string[] {
   const converted = s.display?.kind === "guide_from_naira" || (s.display?.kind === "international_tuition" && s.display.currency !== "USD");
   if (converted && (!s.fx?.source || !s.fx.fetchedAt || !s.fx.rate || !s.fx.calculation)) p.push("exchange-rate details");
   if (s.display?.kind === "international_tuition" && s.display.currency !== "USD" && !s.fx?.rounding) p.push("rounding policy");
+  if (!s.decision || !["country_rule", "local_tuition", "naira_tuition_no_international_price"].includes(s.decision.basis) || s.decision.payableNaira !== s.charge?.totalNaira) p.push("tuition decision");
+  if (s.decision?.basis !== "country_rule" && !s.decision?.approvedBy) p.push("approving administrator");
+  // The recorded tuition must be what is payable: an NGN order must not claim an international tuition was applied.
+  if (s.flow === "admin_admission" && (s.tuition?.currency !== "NGN" || s.tuition.minor !== (s.charge?.totalNaira ?? -1) * 100 || s.tier === "international")) p.push("admission tuition consistency");
   return p;
 }

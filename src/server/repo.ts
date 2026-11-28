@@ -15,6 +15,10 @@ export type OrderRow = {
   method: "paystack" | "bank"; total_kobo: number; regular_kobo: number; hold_id: string | null; group_size: number;
   display_currency: string; fx_rate: number | null; fx_at: string | null; status: "pending" | "part_paid" | "paid" | "cancelled";
 };
+export type PaymentAttempt = {
+  id: string; order_id: string; instalment_id: string; attempt: number; reference: string; state: "claimed" | "initialized" | "failed" | "uncertain" | "released";
+  authorization_url: string | null; access_code: string | null; detail: string | null; claimed_at: string; updated_at: string; released_by: string | null; released_reason: string | null;
+};
 export type InstalmentRow = {
   id: string; order_id: string; seq: number; amount_kobo: number; due_date: string; reference: string;
   status: "due" | "paid" | "overdue"; reminder_sent_at: string | null; link_sent_at: string | null; paid_at: string | null;
@@ -48,7 +52,8 @@ export async function orderIntegritySupported(db: D1Database): Promise<boolean> 
   if (integrityColumns) return true;
   try {
     const cols = (await db.prepare("SELECT name FROM pragma_table_info('orders')").all<{ name: string }>()).results.map((r) => r.name);
-    integrityColumns = ["pricing_snapshot", "idempotency_key", "request_fingerprint", "payment_init"].every((c) => cols.includes(c));
+    const attempts = await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'payment_attempts'").first();
+    integrityColumns = !!attempts && ["pricing_snapshot", "idempotency_key", "request_fingerprint", "payment_init"].every((c) => cols.includes(c));
   } catch { integrityColumns = false; }
   return integrityColumns;
 }
@@ -109,10 +114,51 @@ export class Repo {
   pricingSummary(orderId: string) {
     return guard(() => this.db.prepare("SELECT pricing_tier, residence_country, ip_country FROM orders WHERE id = ?1").bind(orderId).first<{ pricing_tier: string | null; residence_country: string | null; ip_country: string | null }>());
   }
-  // Stores the first Paystack initialisation for an order; a second one never overwrites it.
-  async savePaymentInit(orderId: string, init: string): Promise<boolean> {
-    const r = await guard(() => this.db.prepare("UPDATE orders SET payment_init = ?2 WHERE id = ?1 AND payment_init IS NULL").bind(orderId, init).run());
+  // ---------- Stage D.1.1: Paystack checkout attempts (migration 0014) ----------
+  activeAttempt(instalmentId: string) {
+    return guard(() => this.db.prepare("SELECT * FROM payment_attempts WHERE instalment_id = ?1 AND state IN ('claimed', 'initialized', 'uncertain')").bind(instalmentId).first<PaymentAttempt>());
+  }
+  // Whether an order may be paid online: it has its pricing record, or it predates the first order that has one
+  // (a historical order, made before Stage D). Anything else is an order created outside the integrity path.
+  async paymentIntegrity(orderId: string) {
+    const r = await guard(() => this.db.prepare(`SELECT o.created_at, o.pricing_snapshot IS NOT NULL AS has_snapshot,
+        (SELECT MIN(created_at) FROM orders WHERE pricing_snapshot IS NOT NULL) AS boundary FROM orders o WHERE o.id = ?1`).bind(orderId).first<{ created_at: string; has_snapshot: number; boundary: string | null }>());
+    if (!r) return { ok: false, historical: false };
+    if (r.has_snapshot) return { ok: true, historical: false };
+    const historical = !r.boundary || r.created_at < r.boundary;
+    return { ok: historical, historical };
+  }
+  getAttempt(id: string) {
+    return guard(() => this.db.prepare("SELECT * FROM payment_attempts WHERE id = ?1").bind(id).first<PaymentAttempt>());
+  }
+  async nextAttemptNo(instalmentId: string) {
+    const r = await guard(() => this.db.prepare("SELECT COALESCE(MAX(attempt), 0) AS n FROM payment_attempts WHERE instalment_id = ?1").bind(instalmentId).first<{ n: number }>());
+    return (r?.n ?? 0) + 1;
+  }
+  // The claim: a single INSERT. The partial unique index rejects it when another attempt is active, so only one request
+  // can ever hold the right to call Paystack for an instalment. Returns false when someone else holds it.
+  async claimAttempt(a: { id: string; order_id: string; instalment_id: string; attempt: number; reference: string; at: string }): Promise<boolean> {
+    try {
+      await this.db.prepare("INSERT INTO payment_attempts (id, order_id, instalment_id, attempt, reference, state, claimed_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, 'claimed', ?6, ?6)")
+        .bind(a.id, a.order_id, a.instalment_id, a.attempt, a.reference, a.at).run();
+      return true;
+    } catch (e) {
+      if (/UNIQUE/i.test(String((e as Error)?.message))) return false;
+      throw e;
+    }
+  }
+  // Moves an attempt between states only from the expected state (compare-and-set). Returns whether it changed.
+  async moveAttempt(id: string, from: PaymentAttempt["state"][], to: PaymentAttempt["state"], f: { authorization_url?: string; access_code?: string; detail?: string; released_by?: string; released_reason?: string } = {}) {
+    const r = await guard(() => this.db.prepare(`UPDATE payment_attempts SET state = ?2, authorization_url = COALESCE(?3, authorization_url), access_code = COALESCE(?4, access_code),
+        detail = COALESCE(?5, detail), released_by = COALESCE(?6, released_by), released_reason = COALESCE(?7, released_reason), updated_at = ?8
+      WHERE id = ?1 AND state IN (SELECT value FROM json_each(?9))`)
+      .bind(id, to, f.authorization_url ?? null, f.access_code ?? null, f.detail ?? null, f.released_by ?? null, f.released_reason ?? null, new Date().toISOString(), JSON.stringify(from)).run());
     return (r.meta.changes ?? 0) > 0;
+  }
+  async listAttempts(states: string[]) {
+    const r = await guard(() => this.db.prepare(`SELECT a.*, o.reference AS order_reference, i.seq, i.amount_kobo, i.status AS instalment_status FROM payment_attempts a
+      JOIN orders o ON o.id = a.order_id JOIN instalments i ON i.id = a.instalment_id WHERE a.state IN (SELECT value FROM json_each(?1)) ORDER BY a.updated_at DESC LIMIT 200`).bind(JSON.stringify(states)).all());
+    return r.results;
   }
   getOrderByReference(ref: string) {
     return guard(() => this.db.prepare("SELECT * FROM orders WHERE reference = ?1").bind(ref).first<OrderRow>());

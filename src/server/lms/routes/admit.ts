@@ -3,7 +3,6 @@
 // parts already paid, then runs the normal after-payment steps: registration number, student account and
 // enrolment, admission confirmation email and the private access email. Prices always come from lib/config.ts.
 //   POST /api/app/admin/admit
-import { findProgramme } from "../../../../lib/config.ts";
 import { dueDays, lagosDate, planParts, priceNaira, type Plan } from "../../../../lib/pricing.ts";
 import { ApiError, nowIso, randomCode } from "../../http";
 import { orderIntegritySupported, Repo, type InstalmentRow, type OrderRow, type RegistrationRow } from "../../repo";
@@ -17,12 +16,13 @@ import { findEnrolment, updateEnrolment } from "../data/enrolments";
 import { recordManualPayment } from "../data/reports";
 import { programmeAdmissions } from "../admissions";
 import { requireAssignmentAllowed } from "../capacity";
-import { assertLifecycleAllowsNew } from "../../catalogue";
+import { assertLifecycleAllowsNew, resolveProgramme } from "../../catalogue";
 
 route("POST", "/api/app/admin/admit", ["admin"], async (c) => {
   const b = await c.body();
   const ch = new Checker();
-  const prog = findProgramme(String(b.programme ?? ""));
+  // Priced from the published catalogue (Stage B), so a programme published after the last build is admitted correctly.
+  const prog = await resolveProgramme(c.db, String(b.programme ?? ""));
   if (!prog) ch.errors.push("Please choose a programme.");
   const firstName = ch.req(b.firstName, "First name", 60);
   const surname = ch.req(b.surname, "Surname", 60);
@@ -31,7 +31,7 @@ route("POST", "/api/app/admin/admit", ["admin"], async (c) => {
   const country = ch.opt(b.country, 60);
   const plan = ch.oneOf(b.plan ?? "full", ["full", "parts"] as const, "the payment plan") as Plan;
   const paidParts = plan === "full" ? 1 : ch.int(b.paidParts ?? 1, 1, 3, "Parts already paid");
-  const progFor = findProgramme(String(b.programme ?? ""));
+  const progFor = prog;
   if (plan === "parts" && progFor?.fullPaymentOnly) ch.errors.push(`${progFor.name} is paid in full; it has no instalment plan.`);
   const reference = ch.opt(b.paymentReference, 100);
   const instructorId = b.instructorId ? String(b.instructorId) : null;
@@ -74,16 +74,26 @@ route("POST", "/api/app/admin/admit", ["admin"], async (c) => {
     id: crypto.randomUUID(), order_id: order.id, seq: i + 1, amount_kobo: n * 100, due_date: lagosDate(now, days[i] ?? 0),
     reference: `${ref}-P${i + 1}`, status: "due", reminder_sent_at: null, link_sent_at: null, paid_at: null,
   }));
-  // Stage D.1: an admin admission is priced too (the local naira tuition, recorded by Admissions), so it carries the same
-  // complete pricing record, written in the same transaction as the order. No pricing record, no admission.
-  if (!(await orderIntegritySupported(db))) throw new ApiError(503, "registration_unavailable", "Admissions cannot record new orders until the database is updated (migrations 0012 and 0013).");
+  // Stage D.1/D.1.1: an admin admission records the tuition decision ACTUALLY approved and the amount ACTUALLY payable
+  // (the local naira tuition), in the same transaction as the order. If the approved country rules would apply
+  // international tuition (a programme with a dollar price, learner resident outside NG, or no residence given),
+  // the admission is refused: there is no approved pricing exception and no international charging, so recording
+  // naira tuition would be a misleading financial record.
+  if (!(await orderIntegritySupported(db))) throw new ApiError(503, "registration_unavailable", "Admissions cannot record new orders until the database is updated (migrations 0012 to 0014).");
   const [rates, fx] = await Promise.all([readRates(c.env), getFxPolicy(db)]);
-  const q = quoteTuition({ prog: p, totalNaira: total, plan, country: resolveCountry(countryCodeServer(country ?? ""), null), rates, fx });
-  const snapshot = buildSnapshot({ ...q, charge: { ...q.charge, available: true, reason: null } }, p, "admin_admission", plan);
+  const residence = countryCodeServer(country ?? "");
+  const q = quoteTuition({ prog: p, totalNaira: total, plan, country: resolveCountry(residence, null), rates, fx });
+  if (q.tier === "international") throw new ApiError(409, "admission_pricing_not_permitted", residence
+    ? `${p.name} has international tuition for this learner's country of residence, which cannot be charged or recorded yet (no approved international charging or pricing exception). Nothing was saved.`
+    : `${p.name} has international tuition. Enter the learner's country of residence; international tuition cannot be recorded yet. Nothing was saved.`);
+  const basis = q.tier === "local" ? "local_tuition" as const : "naira_tuition_no_international_price" as const;
+  const snapshot = buildSnapshot({ ...q, tuition: { currency: "NGN", minor: total * 100, status: "set" },
+    presentation: { kind: "admin_recorded_naira", currency: "NGN", totalMinor: total * 100, partsMinor: q.charge.partsNaira.map((n) => n * 100), note: "Recorded by Admissions in naira." },
+    charge: { ...q.charge, available: true, reason: null } }, p, "admin_admission", plan, { basis, approvedBy: c.user.id });
   const missing = snapshotProblems(snapshot);
   if (missing.length) throw new ApiError(500, "pricing_snapshot_incomplete", `The pricing record is incomplete (${missing.join(", ")}). Nothing was saved.`);
   await repo.createRegistration({ people: [reg], order, instalments, pricing: {
-    residence_country: snapshot.country.residence, ip_country: null, pricing_tier: q.tier, tuition_currency: q.tuition.currency, tuition_minor: q.tuition.minor,
+    residence_country: snapshot.country.residence, ip_country: null, pricing_tier: q.tier, tuition_currency: "NGN", tuition_minor: total * 100,
     charge_currency: "NGN", pricing_snapshot: JSON.stringify(snapshot), idempotency_key: null, request_fingerprint: null } });
   const note = reference ? `-${reference.replace(/[^\w-]/g, "").slice(0, 40)}` : "";
   for (const inst of instalments.slice(0, paidParts)) {

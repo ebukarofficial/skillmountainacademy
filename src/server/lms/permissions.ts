@@ -118,6 +118,9 @@ const TABLE: [string, string, Area][] = [
   ["PUT", "/api/app/owner/capacity-policy", "owner"],
   // Stage D: pricing diagnostics (Finance reads them) and the owner's exchange-rate policy.
   ["GET", "/api/app/admin/pricing/diagnostics", "finance"], ["PUT", "/api/app/owner/fx-policy", "owner"],
+  // Stage D.1.1: Finance reconciles uncertain Paystack checkout attempts (release also needs the authenticator code).
+  ["GET", "/api/app/admin/payments/attempts", "finance"], ["POST", "/api/app/admin/payments/attempts/:id/check", "finance"],
+  ["POST", "/api/app/admin/payments/attempts/:id/release", "finance"],
 ];
 
 const MAP = new Map(TABLE.map(([m, p, a]) => [`${m} ${p}`, a]));

@@ -15,7 +15,7 @@ import { button, esc, letter, notice, sendEmail, table } from "../email";
 import { mirrorToSheet } from "../sheet";
 import { activeHoldFor } from "./hold";
 import { readRates } from "./geo";
-import { startPayment } from "./payments";
+import { initiatePayment } from "./payments";
 import { assertCanRegister } from "../lms/admissions";
 
 type Body = Record<string, unknown> & { learner?: Record<string, unknown>; members?: unknown };
@@ -162,13 +162,9 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
 
 const sha256Hex = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
 
-// Starts the Paystack payment for part 1 and keeps it on the order, so a retry reuses it instead of opening another.
-async function beginPayment(env: AppEnv, repo: Repo, order: OrderRow, inst: InstalmentRow, email: string, slug: string) {
-  const pay = await startPayment(env, order, inst, email, `${siteUrl(env)}/checkout/?p=${slug}&ref=${order.reference}`);
-  await repo.savePaymentInit(order.id, JSON.stringify({ reference: pay.reference, authorizationUrl: pay.authorizationUrl, accessCode: pay.accessCode, at: nowIso() }))
-    .catch((e) => console.error("payment init not stored", e));
-  return pay;
-}
+// Starts (or reuses) the Paystack checkout for part 1 through the concurrency-safe claim (payments.ts, Stage D.1.1).
+const beginPayment = (env: AppEnv, repo: Repo, order: OrderRow, inst: InstalmentRow, email: string, slug: string) =>
+  initiatePayment(env, repo, order, inst, email, `${siteUrl(env)}/checkout/?p=${slug}&ref=${order.reference}`);
 
 // The answer to a retried registration: the SAME order, exactly as stored. A key reused for a different request is refused.
 async function replay(env: AppEnv, repo: Repo, prior: OrderRow & { request_fingerprint: string | null; payment_init: string | null }, fingerprint: string, prog: Programme): Promise<Response> {
@@ -176,13 +172,9 @@ async function replay(env: AppEnv, repo: Repo, prior: OrderRow & { request_finge
   const instalments = await repo.instalments(prior.id);
   let pay: { authorizationUrl: string; accessCode: string } | null = null;
   if (prior.method === "paystack" && instalments[0]?.status !== "paid") {
-    const saved = prior.payment_init ? (JSON.parse(prior.payment_init) as { authorizationUrl: string; accessCode: string }) : null;
-    if (saved) pay = saved;
-    else {
-      // The first attempt saved the order but could not start the payment: start it now, once.
-      const reg = await repo.getRegistration(prior.registration_id);
-      if (reg?.email) pay = await beginPayment(env, repo, prior, instalments[0], reg.email, prog.slug);
-    }
+    // Reuses the stored checkout, waits for one in progress, or (after a definite refusal only) opens a new attempt.
+    const reg = await repo.getRegistration(prior.registration_id);
+    if (reg?.email) pay = await beginPayment(env, repo, prior, instalments[0], reg.email, prog.slug);
   }
   const snap = await repo.pricingSummary(prior.id);
   return json({
