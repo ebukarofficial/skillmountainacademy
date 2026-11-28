@@ -102,6 +102,11 @@ export const COMPAT: Record<string, MigrationCompat> = {
     checks: [{ id: "approval_executions_open", area: "data", description: "approved requests whose action is awaiting, running or failed (an older Worker cannot recover or display them)", onFail: "action",
       sql: "SELECT COUNT(*) AS n FROM approval_requests WHERE execution_status IN ('awaiting_execution', 'executing', 'failed')",
       remediation: "recover or close every approved request whose action has not completed before rolling back below 0016" }] },
+  "0017_execution_fencing.sql": { olderWorker: "check",
+    areas: { schema: "additive execution_claim_id column and execution_fences table", security: "an older Worker does not fence approved actions: a stale run could commit after a newer run took over" },
+    checks: [{ id: "approval_executions_running", area: "security", description: "approved requests whose action is running right now (an older Worker would not fence them)", onFail: "action",
+      sql: "SELECT COUNT(*) AS n FROM approval_requests WHERE execution_status = 'executing'",
+      remediation: "wait until no approved action is running (or reconcile interrupted ones) before rolling back below 0017" }] },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));

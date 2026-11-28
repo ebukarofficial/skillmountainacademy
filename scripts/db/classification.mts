@@ -41,6 +41,7 @@ export const CLASSIFICATION: Record<string, TableClass> = {
   staff_assignments: { class: "identity", note: "department membership and heads" },
   staff_invitations: { class: "identity", note: "invitation records; token stored as a hash" },
   approval_requests: { class: "identity", note: "administrative requests and decisions" },
+  execution_fences: { class: "security", note: "proof that an approved action committed, one row per committed run (Stage E.2)" },
   instalments: { class: "financial" },
   payments: { class: "financial" },
   webhook_events: { class: "financial", note: "payment-provider events already processed (prevents double crediting)" },
