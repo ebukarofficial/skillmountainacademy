@@ -16,8 +16,7 @@ export type Submission = { id: string; assignment_id: string; student_id: string
   score: number | null; feedback: string | null; graded_at: string | null; graded_by: string | null };
 export type AssignmentRow = Assignment & { programme_slug: string; sub_id: string | null; sub_text: string | null; sub_file_name: string | null; submitted_at: string | null;
   score: number | null; feedback: string | null; graded_at: string | null; student_name: string };
-const ASSIGNMENT_SELECT = `SELECT a.*, e.programme_slug, s.id AS sub_id, s.text AS sub_text, s.file_name AS sub_file_name, s.submitted_at, s.score, s.feedback, s.graded_at, u.full_name AS student_name
-  FROM assignments a JOIN enrolments e ON e.id = a.enrolment_id JOIN users u ON u.id = a.student_id LEFT JOIN submissions s ON s.assignment_id = a.id`;
+const ASSIGNMENT_SELECT = `SELECT a.*, e.programme_slug, s.id AS sub_id, s.text AS sub_text, s.file_name AS sub_file_name, s.submitted_at, s.score, s.feedback, s.graded_at, u.full_name AS student_name FROM assignments a JOIN enrolments e ON e.id = a.enrolment_id JOIN users u ON u.id = a.student_id LEFT JOIN submissions s ON s.assignment_id = a.id`;
 export const createAssignment = (db: DB, a: Assignment) => insert(db, "assignments", a);
 export const getAssignment = (db: DB, id: string) => one<AssignmentRow>(db, `${ASSIGNMENT_SELECT} WHERE a.id = ?1`, id);
 export const listAssignments = (db: DB, f: { studentId?: string; instructorId?: string; from?: string; to?: string; limit: number }) => all<AssignmentRow>(db,
@@ -39,8 +38,7 @@ export type Quiz = { id: string; student_id: string; instructor_id: string; enro
   duration_min: number | null; due_at: string; questions: string; max_score: number; created_at: string };
 export type Attempt = { id: string; quiz_id: string; student_id: string; started_at: string; submitted_at: string | null; answers: string | null; score: number | null; feedback: string | null; graded_at: string | null; graded_by: string | null };
 export type QuizRow = Quiz & { programme_slug: string; student_name: string; att_id: string | null; started_at: string | null; submitted_at: string | null; answers: string | null; score: number | null; feedback: string | null; graded_at: string | null };
-const QUIZ_SELECT = `SELECT q.*, e.programme_slug, u.full_name AS student_name, t.id AS att_id, t.started_at, t.submitted_at, t.answers, t.score, t.feedback, t.graded_at
-  FROM quizzes q JOIN enrolments e ON e.id = q.enrolment_id JOIN users u ON u.id = q.student_id LEFT JOIN quiz_attempts t ON t.quiz_id = q.id`;
+const QUIZ_SELECT = `SELECT q.*, e.programme_slug, u.full_name AS student_name, t.id AS att_id, t.started_at, t.submitted_at, t.answers, t.score, t.feedback, t.graded_at FROM quizzes q JOIN enrolments e ON e.id = q.enrolment_id JOIN users u ON u.id = q.student_id LEFT JOIN quiz_attempts t ON t.quiz_id = q.id`;
 export const createQuiz = (db: DB, q: Quiz) => insert(db, "quizzes", q);
 export const getQuiz = (db: DB, id: string) => one<QuizRow>(db, `${QUIZ_SELECT} WHERE q.id = ?1`, id);
 export const listQuizzes = (db: DB, f: { studentId?: string; instructorId?: string; limit: number }) => all<QuizRow>(db,
@@ -60,19 +58,4 @@ export const completedLessons = (db: DB, studentId: string) => all<{ lesson_id: 
 export const progressStats = (db: DB, studentId: string, enrolmentId: string, slug: string, now: string) => one<{
   lessons_total: number; lessons_done: number; assignments_total: number; assignments_submitted: number; assignments_overdue: number; assignment_pct: number | null;
   quizzes_total: number; quizzes_done: number; quiz_pct: number | null; assessment_pct: number | null; assessments_missed: number; attended: number; missed: number; cancelled: number; last_class: string | null;
-}>(db, `SELECT
-  (SELECT COUNT(*) FROM lessons l JOIN courses c ON c.id = l.course_id WHERE c.programme_slug = ?3) AS lessons_total,
-  (SELECT COUNT(*) FROM lesson_progress p JOIN lessons l ON l.id = p.lesson_id JOIN courses c ON c.id = l.course_id WHERE p.student_id = ?1 AND c.programme_slug = ?3) AS lessons_done,
-  (SELECT COUNT(*) FROM assignments WHERE enrolment_id = ?2) AS assignments_total,
-  (SELECT COUNT(*) FROM assignments a JOIN submissions s ON s.assignment_id = a.id WHERE a.enrolment_id = ?2) AS assignments_submitted,
-  (SELECT COUNT(*) FROM assignments a LEFT JOIN submissions s ON s.assignment_id = a.id WHERE a.enrolment_id = ?2 AND s.id IS NULL AND a.due_at < ?4) AS assignments_overdue,
-  (SELECT AVG(100.0 * s.score / a.max_score) FROM assignments a JOIN submissions s ON s.assignment_id = a.id WHERE a.enrolment_id = ?2 AND s.graded_at IS NOT NULL) AS assignment_pct,
-  (SELECT COUNT(*) FROM quizzes WHERE enrolment_id = ?2) AS quizzes_total,
-  (SELECT COUNT(*) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND t.submitted_at IS NOT NULL) AS quizzes_done,
-  (SELECT AVG(100.0 * t.score / q.max_score) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND q.kind = 'quiz' AND t.graded_at IS NOT NULL) AS quiz_pct,
-  (SELECT AVG(100.0 * t.score / q.max_score) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND q.kind = 'assessment' AND t.graded_at IS NOT NULL) AS assessment_pct,
-  (SELECT COUNT(*) FROM quizzes q LEFT JOIN quiz_attempts t ON t.quiz_id = q.id AND t.submitted_at IS NOT NULL WHERE q.enrolment_id = ?2 AND q.kind = 'assessment' AND q.due_at < ?4 AND t.id IS NULL) AS assessments_missed,
-  (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'completed') AS attended,
-  (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'missed') AS missed,
-  (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'cancelled') AS cancelled,
-  (SELECT MAX(starts_at) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'completed') AS last_class`, studentId, enrolmentId, slug, now);
+}>(db, `SELECT (SELECT COUNT(*) FROM lessons l JOIN courses c ON c.id = l.course_id WHERE c.programme_slug = ?3) AS lessons_total, (SELECT COUNT(*) FROM lesson_progress p JOIN lessons l ON l.id = p.lesson_id JOIN courses c ON c.id = l.course_id WHERE p.student_id = ?1 AND c.programme_slug = ?3) AS lessons_done, (SELECT COUNT(*) FROM assignments WHERE enrolment_id = ?2) AS assignments_total, (SELECT COUNT(*) FROM assignments a JOIN submissions s ON s.assignment_id = a.id WHERE a.enrolment_id = ?2) AS assignments_submitted, (SELECT COUNT(*) FROM assignments a LEFT JOIN submissions s ON s.assignment_id = a.id WHERE a.enrolment_id = ?2 AND s.id IS NULL AND a.due_at < ?4) AS assignments_overdue, (SELECT AVG(100.0 * s.score / a.max_score) FROM assignments a JOIN submissions s ON s.assignment_id = a.id WHERE a.enrolment_id = ?2 AND s.graded_at IS NOT NULL) AS assignment_pct, (SELECT COUNT(*) FROM quizzes WHERE enrolment_id = ?2) AS quizzes_total, (SELECT COUNT(*) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND t.submitted_at IS NOT NULL) AS quizzes_done, (SELECT AVG(100.0 * t.score / q.max_score) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND q.kind = 'quiz' AND t.graded_at IS NOT NULL) AS quiz_pct, (SELECT AVG(100.0 * t.score / q.max_score) FROM quizzes q JOIN quiz_attempts t ON t.quiz_id = q.id WHERE q.enrolment_id = ?2 AND q.kind = 'assessment' AND t.graded_at IS NOT NULL) AS assessment_pct, (SELECT COUNT(*) FROM quizzes q LEFT JOIN quiz_attempts t ON t.quiz_id = q.id AND t.submitted_at IS NOT NULL WHERE q.enrolment_id = ?2 AND q.kind = 'assessment' AND q.due_at < ?4 AND t.id IS NULL) AS assessments_missed, (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'completed') AS attended, (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'missed') AS missed, (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'cancelled') AS cancelled, (SELECT MAX(starts_at) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'completed') AS last_class`, studentId, enrolmentId, slug, now);

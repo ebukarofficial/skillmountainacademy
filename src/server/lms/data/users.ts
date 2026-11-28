@@ -30,9 +30,7 @@ export const updateUser = (db: DB, id: string, patch: Partial<User>) => update(d
 
 export function listUsers(db: DB, f: { role?: string; status?: string; q?: string; limit: number; offset: number }) {
   return all<User>(db,
-    `SELECT * FROM users WHERE (?1 IS NULL OR role = ?1) AND (?2 IS NULL OR status = ?2)
-       AND (?3 IS NULL OR email LIKE ?3 OR full_name LIKE ?3 OR student_no LIKE ?3)
-     ORDER BY created_at DESC LIMIT ?4 OFFSET ?5`,
+    `SELECT * FROM users WHERE (?1 IS NULL OR role = ?1) AND (?2 IS NULL OR status = ?2) AND (?3 IS NULL OR email LIKE ?3 OR full_name LIKE ?3 OR student_no LIKE ?3) ORDER BY created_at DESC LIMIT ?4 OFFSET ?5`,
     f.role ?? null, f.status ?? null, f.q ? `%${f.q}%` : null, f.limit, f.offset);
 }
 
@@ -68,15 +66,12 @@ export async function sessionWithUser(db: DB, hash: string): Promise<{ user: Use
   let legacy = false;
   try {
     row = await one<User & Record<string, unknown>>(db,
-      `SELECT u.*, s.created_at AS s_created_at, s.expires_at AS s_expires_at, s.last_seen_at AS s_last_seen_at,
-              s.last_activity_at AS s_last_activity_at, s.mfa_pending AS s_mfa_pending, s.mfa_verified_at AS s_mfa_verified_at
-       FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1`, hash);
+      `SELECT u.*, s.created_at AS s_created_at, s.expires_at AS s_expires_at, s.last_seen_at AS s_last_seen_at, s.last_activity_at AS s_last_activity_at, s.mfa_pending AS s_mfa_pending, s.mfa_verified_at AS s_mfa_verified_at FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1`, hash);
   } catch (e) {
     if (!isSchemaGap(e)) throw e;
     legacy = true;
     row = await one<User & Record<string, unknown>>(db,
-      `SELECT u.*, s.created_at AS s_created_at, s.expires_at AS s_expires_at, s.last_seen_at AS s_last_seen_at
-       FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1`, hash);
+      `SELECT u.*, s.created_at AS s_created_at, s.expires_at AS s_expires_at, s.last_seen_at AS s_last_seen_at FROM auth_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?1`, hash);
   }
   if (!row) return null;
   const session: SessionRow = {

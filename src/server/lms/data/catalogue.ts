@@ -34,8 +34,7 @@ export const getDraft = (db: DB, slug: string) => one<DraftRow>(db, "SELECT * FR
 
 // Public: published rows only. Raw D1 (no "learning platform" guard) so the caller can fall back on an older schema.
 export const publishedRows = (db: DB) => db.prepare(
-  `SELECT p.*, s.tab_label AS school_tab, s.tone AS school_tone FROM programmes p LEFT JOIN schools s ON s.slug = p.school_slug
-   WHERE p.status = 'published' AND p.price_kobo > 0 ORDER BY p.position, p.slug`).all<LiveRow & { school_tab: string | null; school_tone: string | null }>().then((r) => r.results);
+  `SELECT p.*, s.tab_label AS school_tab, s.tone AS school_tone FROM programmes p LEFT JOIN schools s ON s.slug = p.school_slug WHERE p.status = 'published' AND p.price_kobo > 0 ORDER BY p.position, p.slug`).all<LiveRow & { school_tab: string | null; school_tone: string | null }>().then((r) => r.results);
 export const retiredRows = (db: DB) => db.prepare("SELECT slug, name FROM programmes WHERE status = 'retired' ORDER BY slug").all<{ slug: string; name: string }>().then((r) => r.results);
 export const publicSchools = (db: DB) => db.prepare("SELECT slug, code, name, tab_label, tone, position FROM schools ORDER BY position, slug").all<SchoolRow>().then((r) => r.results);
 
@@ -43,8 +42,7 @@ const DRAFT_COLS = ["name", "school_slug", "blurb", "description", "learn_json",
   "price_usd_cents", "price_kobo", "level", "audience", "full_payment_only", "position"] as const;
 
 export async function insertDraft(db: DB, slug: string, f: DraftFields, by: string, at: string, source: string | null) {
-  return run(db, `INSERT INTO programme_drafts (slug, ${DRAFT_COLS.join(", ")}, source, created_at, updated_at, updated_by)
-    VALUES (?1, ${DRAFT_COLS.map((_, i) => `?${i + 2}`).join(", ")}, ?${DRAFT_COLS.length + 2}, ?${DRAFT_COLS.length + 3}, ?${DRAFT_COLS.length + 3}, ?${DRAFT_COLS.length + 4})
+  return run(db, `INSERT INTO programme_drafts (slug, ${DRAFT_COLS.join(", ")}, source, created_at, updated_at, updated_by) VALUES (?1, ${DRAFT_COLS.map((_, i) => `?${i + 2}`).join(", ")}, ?${DRAFT_COLS.length + 2}, ?${DRAFT_COLS.length + 3}, ?${DRAFT_COLS.length + 3}, ?${DRAFT_COLS.length + 4})
     ON CONFLICT(slug) DO NOTHING`, slug, ...DRAFT_COLS.map((c) => f[c]), source, at, by);
 }
 export async function updateDraft(db: DB, slug: string, f: DraftFields, by: string, at: string) {
@@ -56,16 +54,7 @@ export async function updateDraft(db: DB, slug: string, f: DraftFields, by: stri
 // clears the old crossed-out price; timed and group prices are kept as they were.
 export async function applyDraft(db: DB, d: DraftRow, tag: string, tone: string, by: string, at: string, priceChanged: boolean) {
   await batch(db, [
-    stmt(db, `INSERT INTO programmes (slug, name, price_kobo, training_months, internship_months, level, updated_at, school_slug, tag, tone, blurb, description, learn_json,
-        curriculum_json, final_project, audience, full_payment_only, price_usd_cents, status, published_at, position, created_at, updated_by)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, 'published', ?7, ?19, ?7, ?20)
-      ON CONFLICT(slug) DO UPDATE SET name = excluded.name, price_kobo = excluded.price_kobo, training_months = excluded.training_months,
-        internship_months = excluded.internship_months, level = excluded.level, updated_at = excluded.updated_at, school_slug = excluded.school_slug, tag = excluded.tag,
-        tone = excluded.tone, blurb = excluded.blurb, description = excluded.description, learn_json = excluded.learn_json, curriculum_json = excluded.curriculum_json,
-        final_project = excluded.final_project, audience = excluded.audience, full_payment_only = excluded.full_payment_only, price_usd_cents = excluded.price_usd_cents,
-        status = 'published', published_at = excluded.published_at, position = excluded.position, updated_by = excluded.updated_by,
-        was_kobo = CASE WHEN ?21 = 1 THEN NULL ELSE programmes.was_kobo END,
-        retired_at = NULL, retired_by = NULL, retired_reason = NULL`,
+    stmt(db, `INSERT INTO programmes (slug, name, price_kobo, training_months, internship_months, level, updated_at, school_slug, tag, tone, blurb, description, learn_json, curriculum_json, final_project, audience, full_payment_only, price_usd_cents, status, published_at, position, created_at, updated_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, 'published', ?7, ?19, ?7, ?20) ON CONFLICT(slug) DO UPDATE SET name = excluded.name, price_kobo = excluded.price_kobo, training_months = excluded.training_months, internship_months = excluded.internship_months, level = excluded.level, updated_at = excluded.updated_at, school_slug = excluded.school_slug, tag = excluded.tag, tone = excluded.tone, blurb = excluded.blurb, description = excluded.description, learn_json = excluded.learn_json, curriculum_json = excluded.curriculum_json, final_project = excluded.final_project, audience = excluded.audience, full_payment_only = excluded.full_payment_only, price_usd_cents = excluded.price_usd_cents, status = 'published', published_at = excluded.published_at, position = excluded.position, updated_by = excluded.updated_by, was_kobo = CASE WHEN ?21 = 1 THEN NULL ELSE programmes.was_kobo END, retired_at = NULL, retired_by = NULL, retired_reason = NULL`,
       d.slug, d.name, d.price_kobo, d.training_months, d.internship_months, d.level, at, d.school_slug, tag, tone, d.blurb, d.description, d.learn_json,
       d.curriculum_json, d.final_project, d.audience, d.full_payment_only, d.price_usd_cents, d.position, by, priceChanged ? 1 : 0),
     stmt(db, "DELETE FROM programme_drafts WHERE slug = ?1", d.slug),
@@ -99,8 +88,6 @@ export const snapshotEnrolmentDurations = (db: DB, enrolmentId: string, training
 
 // Stage C: a programme's lifecycle and admissions history, from the existing audit log (no second history store).
 export const programmeHistory = (db: DB, slug: string) => all<{ at: string; action: string; detail: string | null; actor_name: string | null }>(db,
-  `SELECT a.at, a.action, a.detail, u.full_name AS actor_name FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
-   WHERE a.target_id = ?1 AND (a.action LIKE 'catalogue.%' OR a.action LIKE 'admissions.%') ORDER BY a.at DESC LIMIT 200`, slug);
+  `SELECT a.at, a.action, a.detail, u.full_name AS actor_name FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id WHERE a.target_id = ?1 AND (a.action LIKE 'catalogue.%' OR a.action LIKE 'admissions.%') ORDER BY a.at DESC LIMIT 200`, slug);
 export const activeEnrolmentCounts = (db: DB) => all<{ programme_slug: string; active: number; paused: number; finished: number }>(db,
-  `SELECT programme_slug, SUM(status = 'active') AS active, SUM(status = 'paused') AS paused, SUM(status IN ('completed', 'withdrawn')) AS finished
-   FROM enrolments GROUP BY programme_slug`);
+  `SELECT programme_slug, SUM(status = 'active') AS active, SUM(status = 'paused') AS paused, SUM(status IN ('completed', 'withdrawn')) AS finished FROM enrolments GROUP BY programme_slug`);

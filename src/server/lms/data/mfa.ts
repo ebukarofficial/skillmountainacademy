@@ -12,8 +12,7 @@ export const activeFactor = async (db: DB, userId: string) => { const f = await 
 
 // A new pending secret replaces an earlier pending one, but never an active factor.
 export const savePendingFactor = (db: DB, userId: string, secretEnc: string, at: string) => run(db,
-  `INSERT INTO mfa_factors (user_id, secret_enc, status, created_at) VALUES (?1, ?2, 'pending', ?3)
-   ON CONFLICT(user_id) DO UPDATE SET secret_enc = excluded.secret_enc, created_at = excluded.created_at, last_step = NULL WHERE mfa_factors.status = 'pending'`,
+  `INSERT INTO mfa_factors (user_id, secret_enc, status, created_at) VALUES (?1, ?2, 'pending', ?3) ON CONFLICT(user_id) DO UPDATE SET secret_enc = excluded.secret_enc, created_at = excluded.created_at, last_step = NULL WHERE mfa_factors.status = 'pending'`,
   userId, secretEnc, at);
 export const activateFactor = (db: DB, userId: string, step: number, at: string) =>
   run(db, "UPDATE mfa_factors SET status = 'active', enabled_at = ?2, last_step = ?3 WHERE user_id = ?1 AND status = 'pending'", userId, at, step);

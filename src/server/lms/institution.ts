@@ -128,7 +128,7 @@ const EXECUTORS: Record<Category, Exec> = {
     const requester = await getUser(c.db, r.requested_by);
     if (!requester || !activeAccount(requester) || requester.role !== "admin" || !(rule?.allowedGroups as string[] | undefined)?.includes(requester.admin_role ?? ""))
       throw new ApiError(403, "forbidden", "The person who asked is no longer in a group the owner authorised to release payment attempts.");
-    return planRelease(c, r.target_id, { reason: r.reason, confirmedWithPaystack: p.confirmedWithPaystack === true, releasedBy: r.requested_by, approvedBy: c.user.id, approvalRequest: r.id, claimId });
+    return planRelease(c, r.target_id, { reason: r.reason, releasedBy: r.requested_by, approvedBy: c.user.id, approvalRequest: r.id, claimId });
   },
 };
 export const executorFor = (cat: string): Exec | null => (EXECUTABLE as readonly string[]).includes(cat) ? EXECUTORS[cat as Category] : null;

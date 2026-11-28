@@ -18,6 +18,8 @@ export type OrderRow = {
 export type PaymentAttempt = {
   id: string; order_id: string; instalment_id: string; attempt: number; reference: string; state: "claimed" | "initialized" | "failed" | "uncertain" | "released";
   authorization_url: string | null; access_code: string | null; detail: string | null; claimed_at: string; updated_at: string; released_by: string | null; released_reason: string | null;
+  // Stage E.4 (migration 0018)
+  version: number; verified_status: string | null; verified_at: string | null; verified_version: number | null; first_verified_at: string | null; outcome: "paid" | "reconcile" | null;
 };
 export type InstalmentRow = {
   id: string; order_id: string; seq: number; amount_kobo: number; due_date: string; reference: string;
@@ -84,9 +86,7 @@ export class Repo {
   async hit(key: string, limit: number, windowSec: number): Promise<boolean> {
     const start = Math.floor(Date.now() / 1000 / windowSec) * windowSec;
     const row = await guard(() => this.db.prepare(
-      `INSERT INTO rate_limits (key, window_start, count) VALUES (?1, ?2, 1)
-       ON CONFLICT(key) DO UPDATE SET count = CASE WHEN window_start = ?2 THEN count + 1 ELSE 1 END, window_start = ?2
-       RETURNING count`).bind(key, start).first<{ count: number }>());
+      `INSERT INTO rate_limits (key, window_start, count) VALUES (?1, ?2, 1) ON CONFLICT(key) DO UPDATE SET count = CASE WHEN window_start = ?2 THEN count + 1 ELSE 1 END, window_start = ?2 RETURNING count`).bind(key, start).first<{ count: number }>());
     return (row?.count ?? 1) <= limit;
   }
   async limitOrThrow(key: string, limit: number, windowSec: number): Promise<void> {
@@ -121,8 +121,7 @@ export class Repo {
   // Whether an order may be paid online: it has its pricing record, or it predates the first order that has one
   // (a historical order, made before Stage D). Anything else is an order created outside the integrity path.
   async paymentIntegrity(orderId: string) {
-    const r = await guard(() => this.db.prepare(`SELECT o.created_at, o.pricing_snapshot IS NOT NULL AS has_snapshot,
-        (SELECT MIN(created_at) FROM orders WHERE pricing_snapshot IS NOT NULL) AS boundary FROM orders o WHERE o.id = ?1`).bind(orderId).first<{ created_at: string; has_snapshot: number; boundary: string | null }>());
+    const r = await guard(() => this.db.prepare(`SELECT o.created_at, o.pricing_snapshot IS NOT NULL AS has_snapshot, (SELECT MIN(created_at) FROM orders WHERE pricing_snapshot IS NOT NULL) AS boundary FROM orders o WHERE o.id = ?1`).bind(orderId).first<{ created_at: string; has_snapshot: number; boundary: string | null }>());
     if (!r) return { ok: false, historical: false };
     if (r.has_snapshot) return { ok: true, historical: false };
     const historical = !r.boundary || r.created_at < r.boundary;
@@ -137,32 +136,41 @@ export class Repo {
   }
   // The claim: a single INSERT. The partial unique index rejects it when another attempt is active, so only one request
   // can ever hold the right to call Paystack for an instalment. Returns false when someone else holds it.
-  async claimAttempt(a: { id: string; order_id: string; instalment_id: string; attempt: number; reference: string; at: string }): Promise<boolean> {
+  // Stage E.4: null when the part may not get a new checkout at all (paid, or an attempt needs reconciliation; trigger).
+  async claimAttempt(a: { id: string; order_id: string; instalment_id: string; attempt: number; reference: string; at: string }): Promise<boolean | null> {
     try {
       await this.db.prepare("INSERT INTO payment_attempts (id, order_id, instalment_id, attempt, reference, state, claimed_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, 'claimed', ?6, ?6)")
         .bind(a.id, a.order_id, a.instalment_id, a.attempt, a.reference, a.at).run();
       return true;
     } catch (e) {
-      if (/UNIQUE/i.test(String((e as Error)?.message))) return false;
+      const m = String((e as Error)?.message);
+      if (/checkout_blocked/.test(m)) return null;
+      if (/UNIQUE/i.test(m)) return false;
       throw e;
     }
   }
   // Moves an attempt between states only from the expected state (compare-and-set). Returns whether it changed.
-  async moveAttempt(id: string, from: PaymentAttempt["state"][], to: PaymentAttempt["state"], f: { authorization_url?: string; access_code?: string; detail?: string; released_by?: string; released_reason?: string } = {}) {
-    const r = await guard(() => this.db.prepare(`UPDATE payment_attempts SET state = ?2, authorization_url = COALESCE(?3, authorization_url), access_code = COALESCE(?4, access_code),
-        detail = COALESCE(?5, detail), released_by = COALESCE(?6, released_by), released_reason = COALESCE(?7, released_reason), updated_at = ?8
-      WHERE id = ?1 AND state IN (SELECT value FROM json_each(?9))`)
-      .bind(id, to, f.authorization_url ?? null, f.access_code ?? null, f.detail ?? null, f.released_by ?? null, f.released_reason ?? null, new Date().toISOString(), JSON.stringify(from)).run());
+  async moveAttempt(id: string, from: PaymentAttempt["state"][], to: PaymentAttempt["state"], f: { authorization_url?: string; access_code?: string; detail?: string } = {}) {
+    const r = await guard(() => this.db.prepare(`UPDATE payment_attempts SET state = ?2, authorization_url = COALESCE(?3, authorization_url), access_code = COALESCE(?4, access_code), detail = COALESCE(?5, detail), updated_at = ?6 WHERE id = ?1 AND state IN (SELECT value FROM json_each(?7))`)
+      .bind(id, to, f.authorization_url ?? null, f.access_code ?? null, f.detail ?? null, new Date().toISOString(), JSON.stringify(from)).run());
     return (r.meta.changes ?? 0) > 0;
   }
-  // Stage E.2: the release as a statement, so an approved release commits in one batch with its fence and audit record.
-  releaseStmt(id: string, by: string, reason: string, at: string) {
-    return this.db.prepare("UPDATE payment_attempts SET state = 'released', released_by = ?2, released_reason = ?3, updated_at = ?4 WHERE id = ?1 AND state IN ('uncertain', 'claimed')")
-      .bind(id, by, reason, at);
+  // Stage E.4: only the version this worker verified (a trigger also refuses unless the evidence is definite and settled).
+  releaseStmt(id: string, by: string, reason: string, at: string, version: number) {
+    return this.db.prepare("UPDATE payment_attempts SET state = 'released', released_by = ?2, released_reason = ?3, updated_at = ?4 WHERE id = ?1 AND state IN ('uncertain', 'claimed') AND version = ?5")
+      .bind(id, by, reason, at, version);
+  }
+  // Stage E.4: stores Paystack's answer for the version that was read (compare-and-set); null if the attempt changed or
+  // already has an outcome. A definite non-success answer extends the run; anything else ends it.
+  evidence(id: string, version: number, status: string, at: string) {
+    return guard(() => this.db.prepare(`UPDATE payment_attempts SET verified_status = ?3, verified_at = ?4, version = version + 1, verified_version = version + 1, first_verified_at = CASE WHEN ?3 IN ('failed', 'abandoned') THEN CASE WHEN verified_status IN ('failed', 'abandoned') THEN COALESCE(first_verified_at, ?4) ELSE ?4 END END WHERE id = ?1 AND version = ?2 AND outcome IS NULL RETURNING *`).bind(id, version, status, at).first<PaymentAttempt>());
+  }
+  // A successful charge that cannot be recorded as a normal payment (wrong amount or currency): a person must look at it.
+  flagAttempt(reference: string) {
+    return this.db.prepare("UPDATE payment_attempts SET outcome = 'reconcile' WHERE reference = ?1 AND outcome IS NULL").bind(reference).run();
   }
   async listAttempts(states: string[]) {
-    const r = await guard(() => this.db.prepare(`SELECT a.*, o.reference AS order_reference, i.seq, i.amount_kobo, i.status AS instalment_status FROM payment_attempts a
-      JOIN orders o ON o.id = a.order_id JOIN instalments i ON i.id = a.instalment_id WHERE a.state IN (SELECT value FROM json_each(?1)) ORDER BY a.updated_at DESC LIMIT 200`).bind(JSON.stringify(states)).all());
+    const r = await guard(() => this.db.prepare(`SELECT a.*, o.reference AS order_reference, i.seq, i.amount_kobo, i.status AS instalment_status FROM payment_attempts a JOIN orders o ON o.id = a.order_id JOIN instalments i ON i.id = a.instalment_id WHERE a.state IN (SELECT value FROM json_each(?1)) ORDER BY a.updated_at DESC LIMIT 200`).bind(JSON.stringify(states)).all());
     return r.results;
   }
   getOrderByReference(ref: string) {
@@ -195,13 +203,10 @@ export class Repo {
   async recordPayment(p: { id: string; orderId: string; instalmentId: string; providerRef: string; amountKobo: number; currency: string; paidAt: string; eventId: string }): Promise<boolean> {
     const res = await guard(() => this.db.batch([
       this.db.prepare("INSERT INTO webhook_events (id, received_at) VALUES (?1, ?2) ON CONFLICT(id) DO NOTHING").bind(p.eventId, p.paidAt),
-      this.db.prepare(`INSERT INTO payments (id, order_id, instalment_id, provider, provider_ref, amount_kobo, currency, status, paid_at, created_at)
-        VALUES (?1, ?2, ?3, 'paystack', ?4, ?5, ?6, 'success', ?7, ?7) ON CONFLICT(provider_ref) DO NOTHING`)
+      this.db.prepare(`INSERT INTO payments (id, order_id, instalment_id, provider, provider_ref, amount_kobo, currency, status, paid_at, created_at) VALUES (?1, ?2, ?3, 'paystack', ?4, ?5, ?6, 'success', ?7, ?7) ON CONFLICT(provider_ref) DO NOTHING`)
         .bind(p.id, p.orderId, p.instalmentId, p.providerRef, p.amountKobo, p.currency, p.paidAt),
       this.db.prepare("UPDATE instalments SET status = 'paid', paid_at = ?2 WHERE id = ?1 AND status != 'paid'").bind(p.instalmentId, p.paidAt),
-      this.db.prepare(`UPDATE orders SET status = CASE
-          WHEN (SELECT COUNT(*) FROM instalments WHERE order_id = ?1 AND status != 'paid') = 0 THEN 'paid' ELSE 'part_paid' END
-        WHERE id = ?1`).bind(p.orderId),
+      this.db.prepare(`UPDATE orders SET status = CASE WHEN (SELECT COUNT(*) FROM instalments WHERE order_id = ?1 AND status != 'paid') = 0 THEN 'paid' ELSE 'part_paid' END WHERE id = ?1`).bind(p.orderId),
     ]));
     return (res[1].meta.changes ?? 0) > 0;
   }
@@ -212,19 +217,13 @@ export class Repo {
   // Bank-transfer orders are confirmed by hand in the Google Sheet, so they are left out.
   async instalmentsToNotify(today: string, reminderDay: string, limit: number) {
     const r = await guard(() => this.db.prepare(
-      `SELECT i.*, o.reference AS order_reference, o.programme_slug, r.email, r.first_name
-       FROM instalments i JOIN orders o ON o.id = i.order_id JOIN registrations r ON r.id = o.registration_id
-       WHERE i.status IN ('due', 'overdue') AND i.seq > 1 AND o.method = 'paystack' AND o.status != 'cancelled' AND o.status != 'pending'
-         AND ((i.due_date <= ?1 AND i.link_sent_at IS NULL) OR (i.due_date = ?2 AND i.reminder_sent_at IS NULL))
-       ORDER BY i.due_date LIMIT ?3`).bind(today, reminderDay, limit).all<InstalmentRow & { order_reference: string; programme_slug: string; email: string; first_name: string }>());
+      `SELECT i.*, o.reference AS order_reference, o.programme_slug, r.email, r.first_name FROM instalments i JOIN orders o ON o.id = i.order_id JOIN registrations r ON r.id = o.registration_id WHERE i.status IN ('due', 'overdue') AND i.seq > 1 AND o.method = 'paystack' AND o.status != 'cancelled' AND o.status != 'pending' AND ((i.due_date <= ?1 AND i.link_sent_at IS NULL) OR (i.due_date = ?2 AND i.reminder_sent_at IS NULL)) ORDER BY i.due_date LIMIT ?3`).bind(today, reminderDay, limit).all<InstalmentRow & { order_reference: string; programme_slug: string; email: string; first_name: string }>());
     return r.results;
   }
   // Parts more than 14 days late (for the owner's daily digest).
   async longOverdue(beforeDate: string) {
     const r = await guard(() => this.db.prepare(
-      `SELECT i.reference, i.amount_kobo, i.due_date, r.email, r.first_name, o.programme_slug
-       FROM instalments i JOIN orders o ON o.id = i.order_id JOIN registrations r ON r.id = o.registration_id
-       WHERE i.status = 'overdue' AND i.due_date < ?1 ORDER BY i.due_date LIMIT 100`).bind(beforeDate)
+      `SELECT i.reference, i.amount_kobo, i.due_date, r.email, r.first_name, o.programme_slug FROM instalments i JOIN orders o ON o.id = i.order_id JOIN registrations r ON r.id = o.registration_id WHERE i.status = 'overdue' AND i.due_date < ?1 ORDER BY i.due_date LIMIT 100`).bind(beforeDate)
       .all<{ reference: string; amount_kobo: number; due_date: string; email: string; first_name: string; programme_slug: string }>());
     return r.results;
   }
@@ -251,9 +250,7 @@ export class Repo {
   // Starts a hold, or restarts one whose 7-day cooldown has passed.
   async upsertHold(h: HoldRow): Promise<void> {
     await guard(() => this.db.prepare(
-      `INSERT INTO holds (id, visitor_hash, ip_hash, programme_slug, started_at, expires_at, cooldown_until) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-       ON CONFLICT(visitor_hash, programme_slug) DO UPDATE SET id = excluded.id, ip_hash = excluded.ip_hash, started_at = excluded.started_at,
-         expires_at = excluded.expires_at, cooldown_until = excluded.cooldown_until WHERE holds.cooldown_until <= excluded.started_at`)
+      `INSERT INTO holds (id, visitor_hash, ip_hash, programme_slug, started_at, expires_at, cooldown_until) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(visitor_hash, programme_slug) DO UPDATE SET id = excluded.id, ip_hash = excluded.ip_hash, started_at = excluded.started_at, expires_at = excluded.expires_at, cooldown_until = excluded.cooldown_until WHERE holds.cooldown_until <= excluded.started_at`)
       .bind(h.id, h.visitor_hash, h.ip_hash, h.programme_slug, h.started_at, h.expires_at, h.cooldown_until).run());
   }
 

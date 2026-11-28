@@ -72,7 +72,9 @@ export async function initiatePayment(env: AppEnv, repo: Repo, order: OrderRow, 
   const attempt = await repo.nextAttemptNo(inst.id);
   const reference = `${inst.reference}-A${String(attempt).padStart(3, "0")}`;
   const id = crypto.randomUUID();
-  if (!(await repo.claimAttempt({ id, order_id: order.id, instalment_id: inst.id, attempt, reference, at: new Date().toISOString() }))) {
+  const claimed = await repo.claimAttempt({ id, order_id: order.id, instalment_id: inst.id, attempt, reference, at: new Date().toISOString() });
+  if (claimed === null) throw new ApiError(409, "payment_needs_check", NEEDS_CHECK); // Stage E.4: paid, or a payment needs reconciling
+  if (!claimed) {
     // Another request claimed it a moment ago (or took this attempt number): never call Paystack ourselves.
     const now = await repo.activeAttempt(inst.id);
     if (now) return reuseOrRefuse(repo, now);
@@ -104,13 +106,16 @@ async function reuseOrRefuse(repo: Repo, a: PaymentAttempt): Promise<InitResult>
   throw new ApiError(409, "payment_needs_check", NEEDS_CHECK);
 }
 
-// Read-only check of an attempt's reference with Paystack (used by Finance's reconciliation).
-export async function verifyReference(env: AppEnv, reference: string): Promise<{ known: boolean | null; status: string | null; amount: number | null; currency: string | null; detail: string }> {
+// Read-only check of a reference with Paystack. Stage E.4: "known" only for a well-formed answer about THIS reference;
+// a timeout, error, unreadable or ambiguous answer is "not confirmed" (known null) and is never proof of non-payment.
+export type Verified = { known: boolean | null; status: string | null; amount: number | null; currency: string | null; detail: string; charge?: Charge };
+export async function verifyReference(env: AppEnv, reference: string): Promise<Verified> {
   try {
+    if (!env.PAYSTACK_SECRET_KEY) throw new Error("not configured"); // as before: no call without the key (unknown)
     const r = await fetch(`${PAYSTACK}/transaction/verify/${encodeURIComponent(reference)}`, { headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}` }, signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS) });
-    const j = (await r.json().catch(() => null)) as { status?: boolean; message?: string; data?: { status?: string; amount?: number; currency?: string } } | null;
-    if (r.ok && j?.status && j.data) return { known: true, status: j.data.status ?? null, amount: j.data.amount ?? null, currency: j.data.currency ?? null, detail: String(j.message ?? "") };
-    // Paystack does not document the answer for an unknown reference: anything else is "not confirmed", never "absent".
+    const j = (await r.json().catch(() => null)) as { status?: boolean; message?: string; data?: Charge } | null;
+    const d = j?.data;
+    if (r.ok && j?.status === true && d?.reference === reference && typeof d.status === "string") return { known: true, status: d.status, amount: d.amount ?? null, currency: d.currency ?? null, detail: String(j.message ?? ""), charge: d };
     return { known: null, status: null, amount: null, currency: null, detail: `${r.status}: ${String(j?.message ?? "unreadable").slice(0, 200)}` };
   } catch (e) {
     return { known: null, status: null, amount: null, currency: null, detail: `no answer from Paystack (${(e as Error)?.name ?? "error"})` };
@@ -138,8 +143,9 @@ export async function recordCharge(env: AppEnv, repo: Repo, ctx: ExecutionContex
   const inst = instRef ? await repo.getInstalmentByReference(instRef) : null;
   if (!inst) { console.warn("paystack charge for unknown reference", ch.reference); return "ignored"; }
   // The amount must be the full part, in naira. Anything else is left for the owner to check by hand.
-  if (ch.currency !== "NGN" || typeof ch.amount !== "number" || ch.amount < inst.amount_kobo) {
+  if (ch.currency !== "NGN" || typeof ch.amount !== "number" || ch.amount < inst.amount_kobo || (ch.metadata?.instalment_id ?? inst.id) !== inst.id) {
     console.error("paystack amount mismatch", ch.reference, ch.amount, ch.currency, inst.amount_kobo);
+    await repo.flagAttempt(ch.reference); // Stage E.4: money arrived that a person must reconcile; no new checkout meanwhile
     return "ignored";
   }
   const paidAt = ch.paid_at && !Number.isNaN(Date.parse(ch.paid_at)) ? new Date(ch.paid_at).toISOString() : nowIso();
@@ -205,13 +211,12 @@ export async function handleWebhook(req: Request, env: AppEnv, ctx: ExecutionCon
   return json({ ok: true, result });
 }
 
-// Asks Paystack directly (used when the learner returns from Paystack before the webhook has arrived).
+// Asks Paystack directly (the learner returned before the webhook, or Finance checks an attempt). Never throws for a
+// Paystack failure; only a confirmed success is recorded (idempotently, like the webhook).
 export async function verifyWithPaystack(env: AppEnv, repo: Repo, ctx: ExecutionContext, reference: string) {
-  if (!env.PAYSTACK_SECRET_KEY) return;
-  const r = await fetch(`${PAYSTACK}/transaction/verify/${encodeURIComponent(reference)}`, { headers: { authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}` } });
-  if (!r.ok) return;
-  const j = (await r.json()) as { status?: boolean; data?: Charge };
-  if (j.status && j.data) await recordCharge(env, repo, ctx, j.data, `paystack:${j.data.id ?? reference}`);
+  const v = await verifyReference(env, reference);
+  if (v.known && v.status === "success") await recordCharge(env, repo, ctx, v.charge!, `paystack:${v.charge!.id ?? reference}`);
+  return v;
 }
 
 // GET /api/order?ref=<order reference>[&trxref=<paystack reference>]: payment status for the "thank you" screen. No personal data.

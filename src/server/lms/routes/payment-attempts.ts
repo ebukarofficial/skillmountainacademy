@@ -2,8 +2,9 @@
 //   GET  /api/app/admin/payments/attempts                 uncertain, stale and recently failed attempts
 //   POST /api/app/admin/payments/attempts/:id/check       read-only check with Paystack; a payment Paystack reports as
 //                                                         successful is recorded through the existing, idempotent path
-//   POST /api/app/admin/payments/attempts/:id/release     {reason, confirmedWithPaystack}: after checking, release an
-//                                                         uncertain attempt so the student can open a new checkout.
+//   POST /api/app/admin/payments/attempts/:id/release     {reason}: after checking, release an uncertain attempt so the
+//                                                         student can open a new checkout. Stage E.4: only on definite,
+//                                                         fresh, settled Paystack evidence (payment-release.ts).
 //                                                         Needs the authenticator code. Never possible for a paid one.
 //                                                         Stage E: disabled until the owner authorises it (see below).
 // Nothing here starts a payment: a new attempt is opened only when the student retries, through initiatePayment().
@@ -11,8 +12,8 @@ import { ApiError } from "../../http";
 import { ok, requireStrongAuth, route } from "../api";
 import { Checker } from "../../validate";
 import { Repo } from "../../repo";
-import { CLAIM_TTL_MS, verifyReference, verifyWithPaystack } from "../../routes/payments";
-import { checkReleasable, releaseAttempt } from "../payment-release";
+import { CLAIM_TTL_MS } from "../../routes/payments";
+import { attemptOr404, checkReleasable, releaseAttempt, verifyAttempt } from "../payment-release";
 import { getApprovalPolicy, openApproval } from "../institution";
 
 route("GET", "/api/app/admin/payments/attempts", ["admin"], async (c) => {
@@ -23,11 +24,13 @@ route("GET", "/api/app/admin/payments/attempts", ["admin"], async (c) => {
 
 route("POST", "/api/app/admin/payments/attempts/:id/check", ["admin"], async (c) => {
   const repo = new Repo(c.db);
-  const a = await repo.getAttempt(c.params.id);
-  if (!a) throw new ApiError(404, "not_found", "That payment attempt was not found.");
-  const v = await verifyReference(c.env, a.reference);
-  if (v.known && v.status === "success") await verifyWithPaystack(c.env, repo, c.exec, a.reference);
-  await c.audit("payment.attempt_check", "payment_attempt", a.id, { reference: a.reference, state: a.state, paystack: v });
+  const a = await attemptOr404(repo, c.params.id);
+  // Stage E.4: the controlled recovery step. The answer is stored as evidence (never applied to a newer state); who
+  // checked, and why, is audited. Nothing here releases, retries or starts a payment.
+  const reason = String((await c.body().catch(() => ({} as Record<string, unknown>))).reason ?? "").slice(0, 500) || null;
+  const instalment = await repo.getInstalment(a.instalment_id);
+  const { v, status, e } = await verifyAttempt(c, repo, a, instalment);
+  await c.audit("payment.attempt_check", "payment_attempt", a.id, { reference: a.reference, state: a.state, version: a.version, paystack: v, evidence: status, stored: !!e, reason });
   return ok({ attempt: await repo.getAttempt(a.id), paystack: v, instalment: await repo.getInstalment(a.instalment_id) });
 });
 
@@ -50,12 +53,11 @@ route("POST", "/api/app/admin/payments/attempts/:id/release", ["admin"], async (
   const ch = new Checker();
   const reason = ch.req(b.reason, "Reason", 500);
   ch.done();
-  const confirmed = b.confirmedWithPaystack === true;
   if (rule.requiresApproval && !c.isOwner) {
-    await checkReleasable(c, c.params.id, confirmed);
-    const request = await openApproval(c, { category: "payment_attempt_release", targetType: "payment_attempt", targetId: c.params.id, payload: { confirmedWithPaystack: confirmed }, reason, rule });
+    await checkReleasable(c, c.params.id);
+    const request = await openApproval(c, { category: "payment_attempt_release", targetType: "payment_attempt", targetId: c.params.id, payload: {}, reason, rule });
     return ok({ approvalRequired: true, request }, 202);
   }
-  const attempt = await releaseAttempt(c, c.params.id, { reason, confirmedWithPaystack: confirmed, releasedBy: c.user.id });
+  const attempt = await releaseAttempt(c, c.params.id, { reason, releasedBy: c.user.id });
   return ok({ attempt });
 });

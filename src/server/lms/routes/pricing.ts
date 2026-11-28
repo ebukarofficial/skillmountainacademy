@@ -16,12 +16,7 @@ route("GET", "/api/app/admin/pricing/diagnostics", ["admin"], async (c) => {
   const check = fxUsable(policy, rates);
   // Stage D.1 detection: orders without a pricing record created after the first order that has one. Always 0 when the
   // atomic write works; anything else needs investigation (for example an older Worker running against this database).
-  const integrity = await c.db.prepare(`SELECT
-      (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NULL AND created_at >= (SELECT MIN(created_at) FROM orders WHERE pricing_snapshot IS NOT NULL)) AS without_snapshot,
-      (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NOT NULL) AS with_snapshot,
-      (SELECT COUNT(*) FROM orders o WHERE o.method = 'paystack' AND o.pricing_snapshot IS NOT NULL AND o.status = 'pending'
-         AND NOT EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = o.id AND a.state = 'initialized')) AS paystack_not_started,
-      (SELECT COUNT(*) FROM payment_attempts WHERE state = 'uncertain') AS attempts_uncertain`)
+  const integrity = await c.db.prepare(`SELECT (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NULL AND created_at >= (SELECT MIN(created_at) FROM orders WHERE pricing_snapshot IS NOT NULL)) AS without_snapshot, (SELECT COUNT(*) FROM orders WHERE pricing_snapshot IS NOT NULL) AS with_snapshot, (SELECT COUNT(*) FROM orders o WHERE o.method = 'paystack' AND o.pricing_snapshot IS NOT NULL AND o.status = 'pending' AND NOT EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = o.id AND a.state = 'initialized')) AS paystack_not_started, (SELECT COUNT(*) FROM payment_attempts WHERE state = 'uncertain') AS attempts_uncertain`)
     .first<{ without_snapshot: number; with_snapshot: number; paystack_not_started: number; attempts_uncertain: number }>().catch(() => null);
   return ok({
     integrity,

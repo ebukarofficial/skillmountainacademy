@@ -104,7 +104,11 @@ export const headConditions = (o: { requesterId: string; targetId: string; slug:
 ];
 // checkReleasable at commit time (the read-only Paystack verification stays before the transaction), and the existing
 // release rule that the requester's group is one the owner authorised.
-export const releaseConditions = (o: { attemptId: string; requesterId: string; claimedBefore: string }): Cond[] => [
+export const releaseConditions = (o: { attemptId: string; requesterId: string; claimedBefore: string; version: number }): Cond[] => [
+  // Stage E.4: unchanged since this run's Paystack check (any webhook, payment or other change moves the version). The
+  // freshness and settling of that evidence are enforced by migration 0018's release trigger in the same transaction.
+  { name: "payment_evidence", message: "The attempt changed after Paystack was checked (or a payment arrived).",
+    build: (ps) => `EXISTS (SELECT 1 FROM payment_attempts WHERE id = ${ps.p(o.attemptId)} AND version = ${ps.p(o.version)} AND outcome IS NULL)` },
   { name: "attempt_releasable", message: "The payment attempt is no longer one that can be released.",
     build: (ps) => `EXISTS (SELECT 1 FROM payment_attempts WHERE id = ${ps.p(o.attemptId)} AND (state = 'uncertain' OR (state = 'claimed' AND claimed_at < ${ps.p(o.claimedBefore)})))` },
   { name: "instalment_unpaid", message: "This part has been paid. Nothing to release.",

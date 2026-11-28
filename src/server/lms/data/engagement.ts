@@ -20,13 +20,11 @@ export type WeeklyRow = { id: string; enrolment_id: string; student_id: string; 
   assigned_by: string | null; completed_at: string | null; completion_note: string | null; created_at: string; assigned_by_name?: string | null };
 
 export const weeklyRows = (db: DB, enrolmentId: string, weekStart: string) => all<WeeklyRow>(db,
-  `SELECT w.*, u.full_name AS assigned_by_name FROM weekly_items w LEFT JOIN users u ON u.id = w.assigned_by
-   WHERE w.enrolment_id = ?1 AND w.week_start = ?2 ORDER BY w.created_at`, enrolmentId, weekStart);
+  `SELECT w.*, u.full_name AS assigned_by_name FROM weekly_items w LEFT JOIN users u ON u.id = w.assigned_by WHERE w.enrolment_id = ?1 AND w.week_start = ?2 ORDER BY w.created_at`, enrolmentId, weekStart);
 export const getWeeklyRow = (db: DB, enrolmentId: string, weekStart: string, key: string) =>
   one<WeeklyRow>(db, "SELECT * FROM weekly_items WHERE enrolment_id = ?1 AND week_start = ?2 AND item_key = ?3", enrolmentId, weekStart, key);
 export const tickWeekly = (db: DB, r: { id: string; enrolment: Enrolment; weekStart: string; key: string; at: string; note: string | null }) => run(db,
-  `INSERT INTO weekly_items (id, enrolment_id, student_id, week_start, item_key, completed_at, completion_note, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?6)
-   ON CONFLICT(enrolment_id, week_start, item_key) DO UPDATE SET completed_at = excluded.completed_at, completion_note = COALESCE(excluded.completion_note, weekly_items.completion_note)`,
+  `INSERT INTO weekly_items (id, enrolment_id, student_id, week_start, item_key, completed_at, completion_note, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?6) ON CONFLICT(enrolment_id, week_start, item_key) DO UPDATE SET completed_at = excluded.completed_at, completion_note = COALESCE(excluded.completion_note, weekly_items.completion_note)`,
   r.id, r.enrolment.id, r.enrolment.student_id, r.weekStart, r.key, r.at, r.note);
 export const untickWeekly = (db: DB, enrolmentId: string, weekStart: string, key: string) =>
   run(db, "UPDATE weekly_items SET completed_at = NULL WHERE enrolment_id = ?1 AND week_start = ?2 AND item_key = ?3", enrolmentId, weekStart, key);
@@ -37,15 +35,7 @@ export const deleteWeeklyTask = (db: DB, enrolmentId: string, key: string) =>
 // Evidence from records for one enrolment inside [from, to): the items a student cannot tick by hand.
 export const weeklyEvidence = (db: DB, e: Enrolment, from: string, to: string) => one<{
   lessons: number; submissions: number; assignments_due: number; tests: number; tests_due: number; ai_questions: number; classes: number;
-}>(db, `SELECT
-  (SELECT COUNT(*) FROM lesson_progress p JOIN lessons l ON l.id = p.lesson_id JOIN courses c ON c.id = l.course_id
-     WHERE p.student_id = ?1 AND c.programme_slug = ?3 AND p.completed_at >= ?4 AND p.completed_at < ?5) AS lessons,
-  (SELECT COUNT(*) FROM submissions s JOIN assignments a ON a.id = s.assignment_id WHERE a.enrolment_id = ?2 AND s.submitted_at >= ?4 AND s.submitted_at < ?5) AS submissions,
-  (SELECT COUNT(*) FROM assignments WHERE enrolment_id = ?2 AND due_at >= ?4 AND due_at < ?5) AS assignments_due,
-  (SELECT COUNT(*) FROM quiz_attempts t JOIN quizzes q ON q.id = t.quiz_id WHERE q.enrolment_id = ?2 AND q.kind = 'quiz' AND t.submitted_at >= ?4 AND t.submitted_at < ?5) AS tests,
-  (SELECT COUNT(*) FROM quizzes WHERE enrolment_id = ?2 AND kind = 'quiz' AND due_at >= ?4 AND due_at < ?5) AS tests_due,
-  (SELECT COUNT(*) FROM ai_messages WHERE student_id = ?1 AND role = 'user' AND created_at >= ?4 AND created_at < ?5) AS ai_questions,
-  (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'completed' AND starts_at >= ?4 AND starts_at < ?5) AS classes`,
+}>(db, `SELECT (SELECT COUNT(*) FROM lesson_progress p JOIN lessons l ON l.id = p.lesson_id JOIN courses c ON c.id = l.course_id WHERE p.student_id = ?1 AND c.programme_slug = ?3 AND p.completed_at >= ?4 AND p.completed_at < ?5) AS lessons, (SELECT COUNT(*) FROM submissions s JOIN assignments a ON a.id = s.assignment_id WHERE a.enrolment_id = ?2 AND s.submitted_at >= ?4 AND s.submitted_at < ?5) AS submissions, (SELECT COUNT(*) FROM assignments WHERE enrolment_id = ?2 AND due_at >= ?4 AND due_at < ?5) AS assignments_due, (SELECT COUNT(*) FROM quiz_attempts t JOIN quizzes q ON q.id = t.quiz_id WHERE q.enrolment_id = ?2 AND q.kind = 'quiz' AND t.submitted_at >= ?4 AND t.submitted_at < ?5) AS tests, (SELECT COUNT(*) FROM quizzes WHERE enrolment_id = ?2 AND kind = 'quiz' AND due_at >= ?4 AND due_at < ?5) AS tests_due, (SELECT COUNT(*) FROM ai_messages WHERE student_id = ?1 AND role = 'user' AND created_at >= ?4 AND created_at < ?5) AS ai_questions, (SELECT COUNT(*) FROM class_sessions WHERE enrolment_id = ?2 AND status = 'completed' AND starts_at >= ?4 AND starts_at < ?5) AS classes`,
   e.student_id, e.id, e.programme_slug, from, to);
 
 // ---------- guardian and contact log ----------
@@ -58,6 +48,4 @@ export const lastContacts = (db: DB) => all<{ student_id: string; last_at: strin
 
 // Active enrolments for monitoring, with the student's details.
 export const activeEnrolmentsForMonitoring = (db: DB, limit: number) => all<Enrolment & { full_name: string; email: string; photo_key: string | null; student_no: string | null; instructor_name: string | null }>(db,
-  `SELECT e.*, s.full_name, s.email, s.photo_key, s.student_no, i.full_name AS instructor_name FROM enrolments e
-   JOIN users s ON s.id = e.student_id LEFT JOIN users i ON i.id = e.instructor_id
-   WHERE e.status IN ('active', 'paused') ORDER BY s.full_name LIMIT ?1`, limit);
+  `SELECT e.*, s.full_name, s.email, s.photo_key, s.student_no, i.full_name AS instructor_name FROM enrolments e JOIN users s ON s.id = e.student_id LEFT JOIN users i ON i.id = e.instructor_id WHERE e.status IN ('active', 'paused') ORDER BY s.full_name LIMIT ?1`, limit);
