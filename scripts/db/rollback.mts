@@ -92,6 +92,11 @@ export const COMPAT: Record<string, MigrationCompat> = {
     checks: [{ id: "payment_attempts_open", area: "data", description: "payment attempts that are in progress or uncertain (an older Worker would not respect them)", onFail: "action",
       sql: "SELECT COUNT(*) AS n FROM payment_attempts WHERE state IN ('claimed', 'uncertain')",
       remediation: "resolve uncertain attempts with Finance before rolling back; an older Worker could open a second checkout for them" }] },
+  "0015_institution.sql": { olderWorker: "check",
+    areas: { schema: "additive departments, staff_assignments, staff_invitations and approval_requests tables", data: "an older Worker ignores departments, pending invitations and approval rules, and allows the direct actions that an approval rule would hold" },
+    checks: [{ id: "institution_rules_active", area: "security", description: "pending invitations or approval requests, and approval rules the owner switched on (an older Worker would not enforce them)", onFail: "action",
+      sql: "SELECT (SELECT COUNT(*) FROM staff_invitations WHERE status = 'pending') + (SELECT COUNT(*) FROM approval_requests WHERE status = 'pending') + (SELECT COUNT(*) FROM app_settings WHERE key = 'approval_policy') AS n",
+      remediation: "revoke pending invitations, decide pending requests and record that approval rules will not be enforced before rolling back below 0015" }] },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));
