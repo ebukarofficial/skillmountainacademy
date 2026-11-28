@@ -82,6 +82,11 @@ export const COMPAT: Record<string, MigrationCompat> = {
       remediation: "an older Worker would keep selling a paused or retired programme, or reject a newly published one; do not roll back below 0011 after the first catalogue publication" }] },
   "0012_pricing_snapshot.sql": { olderWorker: "safe",
     areas: { schema: "additive nullable pricing-snapshot columns on orders", data: "an older Worker leaves the new columns empty on the orders it creates; charging (NGN) and existing orders are unchanged" } },
+  "0013_order_idempotency.sql": { olderWorker: "check",
+    areas: { schema: "additive idempotency columns and a unique index on orders", data: "an older Worker writes NULL keys (allowed by the unique index) and does not de-duplicate retries or guarantee a pricing snapshot" },
+    checks: [{ id: "orders_with_pricing_snapshot", area: "data", description: "orders created by a Stage D.1 Worker (an older Worker would create orders without the required pricing record)", onFail: "action",
+      sql: "SELECT COUNT(*) AS n FROM orders WHERE pricing_snapshot IS NOT NULL",
+      remediation: "rolling back below Stage D.1 lets new orders be created without a pricing snapshot; roll back only with registrations closed" }] },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));
