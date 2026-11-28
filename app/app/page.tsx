@@ -15,7 +15,7 @@ export type Me = { id: string; email: string; role: "student" | "instructor" | "
   certifications?: { title: string; issuer: string | null; year: string | null; url: string | null }[]; languages?: string[]; countryOrigin?: string | null; countryResidence?: string | null };
 
 type MeResponse = { user: Me; session?: SessionInfo | null; mfa?: { enabled: boolean; pending: boolean; enforced: boolean; setupRequired: boolean } | null;
-  admin?: { role: string | null; areas: { read: string[]; write: string[] } } | null };
+  admin?: { role: string | null; applied?: string | null; owner?: boolean; areas: { read: string[]; write: string[] } } | null };
 
 export default function AppHome() {
   const { data, error } = useLoad<MeResponse>("/api/me");

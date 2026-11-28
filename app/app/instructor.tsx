@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import type { Me } from "./page";
 import { MaterialsManager, Messages, ProgressView, type Progress } from "./shared";
 import { api, Avatar, Badge, Btn, Card, Empty, Field, inputCls, Msg, PageTitle, Stat, useAction, useLoad, useNow, useTab, VerifiedBadge, when } from "./ui";
+import { ProgressRing, StatCard, StatGrid, WelcomeHero } from "./dash";
 import { AppShell, useNotifications, type NavItem } from "./shell";
 import { AcademicCalendar, type CalEvent } from "./calendar";
 import { InstructorProfileForm } from "./instructor-profile";
@@ -240,7 +241,16 @@ function Workspace({ me }: { me: Me }) {
   return (
     <AppShell me={me} nav={nav} tab={tab} setTab={setTab} primary={8}>
       {tab === "overview" && <>
-        <PageTitle title={<span className="inline-flex items-center gap-2">Welcome, {me.fullName.split(" ")[0]}.{me.verified && <VerifiedBadge />}</span>} sub={<>{me.headline ?? "Faculty"}{me.staffNo ? <> · Faculty No <b className="font-semibold text-ink">{me.staffNo}</b></> : null}</>} />
+        <WelcomeHero name={me.fullName} eyebrow={<span className="inline-flex items-center gap-1.5">Faculty workspace{me.verified && <VerifiedBadge />}</span>}
+          sub={<>{me.headline ?? "Faculty"}{me.staffNo ? <> · Faculty No <b className="font-semibold text-ink">{me.staffNo}</b></> : null}</>}
+          actions={<><Btn onClick={() => go("sessions")}>Today&apos;s classes</Btn>{toGrade.length > 0 && <Btn kind="ghost" onClick={() => go(toGrade[0].to)}>Grade work</Btn>}</>}
+          aside={<div className="rounded-2xl bg-ink/[0.03] p-4"><ProgressRing pct={p?.attendancePct ?? null} label="Class attendance" sub={p ? `${p.sessions.completed} completed · ${p.sessions.missed} missed` : "Calculated from your class records"} size={112} /></div>} />
+        <StatGrid>
+          <StatCard icon="users" label="Active students" value={p ? p.activeStudents : null} note={p ? `${p.studentsTaught} taught in total` : undefined} tone="indigo" onClick={() => go("students")} />
+          <StatCard icon="play" label="Classes today" value={range.data ? todays.length : null} note={upcoming.length ? `${upcoming.length} more this week` : "one-on-one sessions"} onClick={() => go("sessions")} />
+          <StatCard icon="clipboard" label="Awaiting grading" value={asg.data && qz.data ? toGrade.length : null} note="assignments, quizzes, assessments" tone={toGrade.length ? "orange" : "plain"} onClick={() => go(toGrade[0]?.to ?? "assignments")} />
+          <StatCard icon="list" label="Attendance to record" value={range.data ? range.data.pendingOutcomes.length : null} note={p?.rating.average != null ? `student rating ${p.rating.average}` : "finished classes without an outcome"} tone={range.data?.pendingOutcomes.length ? "alert" : "plain"} onClick={() => go("attendance")} />
+        </StatGrid>
         <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             {!!range.data?.pendingOutcomes.length && <section className="rounded-xl border border-ink/10 border-l-4 border-l-brand-orange bg-white p-5"><h2 className="font-display text-lg font-semibold">Attendance to record</h2><p className="mt-1 text-[0.95rem] text-ink/75">{range.data.pendingOutcomes.length} finished class{range.data.pendingOutcomes.length > 1 ? "es need" : " needs"} an outcome (completed or missed).</p><div className="mt-3"><Btn small onClick={() => go("attendance")}>Record attendance</Btn></div></section>}

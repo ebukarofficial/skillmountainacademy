@@ -1,12 +1,11 @@
 "use client";
 import { PORTALS } from "./portals";
-// The signed-in application frame, modelled on an academic learning environment: a compact white header (logo,
-// context, calendar, messages, notifications, profile), a brand-colour navigation bar, and a white content area.
-// On phones the navigation becomes a drawer. Each dashboard passes its own sections; the server decides the role.
+// The signed-in application frame: see AppShell below. Each dashboard passes its own sections; the server decides
+// the role and checks every request.
 import Image from "next/image";
 import { useEffect, useState, type ReactNode } from "react";
 import logo from "@/assets/sma-logo.png";
-import { api, Avatar, goTo, useLoad, VerifiedBadge, when } from "./ui";
+import { api, Avatar, goTo, useLoad, useNow, VerifiedBadge, when } from "./ui";
 import type { Me } from "./page";
 
 const PATHS: Record<string, string> = {
@@ -107,112 +106,111 @@ function Notifications({ onOpen, onAll }: { onOpen: (n: Note) => void; onAll: ((
 }
 
 const CONTEXT = { student: "Learning space", instructor: "Faculty workspace", admin: "Administration" } as const;
+const ROLE = { student: "Student", instructor: "Faculty", admin: "Administrator" } as const;
 
-export function AppShell<T extends string>({ me, nav, tab, setTab, children, context, primary = 8 }: {
+// The signed-in application frame (Institutional Dashboard stage): a white sidebar with the logo, the person's profile,
+// the sections of their role and a help link; an ivory workspace with a slim header (where you are, today's date,
+// calendar, messages, notifications and the account menu). On tablets and phones the sidebar becomes a drawer.
+// The sections are decided by each dashboard from the server's view of the person; the server checks every request.
+export function AppShell<T extends string>({ me, nav, tab, setTab, children, context, roleLabel }: {
   me: Me; nav: NavItem<T>[]; tab: T; setTab: (t: T) => void; children: ReactNode;
-  context?: string; // shown beside the logo (a student's programme, for example)
-  primary?: number; // how many sections show in the bar before the rest go under "More"
+  context?: string; // shown under the name (a student's programme, for example)
+  roleLabel?: string; // the person's role as the server reports it (an administrator's group, "Owner")
+  primary?: number; // kept for compatibility: every section is listed in the sidebar
 }) {
   const [drawer, setDrawer] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [more, setMore] = useState(false);
+  const now = useNow(60_000);
   async function signOut() { await api("/api/auth/logout", { method: "POST" }).catch(() => undefined); goTo(me.role === "admin" ? PORTALS.admin : me.role === "instructor" ? PORTALS.instructor : PORTALS.student); }
   async function signOutAll() { if (!confirm("Sign out of every device, including this one?")) return; await api("/api/auth/logout-all", { method: "POST" }).catch(() => undefined); goTo(me.role === "admin" ? PORTALS.admin : me.role === "instructor" ? PORTALS.instructor : PORTALS.student); }
   const ids = nav.map((n) => n.id as string);
   const has = (id: string) => ids.includes(id);
-  const go = (t: T) => { setTab(t); setDrawer(false); setMore(false); setMenu(false); window.scrollTo({ top: 0 }); };
+  const go = (t: T) => { setTab(t); setDrawer(false); setMenu(false); window.scrollTo({ top: 0 }); };
   const openNotice = (n: Note) => {
     if (n.link && /^https:\/\/meet\.google\.com\//.test(n.link)) { window.open(n.link, "_blank", "noopener"); return; }
     const t = targetOf(n.kind, ids);
     if (t) go(t as T);
   };
   const number = me.role === "student" ? me.studentNo : me.staffNo;
-  const shown = nav.slice(0, primary), rest = nav.slice(primary);
-  const restActive = rest.some((n) => n.id === tab);
+  const current = nav.find((n) => n.id === tab);
+  const where = context ?? CONTEXT[me.role];
   const quick = (id: string, icon: string, label: string) => has(id) && (
-    <button onClick={() => go(id as T)} aria-label={label} title={label} className={`relative hidden h-10 w-10 place-items-center rounded-lg transition hover:bg-ink/5 sm:grid ${tab === id ? "text-indigo" : "text-ink/70 hover:text-ink"}`}>
-      <Icon name={icon} className="h-[22px] w-[22px]" />
-      {!!nav.find((n) => n.id === id)?.badge && <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-brand-orange ring-2 ring-white" aria-hidden="true" />}
+    <button onClick={() => go(id as T)} aria-label={label} title={label} className={`relative hidden h-10 w-10 place-items-center rounded-xl transition hover:bg-white sm:grid ${tab === id ? "bg-white text-indigo" : "text-ink/70 hover:text-ink"}`}>
+      <Icon name={icon} className="h-[21px] w-[21px]" />
+      {!!nav.find((n) => n.id === id)?.badge && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-brand-orange ring-2 ring-paper" aria-hidden="true" />}
     </button>
   );
-  const item = (n: NavItem<T>, mobile = false) => (
+  const item = (n: NavItem<T>) => (
     <button key={n.id} onClick={() => go(n.id)} aria-current={tab === n.id ? "page" : undefined}
-      className={mobile
-        ? `flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-[0.95rem] font-medium ${tab === n.id ? "bg-indigo/[0.07] font-semibold text-indigo" : "text-ink/80 hover:bg-ink/[0.04]"}`
-        : `relative flex shrink-0 items-center gap-1.5 px-3.5 py-3.5 text-[0.95rem] font-medium transition ${tab === n.id ? "text-white" : "text-white/80 hover:text-white"}`}>
-      {mobile && <Icon name={n.icon} />}
-      <span>{n.label}</span>
-      {!!n.badge && <span className={`rounded-full px-1.5 text-[11px] font-bold ${mobile ? "bg-indigo text-white" : "bg-brand-orange text-ink"}`}>{n.badge}<span className="sr-only"> new</span></span>}
-      {!mobile && tab === n.id && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t bg-brand-orange" aria-hidden="true" />}
+      className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[0.93rem] font-medium transition ${tab === n.id ? "bg-indigo text-white shadow-sm shadow-indigo/20" : "text-ink/75 hover:bg-ink/[0.03] hover:text-ink"}`}>
+      <Icon name={n.icon} className={`h-[18px] w-[18px] shrink-0 ${tab === n.id ? "text-white" : "text-ink/50 group-hover:text-indigo"}`} />
+      <span className="min-w-0 flex-1 truncate">{n.label}</span>
+      {!!n.badge && <span className={`rounded-full px-1.5 text-[11px] font-bold ${tab === n.id ? "bg-brand-orange text-ink" : "bg-brand-orange/20 text-ink"}`}>{n.badge}<span className="sr-only"> new</span></span>}
     </button>
+  );
+  const sidebar = (mobile: boolean) => (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between px-5 pb-2 pt-5">
+        <button onClick={() => go(nav[0].id)} aria-label="Home"><Image src={logo} alt="Skill Mountain Academy" unoptimized className="h-9 w-auto" /></button>
+        {mobile && <button className="grid h-10 w-10 place-items-center rounded-lg text-ink/70 hover:bg-ink/5" aria-label="Close menu" onClick={() => setDrawer(false)}><Icon name="close" /></button>}
+      </div>
+      <div className="mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-ink/[0.03] p-3" data-profile>
+        <Avatar src={me.photo} name={me.fullName} size={44} />
+        <div className="min-w-0">
+          <p className="flex items-center gap-1 truncate font-display text-[0.95rem] font-semibold text-ink">{me.fullName}{me.verified && <VerifiedBadge />}</p>
+          <p className="mt-0.5"><span className="inline-block rounded-md bg-indigo/[0.08] px-2 py-0.5 text-xs font-semibold text-indigo">{roleLabel ?? ROLE[me.role]}</span></p>
+          {number && <p className="mt-0.5 truncate text-xs text-ink/55">{number}</p>}
+        </div>
+      </div>
+      <nav aria-label="Sections" className="mt-4 flex-1 space-y-0.5 overflow-y-auto px-3 pb-4">{nav.map((n) => item(n))}</nav>
+      <div className="space-y-2 border-t border-ink/[0.07] p-4">
+        {has("messages") && <button onClick={() => go("messages" as T)} className="w-full rounded-xl bg-paper px-4 py-3 text-left text-sm"><span className="block font-semibold text-ink">Need help?</span><span className="block text-ink/65">{me.role === "student" ? "Message your instructor or the Academy." : "Open your messages."}</span></button>}
+        <button onClick={signOut} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-brand-red hover:bg-brand-red/[0.05]"><Icon name="logout" /> Sign out</button>
+      </div>
+    </div>
   );
   return (
     <div className="min-h-screen overflow-x-clip bg-paper">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded focus:bg-white focus:px-3 focus:py-2">Skip to content</a>
-      <header className="border-b border-ink/10 bg-white">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <button className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink/70 hover:bg-ink/5 lg:hidden" aria-label="Open menu" onClick={() => setDrawer(true)}><Icon name="menu" className="h-6 w-6" /></button>
-            <button onClick={() => go(nav[0].id)} aria-label="Home" className="shrink-0"><Image src={logo} alt="Skill Mountain Academy" unoptimized className="h-9 w-auto" /></button>
-            <span className="hidden h-7 w-px bg-ink/15 sm:block" aria-hidden="true" />
-            <p className="hidden truncate font-display text-base font-semibold text-ink sm:block">{context ?? CONTEXT[me.role]}</p>
-          </div>
-          <div className="flex items-center gap-1">
-            {quick("calendar", "calendar", "Calendar")}
-            {quick("messages", "mail", "Messages")}
-            <Notifications onOpen={openNotice} onAll={has("notifications") ? () => go("notifications" as T) : null} />
-            <span className="mx-1 hidden h-7 w-px bg-ink/15 sm:block" aria-hidden="true" />
-            <div className="relative">
-              <button onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Account menu" className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 transition hover:bg-ink/5">
-                <Avatar src={me.photo} name={me.fullName} size={36} />
-                <span className="hidden items-center gap-1 text-sm font-semibold text-ink md:flex">{me.fullName}{me.verified && <VerifiedBadge />}</span>
-                <Icon name="down" className="hidden h-4 w-4 text-ink/50 md:block" />
-              </button>
-              {menu && (
-                <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-ink/10 bg-white shadow-xl shadow-ink/10">
-                  <div className="border-b border-ink/10 px-4 py-3 text-sm"><p className="font-semibold">{me.fullName}</p><p className="truncate text-ink/65">{me.email}</p>{number && <p className="mt-1 text-ink/65">{number}</p>}</div>
-                  {has("profile") && <button onClick={() => go("profile" as T)} className="flex w-full items-center gap-2 px-4 py-3 text-sm hover:bg-ink/[0.04]"><Icon name="user" /> My profile</button>}
-                  <button onClick={signOut} className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-brand-red hover:bg-brand-red/[0.05]"><Icon name="logout" /> Sign out</button>
-                  <button onClick={signOutAll} className="flex w-full items-center gap-2 px-4 py-3 text-sm text-ink/75 hover:bg-ink/[0.04]"><Icon name="logout" /> Sign out of all devices</button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-      <nav aria-label="Sections" className="hidden bg-indigo/90 lg:block">
-        <div className="mx-auto flex max-w-7xl items-stretch px-3">
-          {shown.map((n) => item(n))}
-          {rest.length > 0 && (
-            <div className="relative">
-              <button onClick={() => setMore(!more)} aria-expanded={more} className={`relative flex h-full items-center gap-1 px-3.5 text-[0.95rem] font-medium ${restActive ? "text-white" : "text-white/80 hover:text-white"}`}>
-                {restActive ? nav.find((n) => n.id === tab)?.label : "More"} <Icon name="down" className="h-4 w-4" />
-                {restActive && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t bg-brand-orange" aria-hidden="true" />}
-              </button>
-              {more && (
-                <div className="absolute left-0 z-50 mt-0 w-64 overflow-hidden rounded-b-xl border border-ink/10 bg-white py-1 shadow-xl shadow-ink/10">
-                  {rest.map((n) => item(n, true))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </nav>
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-ink/[0.07] bg-white lg:block">{sidebar(false)}</aside>
       {drawer && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button className="absolute inset-0 bg-ink/40" aria-label="Close menu" onClick={() => setDrawer(false)} />
-          <aside className="relative flex h-full w-80 max-w-[88vw] flex-col bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-ink/10 px-4 py-3">
-              <Image src={logo} alt="Skill Mountain Academy" unoptimized className="h-8 w-auto" />
-              <button className="grid h-10 w-10 place-items-center rounded-lg text-ink/70 hover:bg-ink/5" aria-label="Close menu" onClick={() => setDrawer(false)}><Icon name="close" /></button>
-            </div>
-            <div className="border-b border-ink/10 px-4 py-3 text-sm"><p className="font-semibold">{me.fullName}</p><p className="text-ink/65">{context ?? CONTEXT[me.role]}{number ? ` · ${number}` : ""}</p></div>
-            <nav aria-label="Sections" className="flex-1 space-y-0.5 overflow-auto p-2">{nav.map((n) => item(n, true))}</nav>
-            <button onClick={signOut} className="flex items-center gap-2 border-t border-ink/10 px-5 py-4 text-sm font-semibold text-brand-red"><Icon name="logout" /> Sign out</button>
-          </aside>
+          <aside className="relative h-full w-80 max-w-[88vw] bg-white shadow-xl">{sidebar(true)}</aside>
         </div>
       )}
-      <main id="main" className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+      <div className="lg:pl-72" data-shell="sidebar">
+        <header className="sticky top-0 z-30 border-b border-ink/[0.06] bg-paper/95 backdrop-blur">
+          <div className="mx-auto flex h-16 max-w-[88rem] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <button className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink/70 hover:bg-white lg:hidden" aria-label="Open menu" onClick={() => setDrawer(true)}><Icon name="menu" className="h-6 w-6" /></button>
+              <button onClick={() => go(nav[0].id)} aria-label="Home" className="shrink-0 lg:hidden"><Image src={logo} alt="Skill Mountain Academy" unoptimized className="h-8 w-auto" /></button>
+              <p className="hidden min-w-0 truncate text-sm text-ink/60 sm:block" aria-label="You are here"><span>{where}</span>{current && <> <span aria-hidden="true">/</span> <b className="font-semibold text-ink">{current.label}</b></>}</p>
+            </div>
+            <div className="flex items-center gap-1">
+              {now > 0 && <span className="mr-2 hidden text-sm text-ink/60 xl:block">{new Date(now).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Lagos" })}</span>}
+              {quick("calendar", "calendar", "Calendar")}
+              {quick("messages", "mail", "Messages")}
+              <Notifications onOpen={openNotice} onAll={has("notifications") ? () => go("notifications" as T) : null} />
+              <div className="relative ml-1">
+                <button onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Account menu" className="flex items-center gap-2 rounded-xl py-1 pl-1 pr-2 transition hover:bg-white">
+                  <Avatar src={me.photo} name={me.fullName} size={34} />
+                  <Icon name="down" className="hidden h-4 w-4 text-ink/50 sm:block" />
+                </button>
+                {menu && (
+                  <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded-xl border border-ink/10 bg-white shadow-xl shadow-ink/10">
+                    <div className="border-b border-ink/10 px-4 py-3 text-sm"><p className="font-semibold">{me.fullName}</p><p className="truncate text-ink/65">{me.email}</p>{number && <p className="mt-1 text-ink/65">{number}</p>}</div>
+                    {has("profile") && <button onClick={() => go("profile" as T)} className="flex w-full items-center gap-2 px-4 py-3 text-sm hover:bg-ink/[0.04]"><Icon name="user" /> My profile</button>}
+                    <button onClick={signOut} className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-brand-red hover:bg-brand-red/[0.05]"><Icon name="logout" /> Sign out</button>
+                    <button onClick={signOutAll} className="flex w-full items-center gap-2 px-4 py-3 text-sm text-ink/75 hover:bg-ink/[0.04]"><Icon name="logout" /> Sign out of all devices</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
+        <main id="main" className="mx-auto max-w-[88rem] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">{children}</main>
+      </div>
     </div>
   );
 }

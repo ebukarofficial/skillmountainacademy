@@ -66,7 +66,7 @@ export function useLoad<T>(path: string | null) {
 
 export function Card({ title, children, action, className = "" }: { title?: ReactNode; children: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-xl border border-ink/10 bg-white p-5 sm:p-6 ${className}`}>
+    <section className={`rounded-2xl border border-ink/[0.07] bg-white p-5 sm:p-6 ${className}`}>
       {(title || action) && <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="font-display text-lg font-semibold text-ink">{title}</h2>{action}</div>}
       {children}
     </section>

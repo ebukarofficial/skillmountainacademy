@@ -10,6 +10,7 @@ import { StudentWeekly } from "./weekly";
 import { api, Avatar, Badge, Bar, Btn, Card, Empty, inputCls, Msg, naira, PageTitle, upload, useAction, useLoad, useNow, useTab, VerifiedBadge, when } from "./ui";
 import { AppShell, Icon, NotificationsPage, targetOf, useNotifications, type NavItem, type Note } from "./shell";
 import { AcademicCalendar, UpcomingList, type CalEvent } from "./calendar";
+import { firstName, ProgressRing, StatCard, StatGrid, WelcomeHero } from "./dash";
 
 type Session = { id: string; programmeName: string; startsAt: string; endsAt: string; lagosTime: string; durationMin: number; status: string; meetUrl: string | null; meetStatus: string; joinOpen: boolean; instructor: { fullName: string } | null };
 type Overview = { enrolments: { id: string; programme: string; programmeName: string; status: string; startedAt: string; instructor: { id: string; fullName: string; email: string; bio: string | null; photo: string | null; specialization: string | null; verified?: boolean; headline?: string | null } | null; timetable: { day: string; startTime: string; durationMin: number } | null }[]; nextSession: Session | null };
@@ -149,7 +150,6 @@ type Module = { id: string; title: string; description: string | null; lessons: 
 type Contact = { id: string; fullName: string; photo: string | null; unread: number; lastAt: string | null; lastMessage: string | null };
 type Resource = { id: string; title: string; kind: string; url: string | null; file: string | null };
 
-const firstName = (n: string) => n.split(" ")[0];
 const pctOf = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
 // A Brightspace-style module card: title, completion bar and "x/y topics completed"; opens to its lessons.
@@ -262,13 +262,16 @@ export function StudentDashboard({ me }: { me: Me }) {
   return (
     <AppShell me={me} nav={nav} tab={tab} setTab={setTab} context={e0?.programmeName} primary={9}>
       {tab === "home" && <>
-        <div className="mb-6">
-          <h1 className="font-display text-2xl font-semibold sm:text-3xl">Welcome, {firstName(me.fullName)}.</h1>
-          <p className="mt-1 flex flex-wrap gap-x-3 text-[0.95rem] text-ink/75">
-            {e0 && <span>{e0.programmeName}</span>}
-            {me.studentNo && <span>Registration No: <b className="font-semibold text-ink">{me.studentNo}</b></span>}
-          </p>
-        </div>
+        <WelcomeHero name={me.fullName} eyebrow="Your learning space" title={<>Welcome, {firstName(me.fullName)}.</>}
+          sub={<span className="flex flex-wrap gap-x-3">{e0 ? <span>{e0.programmeName}</span> : <span>Your programme appears here once your admission is complete.</span>}{me.studentNo && <span>Registration No: <b className="font-semibold text-ink">{me.studentNo}</b></span>}</span>}
+          actions={<>{e0 && <Btn onClick={() => goTab("programme")}>Continue learning</Btn>}{tasks.length > 0 && <Btn kind="ghost" onClick={() => goTab(tasks[0].to)}>Next task</Btn>}</>}
+          aside={<div className="rounded-2xl bg-ink/[0.03] p-4"><ProgressRing pct={p0 ? p0.overall : null} label="Programme progress" sub={modules.length ? `${modulesDone} of ${modules.length} modules completed` : "Modules are being published"} size={112} /></div>} />
+        <StatGrid>
+          <StatCard icon="clipboard" label="Tasks to complete" value={asg.data && quizzes.data ? tasks.length : null} note={tasks.filter((t) => t.status === "overdue").length ? `${tasks.filter((t) => t.status === "overdue").length} overdue` : "assignments, quizzes, assessments"} tone={tasks.some((t) => t.status === "overdue") ? "alert" : "plain"} onClick={() => goTab(tasks[0]?.to ?? "assignments")} />
+          <StatCard icon="play" label="Next class" value={ov.data ? (ov.data.nextSession ? new Date(ov.data.nextSession.startsAt).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Africa/Lagos" }) : "Not set") : null} note={ov.data?.nextSession ? `${new Date(ov.data.nextSession.startsAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" })} Lagos time` : "your weekly time is being arranged"} tone="indigo" onClick={() => goTab("calendar")} />
+          <StatCard icon="user" label="Your instructor" value={ov.data ? (ins ? firstName(ins.fullName) : "Pending") : null} note={ins ? ins.fullName : "being assigned"} onClick={() => goTab(ins ? "messages" : "programme")} />
+          <StatCard icon="mail" label="Unread messages" value={msgs.data ? msgs.data.unread : null} note={notes.data?.unread ? `${notes.data.unread} unread notifications` : "messages from your instructor"} tone={msgs.data?.unread ? "orange" : "plain"} onClick={() => goTab("messages")} />
+        </StatGrid>
         <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <NextClass s={ov.data?.nextSession ?? null} now={now} />

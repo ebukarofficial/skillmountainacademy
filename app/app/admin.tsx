@@ -13,6 +13,7 @@ import { CurrencySettings, Monitoring } from "./monitoring-admin";
 import { CatalogueAdmin } from "./catalogue-admin";
 import { AssignInstructor, CapacityReport } from "./capacity-admin";
 import { InstitutionAdmin } from "./institution-admin";
+import { AdminHome, roleLabelOf } from "./admin-home";
 import { MfaSettings } from "./mfa";
 import { OwnerConsole } from "./owner";
 import { RetentionSettings } from "./security-admin";
@@ -22,43 +23,6 @@ type Tab = (typeof TABS)[number];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 type U = { id: string; email: string; role: string; status: string; fullName: string; studentNo: string | null; lastLoginAt: string | null; adminRole?: string | null };
 
-
-// Institutional overview: the figures in one dense table, and the items that need an administrator's action.
-function Overview({ go }: { go: (t: Tab) => void }) {
-  const { data } = useLoad<{ overview: Record<string, number> }>("/api/app/admin/overview");
-  const fin = useLoad<{ finance: { revenueNaira: number; outstandingNaira: number; overdueNaira: number; awaitingBankConfirmation: number } }>("/api/app/admin/finance");
-  const rec = useLoad<{ candidates: { id: string; verification: string; profileSubmittedAt?: string | null }[] }>("/api/app/admin/recruitment");
-  const o = data?.overview;
-  if (!o) return <Empty>Loading…</Empty>;
-  const f = fin.data?.finance;
-  const toVerify = (rec.data?.candidates ?? []).filter((c) => c.profileSubmittedAt && c.verification !== "approved" && c.verification !== "rejected" && c.verification !== "suspended").length;
-  const actions: [string, number, Tab][] = [
-    ["Students awaiting an instructor", o.awaiting_instructor, "allocation"], ["Enrolments awaiting a weekly class time", o.awaiting_timetable, "allocation"],
-    ["Classes without a recorded outcome", o.pending_outcomes, "attendance"], ["Bank transfers to confirm", f?.awaitingBankConfirmation ?? 0, "payments"],
-    ["Instructor profiles submitted for verification", toVerify, "instructors"],
-  ];
-  const rows: [string, string, string][] = [
-    ["Students", String(o.students), `${o.active_students} active`], ["Instructors", String(o.instructors), `${o.active_instructors} active`],
-    ["Programmes", String(o.programmes), `${o.courses} courses published`], ["Enrolments", String(o.enrolments), `${o.ongoing} ongoing · ${o.completed} completed`],
-    ["Paid registrations (30 days)", String(o.paid_registrations_30d), `${o.unpaid_registrations_30d} unpaid`],
-    ...(f ? [["Revenue to date", naira(f.revenueNaira), ""], ["Outstanding balances", naira(f.outstandingNaira), `${naira(f.overdueNaira)} overdue`]] as [string, string, string][] : []),
-  ];
-  return (
-    <div className="grid gap-6 [&>*]:min-w-0 lg:grid-cols-[1.3fr_1fr]">
-      <Card title="Institution at a glance">
-        <table className="w-full text-left text-[0.95rem]"><tbody>{rows.map(([k, v, n]) => <tr key={k} className="border-b border-ink/[0.07] last:border-0"><th scope="row" className="py-2.5 pr-3 font-medium text-ink/75">{k}</th><td className="py-2.5 pr-3 text-right font-display text-lg font-semibold tabular-nums">{v}</td><td className="py-2.5 text-sm text-ink/70">{n}</td></tr>)}</tbody></table>
-      </Card>
-      <Card title="Needs your action">
-        <ul className="divide-y divide-ink/[0.07]">{actions.map(([k, n, t]) => (
-          <li key={k} className="flex items-center justify-between gap-3 py-2.5">
-            <span className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${n ? "bg-brand-orange" : "bg-ink/20"}`} aria-hidden="true" />{k}</span>
-            <span className="flex items-center gap-3"><b className="tabular-nums">{n}</b>{n > 0 && <Btn small kind="ghost" onClick={() => go(t)}>Open</Btn>}</span>
-          </li>
-        ))}</ul>
-      </Card>
-    </div>
-  );
-}
 
 // Attendance across the Academy for a chosen period, with the classes still awaiting an outcome.
 function Attendance() {
@@ -522,7 +486,7 @@ const TITLES: Record<Tab, [string, string?]> = {
 };
 
 // Which dashboard sections an administrator group sees. DISPLAY ONLY: the server checks every request (permissions.ts).
-type Access = { role: string | null; owner?: boolean; areas: { read: string[]; write: string[] } } | null;
+type Access = { role: string | null; applied?: string | null; owner?: boolean; areas: { read: string[]; write: string[] } } | null;
 const TAB_AREAS: Partial<Record<Tab, string[]>> = {
   overview: ["overview"], students: ["records", "support", "academic"], instructors: ["faculty"], programmes: ["academic", "finance", "catalogue"],
   admissions: ["admissions"], payments: ["finance", "orders"], records: ["academic", "records"], allocation: ["academic"], attendance: ["academic"],
@@ -559,9 +523,9 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
   const nav = allNav.filter((n) => !TAB_AREAS[n.id] || mayRead(access, TAB_AREAS[n.id]!));
   const [title, sub] = TITLES[tab];
   return (
-    <AppShell me={me} nav={nav} tab={tab} setTab={setTab} primary={8}>
-      {tab === "notifications" ? <NotificationsPage ids={TABS as unknown as string[]} onGo={(t) => setTab(t as Tab)} /> : <PageTitle title={title} sub={sub} action={tab === "students" ? <Btn small onClick={() => { setAdmSeg("admit"); setTab("admissions"); }}>Admit a student</Btn> : undefined} />}
-      {tab === "overview" && <Overview go={setTab} />}
+    <AppShell me={me} nav={nav} tab={tab} setTab={setTab} roleLabel={roleLabelOf(access)}>
+      {tab === "notifications" ? <NotificationsPage ids={TABS as unknown as string[]} onGo={(t) => setTab(t as Tab)} /> : tab === "overview" ? null : <PageTitle title={title} sub={sub} action={tab === "students" ? <Btn small onClick={() => { setAdmSeg("admit"); setTab("admissions"); }}>Admit a student</Btn> : undefined} />}
+      {tab === "overview" && <AdminHome me={me} access={access} go={setTab} tabs={TABS} />}
       {tab === "students" && <>
         <Segments value={stuSeg} onChange={setStuSeg} items={[["monitoring", "Monitoring"], ["accounts", "Accounts"]]} />
         {stuSeg === "monitoring" ? <Monitoring /> : <Users fixedRole="student" title="Students" addRoles={["student"]} access={access} meId={me.id} />}
