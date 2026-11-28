@@ -97,6 +97,11 @@ export const COMPAT: Record<string, MigrationCompat> = {
     checks: [{ id: "institution_rules_active", area: "security", description: "pending invitations or approval requests, and approval rules the owner switched on (an older Worker would not enforce them)", onFail: "action",
       sql: "SELECT (SELECT COUNT(*) FROM staff_invitations WHERE status = 'pending') + (SELECT COUNT(*) FROM approval_requests WHERE status = 'pending') + (SELECT COUNT(*) FROM app_settings WHERE key = 'approval_policy') AS n",
       remediation: "revoke pending invitations, decide pending requests and record that approval rules will not be enforced before rolling back below 0015" }] },
+  "0016_approval_execution.sql": { olderWorker: "check",
+    areas: { schema: "additive execution columns on approval_requests", data: "an older Worker ignores execution_status: it would show a failed or interrupted approval as simply approved, and offers no recovery" },
+    checks: [{ id: "approval_executions_open", area: "data", description: "approved requests whose action is awaiting, running or failed (an older Worker cannot recover or display them)", onFail: "action",
+      sql: "SELECT COUNT(*) AS n FROM approval_requests WHERE execution_status IN ('awaiting_execution', 'executing', 'failed')",
+      remediation: "recover or close every approved request whose action has not completed before rolling back below 0016" }] },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));
