@@ -156,7 +156,7 @@ test("worker: orders made before 0012 are untouched and stay readable", async ()
     await db.prepare("INSERT INTO registrations (id, role, created_at, programme_slug, terms, first_name, email, country) VALUES ('r-old','learner','2026-11-01T10:00:00Z','cloud','t','Old','old@example.com','United States')").run();
     await db.prepare("INSERT INTO orders (id, reference, created_at, registration_id, programme_slug, plan, method, total_kobo, regular_kobo, group_size, display_currency, fx_rate, fx_at, status) VALUES ('o-old','SMA-OLD000000001','2026-11-01T10:00:00Z','r-old','cloud','full','bank',45000000,45000000,1,'USD',0.00069,'2026-11-01T05:00:00Z','pending')").run();
     const before = await db.prepare("SELECT id, reference, total_kobo, regular_kobo, display_currency, fx_rate, status FROM orders").all();
-    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql", "0017_execution_fencing.sql"]);
+    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql", "0017_execution_fencing.sql", "0018_payment_reconciliation.sql"]);
     assert.deepEqual((await db.prepare("SELECT id, reference, total_kobo, regular_kobo, display_currency, fx_rate, status FROM orders").all()).results, before.results);
     assert.deepEqual({ ...(await db.prepare("SELECT pricing_snapshot, charge_currency, residence_country FROM orders").first()) }, { pricing_snapshot: null, charge_currency: null, residence_country: null }, "no backfill");
   } finally { await old.dispose(); }

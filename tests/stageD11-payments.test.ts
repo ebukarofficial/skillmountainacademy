@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { startWorker, SECRETS, registration } from "./worker-harness.ts";
+import { startWorker, SECRETS, registration, paystackAnswer, settled } from "./worker-harness.ts";
 import { signIn as helperSignIn, type Session } from "./lms-helpers.ts";
 import { stepOf, totpAt } from "../src/server/lms/mfa-crypto.ts";
 import { snapshotProblems, type PricingSnapshot } from "../src/server/pricing-rules.ts";
@@ -16,7 +16,7 @@ let admin: Session, owner: Session, finance: Session;
 // Paystack behaviour for the next initialize calls (first item used first), and the verify answer.
 let plan: ("ok" | "refuse" | "duplicate" | "error5xx" | "network" | "gate")[] = [];
 let gate: { open: () => void; wait: Promise<void> } | null = null;
-let verifyAnswer: () => Response = () => Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 });
+let verifyAnswer: (url: string) => Response | Promise<Response> = () => Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 });
 const newGate = () => { let open!: () => void; const wait = new Promise<void>((r) => { open = r; }); gate = { open, wait }; return gate; };
 
 const sql = async <T = Record<string, unknown>>(s: string, ...a: unknown[]) => (await (await w.db()).prepare(s).bind(...a).all<T>()).results;
@@ -45,7 +45,7 @@ before(async () => {
       const j = JSON.parse(b);
       return Response.json({ status: true, data: { authorization_url: `https://checkout.paystack.com/${j.reference}`, access_code: `AC_${j.reference}`, reference: j.reference } });
     }
-    if (u.host === "api.paystack.co" && u.pathname.startsWith("/transaction/verify/")) return verifyAnswer();
+    if (u.host === "api.paystack.co" && u.pathname.startsWith("/transaction/verify/")) return verifyAnswer(req.url);
     return undefined;
   } });
   // A published programme WITH international tuition, in this isolated test database only (never published elsewhere).
@@ -175,11 +175,21 @@ test("controlled recovery: a definite refusal allows a new attempt; an uncertain
   // D.1.1 checks below are exercised exactly as before. An administrator outside the authorised group stays refused.
   await owner.json("PUT", "/api/app/owner/approval-policy", { categories: {}, paymentRelease: { enabled: true, approver: "owner", expiresInHours: 24, allowedGroups: ["finance"], requiresApproval: false } });
   assert.equal((await admin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked", confirmedWithPaystack: true })).status, 403, "unassigned administrator not authorised");
-  // Paystack cannot confirm the reference (its answer for unknown references is undocumented): explicit confirmation needed.
-  const noConfirm = await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked" });
-  assert.deepEqual([noConfirm.status, (await json<{ error: string }>(noConfirm)).error], [409, "confirm_required"]);
-  assert.equal((await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { confirmedWithPaystack: true })).status, 400, "a reason is required");
-  await finance.json("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Not in the Paystack dashboard; student never received a link", confirmedWithPaystack: true });
+  // Stage E.4: Paystack cannot confirm the reference (its answer for unknown references is undocumented). That is never
+  // proof of non-payment: an officer's confirmation no longer overrides it, and the attempt stays on hold.
+  const noConfirm = await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked", confirmedWithPaystack: true });
+  assert.deepEqual([noConfirm.status, (await json<{ error: string }>(noConfirm)).error], [409, "payment_unresolved"]);
+  assert.deepEqual((await sql("SELECT state, verified_status FROM payment_attempts WHERE id = ?1", att.id))[0], { state: "uncertain", verified_status: "unknown" });
+  // A definite "abandoned" answer is stored, but must hold for 30 minutes before a release.
+  verifyAnswer = (u) => paystackAnswer(w, u, "abandoned");
+  try {
+    const early = await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked" });
+    assert.deepEqual([early.status, (await json<{ error: string }>(early)).error], [409, "payment_settling"]);
+    assert.equal((await post(b2)).status, 409, "still no new checkout while the attempt is on hold");
+    await settled(w, att.id);
+    assert.equal((await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { confirmedWithPaystack: true })).status, 400, "a reason is required");
+    await finance.json("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Abandoned at Paystack for over 30 minutes; student never received a link" });
+  } finally { verifyAnswer = () => Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 }); }
   const c0 = inits();
   assert.equal((await post(b2)).status, 200, "after release the student can open a new checkout");
   assert.deepEqual((await attempts(ref2)).map((a) => [a.attempt, a.state]), [[1, "released"], [2, "initialized"]]);

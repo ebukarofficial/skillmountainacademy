@@ -4,7 +4,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { build } from "esbuild";
-import { startWorker, SECRETS, registration } from "./worker-harness.ts";
+import { startWorker, SECRETS, registration, paystackAnswer, settled } from "./worker-harness.ts";
 import { signIn as helperSignIn, session, type Session } from "./lms-helpers.ts";
 import { stepOf, totpAt } from "../src/server/lms/mfa-crypto.ts";
 
@@ -58,7 +58,7 @@ before(async () => {
       const j = JSON.parse(b);
       return Response.json({ status: true, data: { authorization_url: `https://checkout.paystack.com/${j.reference}`, access_code: "AC", reference: j.reference } });
     }
-    if (u.host === "api.paystack.co" && u.pathname.startsWith("/transaction/verify/")) return Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 });
+    if (u.host === "api.paystack.co" && u.pathname.startsWith("/transaction/verify/")) return paystackAnswer(w, req.url, "abandoned"); // Stage E.4
     return undefined;
   } });
   legacy = await signIn("owner@example.com"); // an unassigned (legacy) administrator from ADMIN_EMAILS
@@ -388,8 +388,9 @@ test("17 Paystack release stays disabled until the owner authorises it; with app
   const aca2 = await signIn("aca2@example.com");
   await expectErr(aca2.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "x", confirmedWithPaystack: true }), 403);
   await expectErr(legacy.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "x", confirmedWithPaystack: true }), 403, "release_not_authorised");
-  await expectErr(fin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked" }), 409, "confirm_required", "the D.1.1 checks run before a request is stored");
-  const rq = await fin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Not in the Paystack dashboard", confirmedWithPaystack: true });
+  await expectErr(fin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked" }), 409, "payment_settling", "the checks run before a request is stored (E.4: a definite answer must hold 30 minutes)");
+  await settled(w, att.id);
+  const rq = await fin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Abandoned at Paystack for over 30 minutes" });
   assert.equal(rq.status, 202);
   const reqId = ((await rq.json()) as { request: { id: string } }).request.id;
   assert.equal((await sql<{ state: string }>("SELECT state FROM payment_attempts WHERE id = ?1", att.id))[0].state, "uncertain", "nothing released before approval");

@@ -127,3 +127,18 @@ export function learner(over: Record<string, unknown> = {}) {
 export function registration(over: Record<string, unknown> = {}) {
   return { programme: "cloud", plan: "full", method: "paystack", currency: "NGN", termsAccepted: true, termsVersion: "2026-10c", turnstileToken: "good-token", learner: learner(), ...over };
 }
+
+// ---------- Stage E.4: Paystack verification fixtures (mocked; nothing is ever paid) ----------
+type HasDb = Pick<Awaited<ReturnType<typeof startWorker>>, "db">;
+// Paystack's verify answer for the reference in `url`: a well-formed answer for that reference with the attempt's true
+// amount, in the given status ("abandoned", "failed", "success", "ongoing" ...).
+export async function paystackAnswer(w: HasDb, url: string, status = "abandoned", over: Record<string, unknown> = {}) {
+  const ref = decodeURIComponent(new URL(url).pathname.split("/").pop()!);
+  const r = await (await w.db()).prepare("SELECT i.amount_kobo FROM payment_attempts a JOIN instalments i ON i.id = a.instalment_id WHERE a.reference = ?1").bind(ref).first<{ amount_kobo: number }>();
+  return Response.json({ status: true, message: "Verification successful", data: { id: Math.floor(Math.random() * 1e9), status, reference: ref, amount: r?.amount_kobo ?? 0, currency: "NGN", paid_at: status === "success" ? new Date().toISOString() : null, ...over } });
+}
+// Fixture: Paystack already gave a definite non-success answer `minutes` ago, as an earlier check would have stored it.
+// (The write moves the attempt's version, so the stored evidence is no longer current: a release must check again.)
+export async function settled(w: HasDb, attemptId: string, minutes = 31) {
+  await (await w.db()).prepare("UPDATE payment_attempts SET verified_status = 'abandoned', first_verified_at = ?2 WHERE id = ?1").bind(attemptId, new Date(Date.now() - minutes * 60_000).toISOString()).run();
+}

@@ -7,7 +7,7 @@
 // Every approval rule is a test fixture. Paystack and email are mocked. Nothing is paid or sent.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { startWorker, SECRETS, registration } from "./worker-harness.ts";
+import { startWorker, SECRETS, registration, paystackAnswer, settled } from "./worker-harness.ts";
 import { signIn as helperSignIn, type Session } from "./lms-helpers.ts";
 import { stepOf, totpAt } from "../src/server/lms/mfa-crypto.ts";
 
@@ -18,7 +18,9 @@ const ids: Record<string, string> = {};
 const OWNER = "boss@example.com";
 
 // Paystack: initialize fails with a network error (leaving an uncertain attempt); verify can be held and answered.
-let verifyAnswer: () => Response = () => Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 });
+// Stage E.4: by default a definite, matching "abandoned" answer (a release needs one; see uncertainAttempt's fixture).
+const ABANDONED = (url: string) => paystackAnswer(w, url, "abandoned");
+let verifyAnswer: (url: string) => Response | Promise<Response> = ABANDONED;
 let hold: { armed: boolean; open?: () => void; wait?: Promise<void>; reached: boolean } = { armed: false, reached: false };
 const armHold = () => { let open!: () => void; const wait = new Promise<void>((r) => { open = r; }); hold = { armed: true, open, wait, reached: false }; };
 
@@ -94,6 +96,7 @@ async function uncertainAttempt() {
   await w.post("/api/register", b);
   const [a] = await sql<{ id: string; state: string }>("SELECT a.id, a.state FROM payment_attempts a JOIN orders o ON o.id = a.order_id WHERE o.idempotency_key = ?1", b.idempotencyKey);
   assert.equal(a.state, "uncertain");
+  await settled(w, a.id); // Stage E.4 fixture: Paystack's definite answer has held for 30 minutes
   return a.id;
 }
 const attemptState = async (id: string) => (await sql<{ state: string; released_reason: string | null }>("SELECT state, released_reason FROM payment_attempts WHERE id = ?1", id))[0];
@@ -104,7 +107,7 @@ before(async () => {
     if (u.host === "api.paystack.co" && u.pathname === "/transaction/initialize") throw new TypeError("network connection lost");
     if (u.host === "api.paystack.co" && u.pathname.startsWith("/transaction/verify/")) {
       if (hold.armed) { hold.armed = false; hold.reached = true; await hold.wait; }
-      return verifyAnswer();
+      return verifyAnswer(rq.url);
     }
     return undefined;
   } });
@@ -178,7 +181,7 @@ test("E2.3 head appointment: a superseded run cannot end the current headship or
 
 test("E2.4 payment release: a superseded run cannot release the attempt", async () => {
   const att = await uncertainAttempt();
-  const rq = await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Not in the Paystack dashboard", confirmedWithPaystack: true });
+  const rq = await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Not in the Paystack dashboard" });
   assert.equal(rq.status, 202);
   const id = (await body<{ request: { id: string } }>(rq)).request.id;
   await supersedeAfterClaim(id);
@@ -193,7 +196,7 @@ test("E2.4 payment release: a superseded run cannot release the attempt", async 
 
 test("E2.5 real interleaving: the first run is paused, a newer run takes over and completes, the first resumes and changes nothing", async () => {
   const att = await uncertainAttempt();
-  const id = (await body<{ request: { id: string } }>(await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked by Finance", confirmedWithPaystack: true }))).request.id;
+  const id = (await body<{ request: { id: string } }>(await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked by Finance" }))).request.id;
   armHold();
   const first = approve(owner, id); // claims, then pauses inside the Paystack check
   for (let i = 0; i < 200 && !hold.reached; i++) await new Promise((r) => setTimeout(r, 10));
@@ -317,11 +320,15 @@ test("E2.11 every executor keeps its safeguards (refused with nothing committed)
   }
 });
 
-test("E2.12 payment release keeps verify-first and the confirmation requirement", async () => {
+test("E2.12 payment release keeps verify-first; an unconfirmed reference blocks it even with the officer's confirmation (E.4)", async () => {
   const att = await uncertainAttempt();
-  // Confirmation is still required before a request can even be made.
-  await expectErr(fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked" }), 409, "confirm_required");
-  const id = (await body<{ request: { id: string } }>(await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked", confirmedWithPaystack: true }))).request.id;
+  // Stage E.4 (stricter than the former confirmation requirement): Paystack cannot confirm the reference, so no request
+  // can be made, whatever the officer confirms.
+  verifyAnswer = () => Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 });
+  try { await expectErr(fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked", confirmedWithPaystack: true }), 409, "payment_unresolved"); }
+  finally { verifyAnswer = ABANDONED; }
+  await settled(w, att);
+  const id = (await body<{ request: { id: string } }>(await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked" }))).request.id;
   // Paystack now reports the payment as successful: it is recorded, and the approved release is refused.
   const [a] = await sql<{ reference: string; amount: number }>("SELECT a.reference, i.amount_kobo AS amount FROM payment_attempts a JOIN instalments i ON i.id = a.instalment_id WHERE a.id = ?1", att);
   verifyAnswer = () => Response.json({ status: true, message: "Verification successful", data: { id: 99001, status: "success", reference: a.reference, amount: a.amount, currency: "NGN", paid_at: new Date().toISOString() } });
@@ -329,7 +336,7 @@ test("E2.12 payment release keeps verify-first and the confirmation requirement"
     const r = await body<{ executed: boolean; error: string }>(await approve(owner, id));
     assert.equal(r.executed, false);
     assert.match(r.error, /paid_at_paystack/);
-  } finally { verifyAnswer = () => Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 }); }
+  } finally { verifyAnswer = ABANDONED; }
   assert.notEqual((await attemptState(att)).state, "released", "never released");
   assert.equal((await sql<{ status: string }>("SELECT i.status FROM instalments i JOIN payment_attempts a ON a.instalment_id = i.id WHERE a.id = ?1", att))[0].status, "paid", "recorded through the existing path");
   assert.equal((await fences(id)).length, 0);

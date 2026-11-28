@@ -26,7 +26,7 @@ const NOW = new Date().toISOString();
 const PENDING = "0010_owner_integrity.sql";
 // Expansion Stage B added 0011_catalogue.sql (local/staging only). Production and this staging rehearsal start at 0009,
 // so both are pending; the 0010 evidence below is unchanged and 0011 is checked alongside it.
-const PENDING_ALL = ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql", "0017_execution_fencing.sql"]; // 0012: Stage D, local/staging only
+const PENDING_ALL = ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql", "0015_institution.sql", "0016_approval_execution.sql", "0017_execution_fencing.sql", "0018_payment_reconciliation.sql"]; // 0012: Stage D, local/staging only
 // 0011 adds columns (catalogue fields, duration snapshot) and 0012 empty pricing-snapshot columns on orders; no rows added or removed
 const CATALOGUE_TABLES = ["programmes", "enrolments", "orders"];
 const evidence: Record<string, unknown> = {};
@@ -109,7 +109,7 @@ test("3C-C3..C9 apply 0010 to the staging database (wrangler d1 migrations apply
   const expected = (JSON.parse(readFileSync("db/schema.expected.json", "utf8")).schema as { type: string; name: string; sql: string }[]).filter((e) => !skip(e.name)).map(norm).sort();
   const actual = readSchema(stg).filter((e) => !skip(e.name)).map(norm).sort();
   assert.deepEqual(actual, expected, "upgraded schema equals the expected schema");
-  assert.deepEqual(names(stg, "trigger"), ["audit_log_min_retention", "audit_log_no_update", "owner_record_no_delete", "owner_record_no_update"]);
+  assert.deepEqual(names(stg, "trigger"), ["audit_log_min_retention", "audit_log_no_update", "instalments_paid_kept", "owner_record_no_delete", "owner_record_no_update", "payment_attempts_checkout_guard", "payment_attempts_outcome_kept", "payment_attempts_release_guard", "payment_attempts_version", "payments_attempt_outcome", "payments_duplicate_bank"]);
   // C5 owner integrity: the Stage 2B set-up was carried into owner_record, which can be neither changed nor deleted.
   assert.deepEqual({ ...one(stg, "SELECT user_id, email FROM owner_record WHERE id = 1") }, { user_id: "u-own", email: "owner@staging.invalid" });
   assert.throws(() => execLocal(stg, "UPDATE owner_record SET user_id = 'u-leg'"), /fixed after bootstrap/);

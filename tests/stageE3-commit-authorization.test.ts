@@ -10,7 +10,7 @@
 // Every approval rule is a test fixture. Paystack and email are mocked. Nothing is paid or sent.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { startWorker, SECRETS, registration } from "./worker-harness.ts";
+import { startWorker, SECRETS, registration, paystackAnswer, settled } from "./worker-harness.ts";
 import { signIn as helperSignIn, type Session } from "./lms-helpers.ts";
 import { stepOf, totpAt } from "../src/server/lms/mfa-crypto.ts";
 import { accountChangeRefusal, adminMay, groupChangeRefusal } from "../src/server/lms/permissions.ts";
@@ -85,7 +85,8 @@ async function uncertainAttempt() {
 const attempt = async (id: string) => (await sql<{ state: string; instalment_id: string }>("SELECT state, instalment_id FROM payment_attempts WHERE id = ?1", id))[0];
 async function releaseRequest() {
   const att = await uncertainAttempt();
-  const r = await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked in the dashboard", confirmedWithPaystack: true });
+  await settled(w, att); // Stage E.4 fixture: Paystack's definite answer has held for 30 minutes
+  const r = await fin.send("POST", `/api/app/admin/payments/attempts/${att}/release`, { reason: "Checked in the dashboard" });
   assert.equal(r.status, 202, await r.clone().text());
   return { att, id: (await body<{ request: { id: string } }>(r)).request.id };
 }
@@ -107,7 +108,7 @@ before(async () => {
     if (u.host === "api.paystack.co" && u.pathname === "/transaction/initialize") throw new TypeError("network connection lost");
     if (u.host === "api.paystack.co" && u.pathname.startsWith("/transaction/verify/")) {
       if (hold.armed) { hold.armed = false; hold.reached = true; await hold.wait; }
-      return Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 });
+      return paystackAnswer(w, rq.url, "abandoned"); // Stage E.4: a definite, matching non-success answer
     }
     return undefined;
   } });
@@ -167,12 +168,14 @@ test("E3.7 the instalment is paid after planning: no release", async () => {
 
 test("E3.8 the attempt becomes ineligible after planning (resolved elsewhere, or a fresh claim): no release", async () => {
   const a = await releaseRequest();
+  // Stage E.4: any change to the attempt moves its version, so the Paystack answer this run obtained is discarded when it
+  // tries to store it (before the commit): "changed". The commit-time payment_evidence condition is tested in stageE4.
   const r = await approveReleaseWith(a.id, () => sql("UPDATE payment_attempts SET state = 'failed' WHERE id = ?1", a.att));
-  await assertNothingCommitted(a.id, r, "commit_refused:attempt_releasable");
+  await assertNothingCommitted(a.id, r, "changed");
   assert.equal((await attempt(a.att)).state, "failed", "untouched by the release");
   const b = await releaseRequest();
   const r2 = await approveReleaseWith(b.id, () => sql("UPDATE payment_attempts SET state = 'claimed', claimed_at = ?2 WHERE id = ?1", b.att, new Date().toISOString()));
-  await assertNothingCommitted(b.id, r2, "commit_refused:attempt_releasable");
+  await assertNothingCommitted(b.id, r2, "changed");
   assert.equal((await attempt(b.att)).state, "claimed", "an attempt in progress is not released");
 });
 
