@@ -300,3 +300,186 @@ There is **no migration and no schema change**. The owner email transition uses 
 | D-E1–D-E13 | Still unresolved; untouched by this stage. |
 
 **Stopped after the dashboard redesign. No other expansion stage was started.**
+
+---
+
+## Addendum — hardening and verification pass (28 November 2026, 06:30 WAT)
+
+This pass covers the three review points from the Owner's hardening brief. Nothing was redesigned. Nothing was deployed. No production configuration was touched and no remote database command was run.
+
+### A. What was implemented
+
+**1. The owner email transition is now atomic.**
+
+*The problem.* The first version ran its seven statements one by one: drop the trigger, move the account's email, move `owner_record`, re-create the trigger, write the audit row, end the sessions, cancel the sign-in links. That was resumable and idempotent, but **not atomic**. A failure after the trigger drop could leave the owner record unprotected until someone re-ran the tool.
+
+*What changed:*
+
+- `src/server/owner-transition.ts` now produces one statement list that **must run as a single D1 batch**, which D1 executes as one SQL transaction. SQLite DDL is transactional, so the trigger drop is rolled back too.
+- **The audit insert is the guard.** It has no `FROM` clause, so it always runs. Its NOT NULL `at` value is supplied only if every expected result holds. If any check fails, the insert fails and D1 rolls back **everything**. The checks are:
+  - the record and the account are both on the new address;
+  - it is the same account;
+  - the account is an active, not removed administrator;
+  - no other account has the address;
+  - `owner_record_no_update` is back in place;
+  - `changes() = 1`, meaning this very batch moved the record.
+- A failure in any other statement rolls back the same way.
+
+*The local tool, `scripts/owner/transition-email.mts`:*
+
+- It now runs the batch through wrangler's local platform proxy, with **remote bindings switched off**. It no longer runs separate `wrangler d1 execute` calls.
+- It refuses `--remote`.
+- It refuses when:
+  - there is no bootstrapped owner;
+  - the record holds a different address (a mismatch);
+  - the destination address already belongs to an account (it is never taken over).
+- If the transition was already done, it reports so and changes nothing.
+- It checks afterwards that the trigger is present.
+
+**2. Local owner configuration.** No code change. See section C.
+
+**3. Worker bundle: safe size reductions**, with no change to behaviour, security or messages:
+
+- One definition of the department assignment SQL: the plain `createAssignment` and `endAssignment` now reuse the statement builders added in Stage E.2.
+- One random-token helper: `b64u` is exported once from `auth.ts`; the copy in `routes/institution.ts` was removed.
+- The unused `Repo.cleanupRateLimits` was removed. Rate-limit clean-up is done by the retention job.
+
+### B. What was tested
+
+**New test file `tests/owner-transition.test.ts`: 13 of 13 pass.** Each failure test checks that the database is *exactly* as before:
+
+- the account and the owner record;
+- the number of users;
+- both owner-record triggers;
+- audit rows and history;
+- sessions;
+- unused sign-in links.
+
+It also checks that the trigger still blocks a direct change.
+
+| Test | Scenario | Result |
+|---|---|---|
+| T1 | Success | Same account and id; record moved; triggers present; one audit row; sessions and links ended; the record is protected again |
+| T2 | Injected failure while moving the account email | Unchanged |
+| T3 | Injected failure while moving `owner_record` (after the trigger drop) | Unchanged; the trigger is back |
+| T4 | Failure while restoring the trigger | The drop is rolled back as well |
+| T5 | Injected failure while writing the audit event | Unchanged |
+| T6 | Injected failure while ending sessions | Unchanged |
+| T7 | Injected failure while cancelling sign-in links | Unchanged |
+| T8 | Trigger not restored at all | Caught by the guard; rolled back |
+| T9 | Destination address belongs to another account | Refused; that account is untouched |
+| T10 | No bootstrapped owner, or a mismatched record | Refused; no account or owner created |
+| T11 | Second run | Refused by the guard; the completed transition stands |
+| T12 | After the transition | The owner completes the **real email-link sign-in and the authenticator step with the same factor** they enrolled before; then `isOwner: true, bootstrapped, strongSession: true`. Exactly one administrator account exists. |
+| T13 | The script itself | Refuses `--remote` and invalid input before touching anything; uses one batch with remote bindings off |
+
+`tests/dashboard-roles.test.ts` was updated to the atomic batch: a second run is now *refused* with nothing changed, where the earlier version made it a silent no-op. All 13 of its tests pass.
+
+**Full suite**, run in three parts after the last code change:
+
+| Part | Tests | Passed | Failed | Skipped |
+|---|---|---|---|---|
+| 1 (15 files) | 121 | 121 | 0 | 0 |
+| 2 (15 files) | 139 | 139 | 0 | 0 |
+| 3 (15 files) | 195 | 194 | 1 | 0 |
+| **Total** | **455** | **454** | **1** | **0** |
+
+**The known `3B.1` baseline failure remains the only failure:** "staging configuration … account_id is not pinned" (`tests/stage3b-gates.test.ts:312`). It is kept visible and has not been weakened.
+
+| Area | Result |
+|---|---|
+| Owner email transition | 13 of 13 (success and failure injection) |
+| Dashboard roles and direct API permissions | 13 of 13 |
+| Authentication and MFA regression | all pass: email-link sign-in, sessions, authenticator step-up, owner break-glass, owner bootstrap, MFA enforcement (`lms1`, `security`, `stage2b`, `stage2c` and others) |
+
+No existing test was weakened, deleted or bypassed.
+
+| Check | Result |
+|---|---|
+| TypeScript (both configurations) | pass |
+| ESLint | pass |
+| `npm run db:check` | PASS (17 migration files; no new migration) |
+| Production build | pass; 0 public pages with different visible text |
+| CSP check | pass |
+| Secret scan | pass |
+| `npm audit` | 0 vulnerabilities |
+| Worker bundle | 368,119 bytes = 359.49 KiB; budget 368,640 bytes; headroom **521 bytes** (section D) |
+
+### C. What was verified against the actual local environment
+
+**`.dev.vars` does not exist** in this workspace. It is git-ignored and was **not created**, so as not to create or overwrite anyone's local secrets. The effective local `OWNER_EMAIL` is therefore the value in `wrangler.jsonc` (`bookebukar@gmail.com`).
+
+Running `wrangler dev` with no override against the local database, after the transition, the owner status is `isOwner: false, state: "mismatch"`. This is the safe result: nobody is the owner, and no account was created.
+
+**To use the designated address locally**, on your own machine:
+
+```sh
+cp -n .dev.vars.example .dev.vars        # only if you have no .dev.vars yet; -n never overwrites
+# or, if you already have one, add this single line to it:
+#   OWNER_EMAIL=pascalsolomon63@gmail.com
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/owner/transition-email.mts --from <your current local owner email> --to pascalsolomon63@gmail.com
+```
+
+The second command moves your local owner account. It reads wrangler's default local database (`.wrangler/state`); add `--persist-to <dir>` if you use a different one.
+
+**Verified in this workspace** against the running local Worker (`wrangler dev --local`) and its local database. The values a `.dev.vars` would supply were passed with `--var`: `OWNER_EMAIL=pascalsolomon63@gmail.com` and a local-only `MFA_ENCRYPTION_KEY`.
+
+| Check | Result |
+|---|---|
+| Owner record | `user_id u-boss`, record and account both `pascalsolomon63@gmail.com` |
+| Accounts with the new address | 1 |
+| Accounts with the previous local address (`boss@example.com`) | **0**, so it cannot sign in at all |
+| Administrator accounts | 3 (the owner and two staff created earlier): no duplicate |
+| Owner records | 1 |
+| Sign-in through the real `/api/auth/verify` endpoint | 200 → `/api/me` is `u-boss` with the new address; owner status `isOwner: true, state: bootstrapped` |
+| Authenticator enrolled (real `/api/auth/mfa/setup` and `/enable`), then a second sign-in | `mfaRequired: true`; owner data refused before the code (403); **code step 200**; then `isOwner: true, bootstrapped, strongSession: true` |
+| The transition tool re-run on this database | "Already done … Nothing was changed." |
+| The tool run on a fresh local database (migrations applied, owner seeded) | Moved the account; a second run reported "already done"; both triggers present; one audit row |
+
+*Limitation of this check.* Email cannot be delivered offline, so the sign-in link's token row was placed in the local database directly. The **real** verify, MFA and owner endpoints were then used. The complete email path (send, then click) is covered end to end by test T12, where the harness captures the mocked email.
+
+Two wrangler warnings appear when the tool starts. One is about the sandbox proxy. The other notes that the AI binding is always remote; the tool never uses that binding, only the local D1 database.
+
+### D. Worker bundle: measured result
+
+| | Bytes | KiB |
+|---|---|---|
+| Before this pass | 368,627 | 359.99 |
+| **After this pass** | **368,119** | **359.49** |
+| Budget (`tests/phase9.test.ts`) | 368,640 | 360.00 |
+| **Headroom** | **521** | **0.51** |
+| Compressed (gzip -9), what Cloudflare measures | ≈110,305 | ≈107.7 |
+
+**The 5 KiB target was not reached without compromising the rules of the brief.**
+
+- Measured composition: **about 280 KB of the 368 KB (76%) is string content**. That is SQL, user-facing messages, email templates and the website configuration used by the assistant and pricing (`lib/config.ts`, 11 KB).
+- Duplicated string literals total about **0.6 KB**.
+- There are no npm dependencies in the Worker bundle.
+- Code duplication and unused code removed in this pass: about 0.5 KB.
+- The only remaining mechanical saving is about 1.4 KB, from collapsing line breaks inside multi-line SQL strings. I did not do it: it is a form of hand-minification that makes the SQL harder to maintain, and the brief excludes minifying merely to pass the budget.
+- Anything larger would mean shortening user-facing messages or removing features.
+
+**Recommendation for Owner approval (D-UI6, measured):**
+
+- Raise the test budget from 360 KiB to **400 KiB** of minified Worker code. That gives about 40 KiB of headroom for the next stages.
+- For reference, the current bundle compresses to about 108 KiB, roughly **3.5% of the Workers Free plan's 3 MiB compressed limit**. At 400 KiB minified the compressed size would be about 120 KiB, about 4%.
+- An alternative is to change the test to measure the compressed size, which is the limit Cloudflare actually applies, with a budget of, say, 128 KiB.
+
+The budget itself was **not** changed.
+
+### E. What remains unresolved
+
+- **Bundle headroom** is 521 bytes, pending decision D-UI6.
+- **The local `.dev.vars`** must be created by the Owner on their machine (section C). It was deliberately not created here.
+- **The production owner email is unchanged.** Its transition is a separate, approved, one-window procedure (section 9). The local tool cannot do it: it refuses `--remote` and runs with remote bindings off. In production the same SQL would run as one `wrangler d1 execute --remote --file` step. Whether a remote file execution is a single transaction must be confirmed and rehearsed on staging first.
+
+### F. What still requires Owner approval
+
+| # | Decision |
+|---|---|
+| D-UI1 | Production owner email transition. |
+| D-UI2 – D-UI5 | HR group; content group; advertising; global search. |
+| D-UI6 | Worker bundle budget (recommendation above). |
+| D-E1 – D-E13 | Unchanged and unresolved. |
+
+**Stopped after the hardening pass. Awaiting Owner review.**
