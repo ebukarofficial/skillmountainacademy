@@ -68,7 +68,7 @@ test("unassigned NON-owner administrator cannot promote themselves (the Stage 2 
   const me = await legacy.json<{ admin: { owner: boolean; role: string | null } }>("GET", "/api/me");
   assert.deepEqual([me.admin.owner, me.admin.role], [false, null]);
   for (const g of ["super", "finance", "reporting"]) {
-    const r = await legacy.send("PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: g });
+    const r = await legacy.send("PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: g, reason: "Stage E test" });
     assert.equal(r.status, 403, g);
   }
   assert.equal(await groupOf(w, ids.legacy), null);
@@ -84,7 +84,7 @@ test("unassigned NON-owner administrator cannot promote themselves (the Stage 2 
 test("before set-up nobody can assign groups; the owner's one-time bootstrap enables it and cannot be repeated", async () => {
   ids.a2 = (await owner.json<{ user: { id: string; adminRole: string } }>("POST", "/api/app/admin/users", { email: "a2@example.com", role: "admin", fullName: "Admin Two", sendInvite: false })).user.id;
   assert.equal(await groupOf(w, ids.a2), "reporting", "new administrators start read-only");
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "finance" })).status, 403, "owner must complete set-up first");
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "finance", reason: "Stage E test" })).status, 403, "owner must complete set-up first");
   assert.equal((await legacy.send("POST", "/api/app/owner/bootstrap")).status, 403, "non-owner cannot bootstrap");
   const st = await owner.json<{ isOwner: boolean; bootstrapped: boolean }>("GET", "/api/app/owner/status");
   assert.deepEqual([st.isOwner, st.bootstrapped], [true, false]);
@@ -92,26 +92,26 @@ test("before set-up nobody can assign groups; the owner's one-time bootstrap ena
   assert.equal(await groupOf(w, ids.owner), "super");
   assert.ok(await audited(w, "owner.bootstrap", ids.owner));
   assert.equal((await owner.send("POST", "/api/app/owner/bootstrap")).status, 409, "bootstrap privilege disabled after use");
-  assert.equal((await legacy.send("PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "super" })).status, 403, "still refused after set-up");
+  assert.equal((await legacy.send("PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "super", reason: "Stage E test" })).status, 403, "still refused after set-up");
 });
 
 test("Super Administrators: only the owner appoints them; they assign other groups but never their own, the owner's or a Super's", async () => {
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "super" })).status, 200);
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "super", reason: "Stage E test" })).status, 200);
   assert.ok(await audited(w, "admin.group_assigned", ids.a2));
   const a2 = await strong(w, "a2@example.com");
   ids.a3 = (await owner.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "a3@example.com", role: "admin", fullName: "Admin Three", sendInvite: false })).user.id;
-  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.a3}`, { adminRole: "finance" })).status, 200, "a Super assigns an authorised group");
+  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.a3}`, { adminRole: "finance", reason: "Stage E test" })).status, 200, "a Super assigns an authorised group");
   assert.equal(await groupOf(w, ids.a3), "finance");
-  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.a3}`, { adminRole: "super" })).status, 403, "only the owner appoints Supers");
-  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "academic" })).status, 403, "nobody changes their own group");
-  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.owner}`, { adminRole: "reporting" })).status, 403, "the owner's group is fixed");
-  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.owner}`, { status: "suspended" })).status, 403, "nobody suspends the owner");
+  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.a3}`, { adminRole: "super", reason: "Stage E test" })).status, 403, "only the owner appoints Supers");
+  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "academic", reason: "Stage E test" })).status, 403, "nobody changes their own group");
+  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.owner}`, { adminRole: "reporting", reason: "Stage E test" })).status, 403, "the owner's group is fixed");
+  assert.equal((await a2.send("PATCH", `/api/app/admin/users/${ids.owner}`, { status: "suspended", reason: "Stage E test" })).status, 403, "nobody suspends the owner");
   assert.equal((await a2.send("POST", "/api/app/admin/users", { email: "s3@example.com", role: "admin", fullName: "S3", adminRole: "super", sendInvite: false })).status, 403);
-  assert.equal((await legacy.send("PATCH", `/api/app/admin/users/${ids.a2}`, { status: "suspended" })).status, 403, "an unassigned admin cannot suspend a Super");
+  assert.equal((await legacy.send("PATCH", `/api/app/admin/users/${ids.a2}`, { status: "suspended", reason: "Stage E test" })).status, 403, "an unassigned admin cannot suspend a Super");
   // A normal (finance) administrator cannot change their own group or anyone else's.
   const a3 = await signIn(w, "a3@example.com");
-  assert.equal((await a3.send("PATCH", `/api/app/admin/users/${ids.a3}`, { adminRole: "super" })).status, 403);
-  assert.equal((await a3.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "reporting" })).status, 403);
+  assert.equal((await a3.send("PATCH", `/api/app/admin/users/${ids.a3}`, { adminRole: "super", reason: "Stage E test" })).status, 403);
+  assert.equal((await a3.send("PATCH", `/api/app/admin/users/${ids.a2}`, { adminRole: "reporting", reason: "Stage E test" })).status, 403);
   assert.equal(await groupOf(w, ids.a3), "finance");
 });
 
@@ -145,7 +145,7 @@ test("owner removals: Supers request, the owner approves; removed accounts canno
   await w.post("/api/auth/request", { email: "a3@example.com", turnstileToken: "good-token" }, { "cf-connecting-ip": "10.66.9.9" });
   await new Promise((r) => setTimeout(r, 300));
   assert.ok(!w.calls.slice(before).some((c) => c.url.includes("api.resend.com") && c.body.includes("a3@example.com")), "no sign-in link for a removed account");
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.a3}`, { status: "active" })).status, 403, "removal is permanent");
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.a3}`, { status: "active", reason: "Stage E test" })).status, 403, "removal is permanent");
   const row = await (await w.db()).prepare("SELECT removed_at, removed_by FROM users WHERE id = ?1").bind(ids.a3).first<{ removed_at: string; removed_by: string }>();
   assert.ok(row?.removed_at && row.removed_by === ids.owner, "row kept, marked removed");
   // Direct removal of a student by the owner; the owner cannot remove themselves.

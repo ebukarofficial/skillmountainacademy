@@ -337,7 +337,7 @@ test("permissions: a limited administrator is refused restricted functions by th
     const f = await signIn(x, "fin@example.com");
     assert.equal((await f.get("/api/app/admin/payments")).status, 200);
     assert.equal((await f.get("/api/app/admin/orders")).status, 200);
-    for (const [m, p, b] of [["GET", "/api/app/admin/recruitment"], ["GET", "/api/app/admin/audit"], ["POST", "/api/app/admin/admit", {}], ["PATCH", `/api/app/admin/users/${stu}`, { status: "suspended" }],
+    for (const [m, p, b] of [["GET", "/api/app/admin/recruitment"], ["GET", "/api/app/admin/audit"], ["POST", "/api/app/admin/admit", {}], ["PATCH", `/api/app/admin/users/${stu}`, { status: "suspended", reason: "Stage E test" }],
       ["GET", `/api/app/students/${stu}/grades`], ["POST", "/api/app/admin/users", { email: "x@example.com", role: "admin", fullName: "X" }]] as [string, string, unknown?][]) {
       const r = await f.send(m, p, b);
       assert.equal(r.status, 403, `${m} ${p}`);
@@ -350,9 +350,9 @@ test("permissions: a limited administrator is refused restricted functions by th
     assert.equal((await r.get("/api/app/admin/overview")).status, 200);
     assert.equal((await r.send("PATCH", `/api/app/admin/admissions/webdev`, { state: "closed" })).status, 403, "reporting is read-only");
     // Only the owner or a Super Administrator can change groups; nobody can raise their own.
-    assert.equal((await f.send("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "super" })).status, 403);
+    assert.equal((await f.send("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "super", reason: "Stage E test" })).status, 403);
     // A group change signs the person out at once.
-    await own.json("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "academic" });
+    await own.json("PATCH", `/api/app/admin/users/${fin.id}`, { adminRole: "academic", reason: "Stage E test" });
     assert.equal((await f.get("/api/me")).status, 401);
     // The owner keeps full access.
     assert.equal((await own.get("/api/app/admin/audit")).status, 200);
@@ -398,9 +398,9 @@ test("isolation: role and registration number cannot be changed through the API;
   assert.equal((await a.get("/api/app/admin/overview")).status, 403);
   // Suspension ends existing sessions at once.
   const b = await signIn(w, "sec-b@example.com");
-  await admin.json("PATCH", `/api/app/admin/users/${ids.stuB}`, { status: "suspended" });
+  await admin.json("PATCH", `/api/app/admin/users/${ids.stuB}`, { status: "suspended", reason: "Stage E test" });
   assert.equal((await b.get("/api/me")).status, 401);
-  await admin.json("PATCH", `/api/app/admin/users/${ids.stuB}`, { status: "active" });
+  await admin.json("PATCH", `/api/app/admin/users/${ids.stuB}`, { status: "active", reason: "Stage E test" });
   // Identifiers in the URL are validated: path tricks never reach a handler.
   for (const p of [`/api/app/students/..%2F..%2Fadmin/progress`, `/api/app/students/${"x".repeat(80)}/grades`]) assert.equal((await a.get(p)).status, 404);
 });

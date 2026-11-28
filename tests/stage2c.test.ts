@@ -139,9 +139,9 @@ test("a lost bootstrap record is detected from the audit log: nobody becomes own
 });
 
 test("the owner cannot accidentally suspend, regroup, reset or remove their own account; nobody else can either", async () => {
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.owner}`, { status: "suspended" })).status, 400);
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.owner}`, { role: "student" })).status, 400);
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.owner}`, { adminRole: "reporting" })).status, 403);
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.owner}`, { status: "suspended", reason: "Stage E test" })).status, 400);
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.owner}`, { role: "student", reason: "Stage E test" })).status, 400);
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ids.owner}`, { adminRole: "reporting", reason: "Stage E test" })).status, 403);
   assert.equal((await owner.send("POST", `/api/app/admin/users/${ids.owner}/mfa-reset`)).status, 400);
   assert.equal((await owner.send("POST", `/api/app/owner/users/${ids.owner}/remove`, { reason: "oops" })).status, 403);
   assert.equal(await groupOf(ids.owner), "super");
@@ -153,15 +153,15 @@ test("Super Administrators also need the authenticator code for group changes, M
   ids.sup = (await owner.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "sup@example.com", role: "admin", fullName: "Sup Admin", sendInvite: false, adminRole: "super" })).user.id;
   ids.fin = (await owner.json<{ user: { id: string } }>("POST", "/api/app/admin/users", { email: "fin@example.com", role: "admin", fullName: "Fin Admin", sendInvite: false, adminRole: "finance" })).user.id;
   const supEmail = await signIn(w, "sup@example.com"); // email link only, no authenticator yet
-  for (const [m, p, b] of [["PATCH", `/api/app/admin/users/${ids.fin}`, { adminRole: "academic" }], ["POST", `/api/app/admin/users/${ids.fin}/mfa-reset`],
-    ["POST", `/api/app/admin/users/${ids.fin}/removal-requests`, { reason: "x" }], ["PATCH", `/api/app/admin/users/${ids.fin}`, { status: "suspended" }]] as [string, string, unknown?][]) {
+  for (const [m, p, b] of [["PATCH", `/api/app/admin/users/${ids.fin}`, { adminRole: "academic", reason: "Stage E test" }], ["POST", `/api/app/admin/users/${ids.fin}/mfa-reset`],
+    ["POST", `/api/app/admin/users/${ids.fin}/removal-requests`, { reason: "x" }], ["PATCH", `/api/app/admin/users/${ids.fin}`, { status: "suspended", reason: "Stage E test" }]] as [string, string, unknown?][]) {
     const r = await supEmail.send(m, p, b);
     assert.equal(r.status, 403, `${m} ${p}`);
     assert.equal(await errOf(r), "mfa_step_required", `${m} ${p}`);
   }
   assert.equal(await groupOf(ids.fin), "finance", "nothing changed");
   const sup = (await strong(w, "sup@example.com")).s;
-  assert.equal((await sup.send("PATCH", `/api/app/admin/users/${ids.fin}`, { adminRole: "academic" })).status, 200, "with the code: allowed");
+  assert.equal((await sup.send("PATCH", `/api/app/admin/users/${ids.fin}`, { adminRole: "academic", reason: "Stage E test" })).status, 200, "with the code: allowed");
   assert.equal(await groupOf(ids.fin), "academic");
   ids.supCookie = sup.cookie;
 });
@@ -175,8 +175,8 @@ test("legacy (unassigned) administrators: day-to-day access kept; every administ
   assert.equal((await legacy.send("POST", "/api/app/admin/users", { email: "legacy-made@example.com", role: "student", fullName: "Legacy Made", sendInvite: false })).status, 201);
   // Refused.
   const refused: [string, string, unknown?][] = [
-    ["PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "super" }], ["PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "finance" }],
-    ["PATCH", `/api/app/admin/users/${ids.fin}`, { adminRole: "reporting" }], ["PATCH", `/api/app/admin/users/${ids.fin}`, { status: "suspended" }],
+    ["PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "super", reason: "Stage E test" }], ["PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "finance", reason: "Stage E test" }],
+    ["PATCH", `/api/app/admin/users/${ids.fin}`, { adminRole: "reporting", reason: "Stage E test" }], ["PATCH", `/api/app/admin/users/${ids.fin}`, { status: "suspended", reason: "Stage E test" }],
     ["POST", "/api/app/admin/users", { email: "l2@example.com", role: "admin", fullName: "L Two", sendInvite: false }],
     ["POST", "/api/app/admin/users", { email: "l3@example.com", role: "admin", fullName: "L Three", sendInvite: false, adminRole: "super" }],
     ["POST", `/api/app/admin/users/${ids.fin}/mfa-reset`], ["POST", `/api/app/admin/users/${ids.fin}/removal-requests`, { reason: "x" }],
@@ -202,7 +202,7 @@ test("owner review of legacy administrators: warning list, optional read-only re
   assert.equal((await legacy.send("POST", "/api/app/admin/users", { email: "blocked@example.com", role: "student", fullName: "Blocked", sendInvite: false })).status, 403, "restricted: read-only");
   assert.ok(await audited("admin.access_refused", undefined));
   // The owner assigns the group explicitly; the list empties.
-  await owner.json("PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "admissions" });
+  await owner.json("PATCH", `/api/app/admin/users/${ids.legacy}`, { adminRole: "admissions", reason: "Stage E test" });
   assert.equal(await groupOf(ids.legacy), "admissions");
   assert.equal((await owner.json<{ admins: unknown[] }>("GET", "/api/app/owner/legacy-admins")).admins.length, 0);
   await owner.json("PUT", "/api/app/owner/policy", { restrictUnassigned: false });
@@ -246,8 +246,8 @@ test("removing an instructor revokes access only: every academic record stays, t
   // Access revoked everywhere.
   assert.equal((await insSession.get("/api/me")).status, 401, "sessions ended");
   assert.notEqual((await verify(w, oldLink, "10.77.2.2")).r.status, 200, "older sign-in link revoked");
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ins}`, { status: "active" })).status, 403, "cannot be reactivated");
-  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ins}`, { role: "admin" })).status, 403);
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ins}`, { status: "active", reason: "Stage E test" })).status, 403, "cannot be reactivated");
+  assert.equal((await owner.send("PATCH", `/api/app/admin/users/${ins}`, { role: "admin", reason: "Stage E test" })).status, 403);
   await eligible(owner, ins, "graphics");
   assert.equal((await owner.send("POST", "/api/app/admin/enrolments", { studentId: stu, programme: "graphics", instructorId: ins })).status, 400, "cannot be given new students");
   // Until reassigned, the removed instructor receives no more email (no Meet links or student details).

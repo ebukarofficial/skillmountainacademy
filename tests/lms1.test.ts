@@ -82,12 +82,12 @@ test("admin manages users: create with student number, invite, edit, suspend (se
   assert.ok(await w.waitFor((c) => c.slice(before).some((x) => x.url.includes("api.resend.com") && x.body.includes("new@example.com") && x.body.includes("learning space is ready"))), "invite email");
   assert.equal((await admin.send("POST", "/api/app/admin/users", { email: "new@example.com", role: "student", fullName: "Dup" })).status, 409);
   const stu = await signIn(w, "new@example.com");
-  await admin.json("PATCH", `/api/app/admin/users/${created.user.id}`, { status: "suspended" });
+  await admin.json("PATCH", `/api/app/admin/users/${created.user.id}`, { status: "suspended", reason: "Stage E test" });
   assert.equal((await stu.get("/api/me")).status, 401, "suspended user is signed out immediately");
   const r = await w.post("/api/auth/request", { email: "new@example.com", turnstileToken: "good-token" }, { "cf-connecting-ip": "10.1.1.9" });
   assert.equal(r.status, 200);
   const me = await admin.json<{ user: { id: string } }>("GET", "/api/me");
-  assert.equal((await admin.send("PATCH", `/api/app/admin/users/${me.user.id}`, { status: "suspended" })).status, 400);
+  assert.equal((await admin.send("PATCH", `/api/app/admin/users/${me.user.id}`, { status: "suspended", reason: "Stage E test" })).status, 400);
   const list = await admin.json<{ users: { email: string }[] }>("GET", "/api/app/admin/users?role=student&q=new");
   assert.ok(list.users.some((u) => u.email === "new@example.com"));
   const audit = await admin.json<{ entries: { action: string }[] }>("GET", "/api/app/admin/audit");

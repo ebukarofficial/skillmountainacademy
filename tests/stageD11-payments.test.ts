@@ -12,7 +12,7 @@ import { snapshotProblems, type PricingSnapshot } from "../src/server/pricing-ru
 
 type W = Awaited<ReturnType<typeof startWorker>>;
 let w: W;
-let admin: Session;
+let admin: Session, owner: Session, finance: Session;
 // Paystack behaviour for the next initialize calls (first item used first), and the verify answer.
 let plan: ("ok" | "refuse" | "duplicate" | "error5xx" | "network" | "gate")[] = [];
 let gate: { open: () => void; wait: Promise<void> } | null = null;
@@ -33,7 +33,7 @@ const attempts = (orderRef: string) => sql<{ attempt: number; state: string; ref
 const sig = (instRef: string) => createHmac("sha256", SECRETS.PAYSTACK_SECRET_KEY).update(`pay|${instRef}`).digest("hex").slice(0, 32);
 
 before(async () => {
-  w = await startWorker({ env: { ...SECRETS, MFA_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString("base64") }, mock: async (req, b) => {
+  w = await startWorker({ env: { ...SECRETS, OWNER_EMAIL: "boss@example.com", MFA_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString("base64") }, mock: async (req, b) => {
     const u = new URL(req.url);
     if (u.host === "api.paystack.co" && u.pathname === "/transaction/initialize") {
       const mode = plan.shift() ?? "ok";
@@ -55,6 +55,18 @@ before(async () => {
   admin = await helperSignIn(w, "owner@example.com");
   const secret = (await admin.json<{ secret: string }>("POST", "/api/auth/mfa/setup")).secret;
   await admin.json("POST", "/api/auth/mfa/enable", { code: await totpAt(secret, stepOf(Date.now())) });
+  // Stage E: the owner, and a Finance administrator who may release once the owner authorises it.
+  const strong = async (email: string) => {
+    await reset();
+    const s = await helperSignIn(w, email);
+    const sec = (await s.json<{ secret: string }>("POST", "/api/auth/mfa/setup")).secret;
+    await s.json("POST", "/api/auth/mfa/enable", { code: await totpAt(sec, stepOf(Date.now())) });
+    return s;
+  };
+  owner = await strong("boss@example.com");
+  await owner.json("POST", "/api/app/owner/bootstrap");
+  await owner.json("POST", "/api/app/admin/users", { email: "fin@example.com", role: "admin", adminRole: "finance", fullName: "Finance Officer", sendInvite: false });
+  finance = await strong("fin@example.com");
 });
 after(async () => { await w.dispose(); });
 
@@ -153,11 +165,21 @@ test("controlled recovery: a definite refusal allows a new attempt; an uncertain
   const [att] = await sql<{ id: string }>("SELECT a.id FROM payment_attempts a JOIN orders o ON o.id = a.order_id WHERE o.reference = ?1", ref2);
   const list = await admin.json<{ attempts: { id: string; state: string }[] }>("GET", "/api/app/admin/payments/attempts");
   assert.ok(list.attempts.some((a) => a.id === att.id && a.state === "uncertain"));
+  // Stage E: release is disabled for everyone, the owner included, until the owner authorises it.
+  for (const who of [admin, finance, owner]) {
+    const off = await who.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked", confirmedWithPaystack: true });
+    assert.deepEqual([off.status, (await json<{ error: string }>(off)).error], [403, "release_not_authorised"]);
+  }
+  assert.equal((await attempts(ref2))[0].state, "uncertain", "nothing released");
+  // Test fixture only (isolated database): the owner authorises Finance to release without a second approval, so the
+  // D.1.1 checks below are exercised exactly as before. An administrator outside the authorised group stays refused.
+  await owner.json("PUT", "/api/app/owner/approval-policy", { categories: {}, paymentRelease: { enabled: true, approver: "owner", expiresInHours: 24, allowedGroups: ["finance"], requiresApproval: false } });
+  assert.equal((await admin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked", confirmedWithPaystack: true })).status, 403, "unassigned administrator not authorised");
   // Paystack cannot confirm the reference (its answer for unknown references is undocumented): explicit confirmation needed.
-  const noConfirm = await admin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked" });
+  const noConfirm = await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Checked" });
   assert.deepEqual([noConfirm.status, (await json<{ error: string }>(noConfirm)).error], [409, "confirm_required"]);
-  assert.equal((await admin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { confirmedWithPaystack: true })).status, 400, "a reason is required");
-  await admin.json("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Not in the Paystack dashboard; student never received a link", confirmedWithPaystack: true });
+  assert.equal((await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { confirmedWithPaystack: true })).status, 400, "a reason is required");
+  await finance.json("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "Not in the Paystack dashboard; student never received a link", confirmedWithPaystack: true });
   const c0 = inits();
   assert.equal((await post(b2)).status, 200, "after release the student can open a new checkout");
   assert.deepEqual((await attempts(ref2)).map((a) => [a.attempt, a.state]), [[1, "released"], [2, "initialized"]]);
@@ -176,7 +198,7 @@ test("recovery: a payment Paystack reports as successful is recorded and never r
   try {
     const check = await admin.json<{ paystack: { status: string }; instalment: { status: string } }>("POST", `/api/app/admin/payments/attempts/${att.id}/check`);
     assert.deepEqual([check.paystack.status, check.instalment.status], ["success", "paid"], "recorded through the existing idempotent path");
-    const rel = await admin.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "x", confirmedWithPaystack: true });
+    const rel = await finance.send("POST", `/api/app/admin/payments/attempts/${att.id}/release`, { reason: "x", confirmedWithPaystack: true });
     assert.equal(rel.status, 409);
   } finally { verifyAnswer = () => Response.json({ status: false, message: "Transaction reference not found" }, { status: 400 }); }
 });

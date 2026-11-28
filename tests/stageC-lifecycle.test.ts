@@ -106,7 +106,7 @@ test("admissions: a fully subscribed programme refuses new registrations", async
 test("eligibility: unapproved, inactive and not-eligible instructors cannot receive students; eligible ones can", async () => {
   assert.equal(await errOf(await enrol(ids.s1, "webdev", ids.cand)), "not_approved");
   assert.equal(await errOf(await enrol(ids.s1, "webdev", ids.insB)), "not_eligible", "approved but not approved to teach Web Development");
-  await owner.json("PATCH", `/api/app/admin/users/${ids.insD}`, { status: "suspended" });
+  await owner.json("PATCH", `/api/app/admin/users/${ids.insD}`, { status: "suspended", reason: "Stage E test" });
   assert.equal((await enrol(ids.s1, "webdev", ids.insD)).status, 400, "suspended");
   const r = await enrol(ids.s1, "webdev", ids.insA);
   assert.equal(r.status, 201);

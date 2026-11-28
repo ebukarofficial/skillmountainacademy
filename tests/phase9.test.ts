@@ -44,8 +44,9 @@ test("free-plan limits: small bundle, capped cron work, few queries per request"
     define: { "process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY": '""', "process.env.NEXT_PUBLIC_SHEET_URL": '""', "process.env.NEXT_PUBLIC_WHATSAPP": '""', "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": '""' } });
   const kb = r.outputFiles[0].contents.length / 1024;
   // Raised from 200 to 300 KiB for the final brief (bookings, assistant, records, checklist), and to 320 KiB for the
-  // expansion Stages B to D.1.1 (catalogue, capacity, pricing, payment attempts); the Free plan allows 3 MiB.
-  assert.ok(kb < 320, `Worker bundle ${kb.toFixed(1)} KiB (Free plan limit 3 MiB)`);
+  // expansion Stages B to D.1.1 (catalogue, capacity, pricing, payment attempts), and to 360 KiB for Stage E
+  // (departments, invitations, approvals); the Free plan allows 3 MiB.
+  assert.ok(kb < 360, `Worker bundle ${kb.toFixed(1)} KiB (Free plan limit 3 MiB)`);
   assert.ok(Number(read("src/server/cron.ts").match(/MAX_NOTICES_PER_RUN = (\d+)/)![1]) <= 20, "each cron run stays under 50 subrequests and 50 D1 queries");
   const src = files("src", [".ts"]).map(read).join("\n");
   assert.doesNotMatch(src, /bcrypt|scrypt|pbkdf2|argon/i, "no CPU-heavy hashing in routes");

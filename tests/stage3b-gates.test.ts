@@ -102,7 +102,7 @@ test("deploy gate: database compatibility read from the approved D1 UUID itself;
   const at = (migration: string | null | Error) => liveFakes({ migration }).deps;
   const cfg = pinnedCfg();
   await gateRefused(goodEnv, { ...at("0009_owner.sql"), wranglerConfig: cfg }, /Migrate first/);
-  await gateRefused(goodEnv, { ...at("0015_future.sql"), wranglerConfig: cfg }, /newer than this build .* rollback procedure/);
+  await gateRefused(goodEnv, { ...at("0016_future.sql"), wranglerConfig: cfg }, /newer than this build .* rollback procedure/);
   await gateRefused(goodEnv, { ...at(null), wranglerConfig: cfg }, /no migration history/);
   await gateRefused(goodEnv, { ...at(new Error("D1 query refused: permission")), wranglerConfig: cfg }, /could not be read \(D1 query refused: permission\)/);
   await gateRefused(goodEnv, { ...at("garbage.sql"), wranglerConfig: cfg }, /unrecognised latest migration/);

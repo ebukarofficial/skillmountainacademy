@@ -19,9 +19,9 @@ test("the API list in docs/lms/API.md is current", () => {
   assert.equal(readFileSync(join(ROOT, "docs/lms/API.md"), "utf8"), apiDoc(routes), "run: node scripts/api-docs.mts");
 });
 
-test("every non-public route refuses signed-out requests (401); only sign-in (including the authenticator step and owner break-glass recovery, which need a pending or owner session), admissions status, the faculty list, call requests and the admissions assistant are public", async () => {
+test("every non-public route refuses signed-out requests (401); only sign-in (including the authenticator step and owner break-glass recovery, which need a pending or owner session), staff invitation links (Stage E: a valid single-use token), admissions status, the faculty list, call requests and the admissions assistant are public", async () => {
   const pub = routes.filter((r) => r.roles === "public").map((r) => `${r.method} ${r.path}`).sort();
-  assert.deepEqual(pub, ["GET /api/admissions", "GET /api/faculty", "GET /api/faculty/:id/photo", "POST /api/assistant/ask", "POST /api/auth/logout", "POST /api/auth/mfa/verify", "POST /api/auth/owner-recovery", "POST /api/auth/request", "POST /api/auth/verify", "POST /api/bookings"]);
+  assert.deepEqual(pub, ["GET /api/admissions", "GET /api/faculty", "GET /api/faculty/:id/photo", "POST /api/assistant/ask", "POST /api/auth/invitations/accept", "POST /api/auth/invitations/decline", "POST /api/auth/invitations/preview", "POST /api/auth/logout", "POST /api/auth/mfa/verify", "POST /api/auth/owner-recovery", "POST /api/auth/request", "POST /api/auth/verify", "POST /api/bookings"]);
   for (const r of routes.filter((x) => x.roles !== "public")) {
     const res = await w.fetchApi(fill(r.path), { method: r.method, headers: { origin: "https://skillmountainacademy.com", "content-type": "application/json" }, body: r.method === "GET" ? undefined : "{}" });
     assert.equal(res.status, 401, `${r.method} ${r.path} -> ${res.status}`);
