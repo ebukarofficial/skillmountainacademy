@@ -71,6 +71,7 @@ export async function resolveProgramme(db: DB | undefined, slug: string | null |
     internshipMonths: p.internshipMonths, level: p.level, ...(p.audience ? { audience: p.audience } : {}), ...(p.track ? { track: p.track } : {}),
     timedPrice: p.timedPrice, fastTrack: false, curriculum: bundled?.curriculum ?? `/curricula/${p.slug}.pdf`, groupPrice: p.groupPrice,
     ...(p.fullPaymentOnly ? { fullPaymentOnly: true } : {}), tone: p.tone, learn: p.learn, ...(p.school ? { school: p.school } : {}),
+    ...(p.priceUsdCents ? { priceUsdCents: p.priceUsdCents } : {}),
   };
 }
 

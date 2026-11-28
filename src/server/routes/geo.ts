@@ -2,7 +2,8 @@
 // Rates come from ExchangeRate-API's free open endpoint (no key; attribution link shown on the site; data updates
 // daily, and we fetch only every 12 hours). If it fails, the CC0 currency-api feed on jsDelivr is tried. If both fail,
 // the last known rates stay in KV, so prices keep showing.
-import { CURRENCIES, convertParts, currencyForCountry, planParts, priceNaira, type Currency, type Rates } from "../../../lib/pricing.ts";
+import { CURRENCIES, currencyForCountry, priceNaira, type Currency, type Rates } from "../../../lib/pricing.ts";
+import { getFxPolicy, ipCountry, quoteTuition, resolveCountry, validCountry } from "../pricing";
 import { LIFECYCLE_MESSAGE, lifecycleOf, resolveProgramme } from "../catalogue";
 import type { AppEnv } from "../env";
 import { json } from "../http";
@@ -60,7 +61,7 @@ export async function refreshRates(env: AppEnv): Promise<Rates | null> {
 
 // GET /api/geo: the visitor's country (from Cloudflare) and the currency to show, plus the cached rates.
 export async function handleGeo(req: Request, env: AppEnv): Promise<Response> {
-  const country = (req as Request & { cf?: { country?: string } }).cf?.country ?? null;
+  const country = ipCountry(req); // validated ISO code from Cloudflare, or null
   let rates = await readRates(env);
   // First visit after setup, before the cron has run. At most one attempt per 10 minutes per Worker instance.
   if (!rates && env.KV && Date.now() - lastTry > 600_000) {
@@ -71,30 +72,30 @@ export async function handleGeo(req: Request, env: AppEnv): Promise<Response> {
   return json({ ok: true, country, currency, rates }, 200, { "cache-control": "private, max-age=600" });
 }
 
-// GET /api/quote?programme=<slug>&country=<ISO2>[&plan=full|parts]
-// The one place where a programme's amount is converted for display. The country of residence decides the
-// currency (NGN, GBP, EUR, USD: see currencyForCountry). Paystack always charges in naira, so the charge amount
-// and currency are returned separately and shown before payment.
+// GET /api/quote?programme=<slug>[&country=<ISO2 country of residence>][&plan=full|parts]
+// Stage D: the server's country-based tuition quote (src/server/pricing.ts). The country is the validated country of
+// residence when given, otherwise Cloudflare's network country. No currency is accepted from the browser. The tuition
+// presentation and what Paystack actually charges (always naira, today) are returned separately.
 export async function handleQuote(req: Request, env: AppEnv): Promise<Response> {
   const u = new URL(req.url);
   const life = await lifecycleOf(env.DB, u.searchParams.get("programme"));
   if (life && life !== "published" && life !== "unknown") return json({ ok: false, error: "programme_unavailable", message: LIFECYCLE_MESSAGE[life] }, 409);
   const prog = await resolveProgramme(env.DB, u.searchParams.get("programme"));
   if (!prog) return json({ ok: false, error: "invalid", message: "Unknown programme." }, 400);
-  const cc = (u.searchParams.get("country") || (req as Request & { cf?: { country?: string } }).cf?.country || "").toUpperCase();
-  const country = /^[A-Z]{2}$/.test(cc) ? cc : null;
-  const wantParts = u.searchParams.get("plan") === "parts" && !prog.fullPaymentOnly;
-  const totalNaira = priceNaira(prog);
-  const partsNaira = planParts(totalNaira, wantParts ? "parts" : "full");
-  let currency: Currency = currencyForCountry(country);
-  const rates = currency === "NGN" ? null : await readRates(env);
-  let shown = convertParts(partsNaira, currency, rates);
-  if (!shown) { currency = "NGN"; shown = partsNaira; } // no rates yet: show naira rather than a guess
+  const requested = u.searchParams.get("country");
+  if (requested && !validCountry(requested)) return json({ ok: false, error: "invalid_country", message: "Please choose a valid country of residence." }, 400);
+  const country = resolveCountry(requested, ipCountry(req));
+  const plan = u.searchParams.get("plan") === "parts" && !prog.fullPaymentOnly ? "parts" : "full";
+  const [rates, fx] = await Promise.all([readRates(env), getFxPolicy(env.DB)]);
+  const q = quoteTuition({ prog, totalNaira: priceNaira(prog), plan, country, rates, fx });
+  const p = q.presentation;
   return json({
-    ok: true, programme: prog.slug, country, currency,
-    display: { total: shown.reduce((a, b) => a + b, 0), parts: shown, approximate: currency !== "NGN" },
-    charge: { currency: "NGN", total: totalNaira, parts: partsNaira, provider: "Paystack" },
-    plan: wantParts ? "parts" : "full", fullPaymentOnly: !!prog.fullPaymentOnly,
-    rate: currency === "NGN" ? 1 : rates!.rates[currency], ratesUpdatedAt: currency === "NGN" ? null : rates!.fetchedAt, source: currency === "NGN" ? null : rates!.source,
+    ok: true, programme: prog.slug, country: country.country, countrySource: country.source, tier: q.tier, tuitionCurrency: q.tuitionCurrency, tuition: q.tuition,
+    // Backward-compatible display fields (whole units), now carrying the presentation kind and note.
+    currency: p.currency, display: { total: p.totalMinor / 100, parts: p.partsMinor.map((n) => n / 100), approximate: p.kind === "guide_from_naira", kind: p.kind, note: p.note,
+      totalMinor: p.totalMinor, partsMinor: p.partsMinor },
+    charge: { currency: "NGN", total: q.charge.totalNaira, parts: q.charge.partsNaira, provider: q.charge.provider, available: q.charge.available, reason: q.charge.reason },
+    plan, fullPaymentOnly: !!prog.fullPaymentOnly,
+    rate: q.fx.rate ?? 1, ratesUpdatedAt: q.fx.fetchedAt, source: q.fx.source, fx: { policy: q.fx.policy, usable: q.fx.usable, reason: q.fx.reason },
   }, 200, { "cache-control": "private, max-age=300" });
 }

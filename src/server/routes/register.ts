@@ -2,7 +2,8 @@
 // the learner and the owner (Resend) and mirrors the registration to the Google Sheet. Payment starts in payments.ts.
 import { EDUCATION, ENGLISH, FLAGS, BANK, duration, type Programme } from "../../../lib/config.ts";
 import { assertLifecycleAllowsNew, resolveProgramme } from "../catalogue";
-import { dueDays, lagosDate, money, planParts, priceNaira, type Currency, type Plan, CURRENCIES } from "../../../lib/pricing.ts";
+import { getFxPolicy, ipCountry, quoteTuition, recordPricingSnapshot, resolveCountry, snapshotOf, validCountry, countryCodeServer } from "../pricing";
+import { dueDays, lagosDate, money, planParts, priceNaira, type Currency, type Plan } from "../../../lib/pricing.ts";
 import type { AppEnv } from "../env";
 import { siteUrl } from "../env";
 import { ApiError, clientIp, json, nowIso, randomCode, readJson, sameOrigin } from "../http";
@@ -57,7 +58,11 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   const plan = c.oneOf(body.plan ?? "full", ["full", "parts"] as const, "how to pay") as Plan;
   if (plan === "parts" && prog.fullPaymentOnly) c.errors.push(`${prog.name} is paid in full; it has no instalment plan.`);
   const method = c.oneOf(body.method ?? "paystack", ["paystack", "bank"] as const, "a payment method");
-  const currency = (CURRENCIES as readonly string[]).includes(String(body.currency)) ? (body.currency as Currency) : "NGN";
+  // Stage D: the browser's "currency" is ignored. The country of residence comes from the form (ISO code, validated
+  // here; the country name is checked as a fallback) and decides the tuition currency on the server.
+  const rawLearner = (body.learner as Record<string, unknown>) ?? {};
+  const declared = validCountry(rawLearner.countryCode) ?? countryCodeServer(String(rawLearner.country ?? ""));
+  if (rawLearner.countryCode && !validCountry(rawLearner.countryCode)) c.errors.push("Please choose a valid country of residence.");
   if (body.termsAccepted !== true) c.errors.push("Please accept the Terms and Conditions.");
   const members = readMembers(c, body.members, prog);
   c.done();
@@ -75,7 +80,12 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   const parts = planParts(total, plan);
   if (method === "paystack" && !env.PAYSTACK_SECRET_KEY) throw new ApiError(503, "not_configured", "Online payment is not set up yet. Please choose bank transfer, or contact us on WhatsApp.");
 
-  const rates = await readRates(env);
+  const [rates, fx] = await Promise.all([readRates(env), getFxPolicy(env.DB)]);
+  const country = resolveCountry(declared, ipCountry(req));
+  const q = quoteTuition({ prog, totalNaira: total, plan, country, rates, fx });
+  // International tuition (a programme with a dollar price) cannot be paid online yet: nothing is saved or charged.
+  if (!q.charge.available) throw new ApiError(409, "international_payment_unavailable", q.charge.reason ?? "This tuition cannot be paid online yet. Please contact Admissions.");
+  const currency: Currency = q.presentation.currency;
   const now = new Date();
   const at = nowIso();
   const reference = `SMA-${method === "bank" ? "BT-" : ""}${randomCode(12)}`;
@@ -93,7 +103,7 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   const order: OrderRow = {
     id: crypto.randomUUID(), reference, created_at: at, registration_id: leadId, programme_slug: prog.slug, plan, method,
     total_kobo: total * 100, regular_kobo: prog.price * 100, hold_id: hold?.id ?? null, group_size: groupSize,
-    display_currency: currency, fx_rate: currency === "NGN" ? 1 : rates?.rates[currency] ?? null, fx_at: currency === "NGN" ? null : rates?.fetchedAt ?? null,
+    display_currency: currency, fx_rate: currency === "NGN" ? 1 : q.presentation.kind === "guide_from_naira" ? rates?.rates[currency] ?? null : null, fx_at: currency === "NGN" ? null : rates?.fetchedAt ?? null,
     status: "pending",
   };
   const days = dueDays(prog);
@@ -102,6 +112,9 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
     reference: `${reference}-P${i + 1}`, status: "due", reminder_sent_at: null, link_sent_at: null, paid_at: null,
   }));
   await repo.createRegistration({ people, order, instalments });
+  // Stage D snapshot (migration 0012). Best effort: on an older database the order is exactly as before.
+  await recordPricingSnapshot(env.DB, order.id, { residence: country.residence, network: country.network, tier: q.tier, tuitionCurrency: q.tuition.currency,
+    tuitionMinor: q.tuition.minor, snapshot: snapshotOf(q, prog) });
 
   ctx.waitUntil(afterRegister(env, { prog, learner, order, instalments, members, terms }));
 
@@ -109,7 +122,7 @@ export async function handleRegister(req: Request, env: AppEnv, ctx: ExecutionCo
   return json({
     ok: true, reference, method, plan, totalNaira: total, regularNaira: prog.price, holdApplied: !!hold,
     parts: instalments.map((i) => ({ seq: i.seq, naira: i.amount_kobo / 100, due: i.due_date })),
-    payNowNaira: parts[0], chargeCurrency: "NGN", displayCurrency: currency, fxRate: order.fx_rate,
+    payNowNaira: parts[0], chargeCurrency: "NGN", displayCurrency: currency, fxRate: order.fx_rate, tier: q.tier, country: country.country,
     authorizationUrl: pay?.authorizationUrl ?? null, accessCode: pay?.accessCode ?? null,
     bank: method === "bank" ? BANK : null,
   });

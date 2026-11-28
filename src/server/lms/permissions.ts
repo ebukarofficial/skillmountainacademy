@@ -116,6 +116,8 @@ const TABLE: [string, string, Area][] = [
   ["POST", "/api/app/admin/catalogue/programmes/:slug/resume", "catalogue"], ["GET", "/api/app/admin/catalogue/programmes/:slug/history", "catalogue"],
   ["GET", "/api/app/admin/capacity", "academic"], ["GET", "/api/app/admin/assignment-options", "academic"],
   ["PUT", "/api/app/owner/capacity-policy", "owner"],
+  // Stage D: pricing diagnostics (Finance reads them) and the owner's exchange-rate policy.
+  ["GET", "/api/app/admin/pricing/diagnostics", "finance"], ["PUT", "/api/app/owner/fx-policy", "owner"],
 ];
 
 const MAP = new Map(TABLE.map(([m, p, a]) => [`${m} ${p}`, a]));
