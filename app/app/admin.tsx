@@ -12,11 +12,12 @@ import { AssistantEnquiries, CallRequests } from "./desk-admin";
 import { CurrencySettings, Monitoring } from "./monitoring-admin";
 import { CatalogueAdmin } from "./catalogue-admin";
 import { AssignInstructor, CapacityReport } from "./capacity-admin";
+import { InstitutionAdmin } from "./institution-admin";
 import { MfaSettings } from "./mfa";
 import { OwnerConsole } from "./owner";
 import { RetentionSettings } from "./security-admin";
 
-const TABS = ["overview", "students", "instructors", "programmes", "admissions", "payments", "records", "allocation", "attendance", "assessments", "materials", "content", "reports", "notifications", "security", "owner"] as const;
+const TABS = ["overview", "students", "instructors", "programmes", "admissions", "payments", "records", "allocation", "attendance", "assessments", "materials", "content", "reports", "notifications", "institution", "security", "owner"] as const;
 type Tab = (typeof TABS)[number];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 type U = { id: string; email: string; role: string; status: string; fullName: string; studentNo: string | null; lastLoginAt: string | null; adminRole?: string | null };
@@ -130,7 +131,7 @@ function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", 
               <td className="px-2 py-2.5 text-sm">{u.lastLoginAt ? when(u.lastLoginAt) : "Never"}</td>
               <td className="space-x-1 whitespace-nowrap px-2 py-2.5 text-right">
                 <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/admin/users/${u.id}/invite`, { method: "POST" }), `Sign-in link sent to ${u.email}.`)}>Send link</Btn>
-                <Btn small kind="ghost" disabled={busy} onClick={() => run(() => api(`/api/app/admin/users/${u.id}`, { method: "PATCH", body: { status: u.status === "active" ? "suspended" : "active" } }), "Updated.", reload)}>{u.status === "active" ? "Suspend" : "Reactivate"}</Btn>
+                <Btn small kind="ghost" disabled={busy} onClick={() => { const staff = u.role !== "student"; const reason = staff ? prompt(`${u.status === "active" ? "Suspend" : "Reactivate"} ${u.fullName}? Reason (required, recorded in the audit log):`) : ""; if (staff && !reason?.trim()) return; run(() => api(`/api/app/admin/users/${u.id}`, { method: "PATCH", body: { status: u.status === "active" ? "suspended" : "active", ...(staff ? { reason } : {}) } }), "Updated.", reload); }}>{u.status === "active" ? "Suspend" : "Reactivate"}</Btn>
               </td></tr>
             {u.id !== meId && (access?.owner || (access?.role === "super" && u.role !== "student")) && <tr><td colSpan={9} className="px-2 pb-2 text-right text-sm">
               {access?.owner
@@ -140,7 +141,7 @@ function Users({ fixedRole, title = "Users", addRoles = ["instructor", "admin", 
             {u.role === "admin" && <tr className="border-b border-ink/[0.06]"><td colSpan={9} className="px-2 pb-3 text-sm">
               <span className="mr-2 text-ink/70">Administrator group:</span>
               <select aria-label={`Administrator group for ${u.fullName}`} value={u.adminRole ?? ""} disabled={busy}
-                onChange={(e) => { if (e.target.value) run(() => api(`/api/app/admin/users/${u.id}`, { method: "PATCH", body: { adminRole: e.target.value } }), "Group saved. That person was signed out so the change applies at once.", reload); }}
+                onChange={(e) => { const g = e.target.value; if (!g) return; const reason = prompt(`Change ${u.fullName}'s administrator group? Reason (required, recorded in the audit log):`); if (!reason?.trim()) return; run(() => api(`/api/app/admin/users/${u.id}`, { method: "PATCH", body: { adminRole: g, reason } }), "Group saved. That person was signed out so the change applies at once.", reload); }}
                 className={`${inputCls} mt-0 inline-block w-auto py-1`}>
                 {!u.adminRole && <option value="">Not assigned (full access, as before)</option>}
                 {ADMIN_GROUPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -515,6 +516,7 @@ const TITLES: Record<Tab, [string, string?]> = {
   content: ["Website content", "What the public website shows that is controlled from here, and where to change it."],
   reports: ["Reports", "Figures from the Academy's records, with downloads for your own analysis."],
   notifications: ["Notifications", ""],
+  institution: ["Institution", "Departments, heads, staff invitations and approvals. Departments organise people; access still comes only from administrator groups."],
   security: ["Security and audit", "Accounts, sign-in access, email delivery, errors and the audit log."],
   owner: ["Owner console", "Platform owner only: set-up, administrator groups, permanent removals, approvals and the full audit log."],
 };
@@ -550,6 +552,7 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
     { id: "content", label: "Website content", icon: "school" },
     { id: "reports", label: "Reports", icon: "chart" },
     { id: "notifications", label: "Notifications", icon: "bell" },
+    { id: "institution", label: "Institution", icon: "users" },
     { id: "security", label: "Security and audit", icon: "shield" },
     { id: "owner", label: "Owner console", icon: "shield" },
   ];
@@ -588,6 +591,7 @@ export function AdminDashboard({ me, access = null }: { me: Me; access?: Access 
       {tab === "content" && <WebsiteContent go={setTab} />}
       {tab === "reports" && <Reports />}
       {tab === "owner" && <OwnerConsole />}
+      {tab === "institution" && <InstitutionAdmin access={access} meId={me.id} />}
       {tab === "security" && <div className="space-y-6"><MfaSettings />{mayRead(access, ["people"]) && <Users title="All accounts" access={access} meId={me.id} />}{mayRead(access, ["security"]) && <><RetentionSettings /><Platform /></>}</div>}
     </AppShell>
   );

@@ -1,5 +1,5 @@
 {
-  "migration": "0014_payment_attempts.sql",
+  "migration": "0015_institution.sql",
   "migrations": [
     "0001_init.sql",
     "0002_seed_programmes.sql",
@@ -14,7 +14,8 @@
     "0011_catalogue.sql",
     "0012_pricing_snapshot.sql",
     "0013_order_idempotency.sql",
-    "0014_payment_attempts.sql"
+    "0014_payment_attempts.sql",
+    "0015_institution.sql"
   ],
   "schema": [
     {
@@ -556,6 +557,66 @@
       "name": "payment_attempts_state",
       "tbl_name": "payment_attempts",
       "sql": "CREATE INDEX payment_attempts_state ON payment_attempts(state, updated_at)"
+    },
+    {
+      "type": "table",
+      "name": "departments",
+      "tbl_name": "departments",
+      "sql": "CREATE TABLE departments (\n  slug        TEXT PRIMARY KEY,\n  name        TEXT NOT NULL,\n  purpose     TEXT,\n  status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),\n  created_at  TEXT NOT NULL,\n  created_by  TEXT,\n  updated_at  TEXT NOT NULL,\n  updated_by  TEXT\n)"
+    },
+    {
+      "type": "table",
+      "name": "staff_assignments",
+      "tbl_name": "staff_assignments",
+      "sql": "CREATE TABLE staff_assignments (\n  id               TEXT PRIMARY KEY,\n  user_id          TEXT NOT NULL REFERENCES users(id),\n  department_slug  TEXT NOT NULL REFERENCES departments(slug),\n  position         TEXT NOT NULL CHECK (position IN ('head', 'staff')),\n  reason           TEXT,\n  created_at       TEXT NOT NULL,\n  created_by       TEXT,\n  ended_at         TEXT,\n  ended_by         TEXT,\n  end_reason       TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "staff_assignments_one_head",
+      "tbl_name": "staff_assignments",
+      "sql": "CREATE UNIQUE INDEX staff_assignments_one_head ON staff_assignments(department_slug) WHERE position = 'head' AND ended_at IS NULL"
+    },
+    {
+      "type": "index",
+      "name": "staff_assignments_one_active",
+      "tbl_name": "staff_assignments",
+      "sql": "CREATE UNIQUE INDEX staff_assignments_one_active ON staff_assignments(user_id, department_slug) WHERE ended_at IS NULL"
+    },
+    {
+      "type": "index",
+      "name": "staff_assignments_user",
+      "tbl_name": "staff_assignments",
+      "sql": "CREATE INDEX staff_assignments_user ON staff_assignments(user_id, ended_at)"
+    },
+    {
+      "type": "table",
+      "name": "staff_invitations",
+      "tbl_name": "staff_invitations",
+      "sql": "CREATE TABLE staff_invitations (\n  id               TEXT PRIMARY KEY,\n  email            TEXT NOT NULL,\n  full_name        TEXT NOT NULL,\n  role             TEXT NOT NULL CHECK (role IN ('admin', 'instructor')),\n  admin_role       TEXT,\n  department_slug  TEXT REFERENCES departments(slug),\n  position         TEXT CHECK (position IS NULL OR position IN ('head', 'staff')),\n  token_hash       TEXT NOT NULL UNIQUE,\n  status           TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'declined', 'revoked', 'expired')),\n  expires_at       TEXT NOT NULL,\n  created_at       TEXT NOT NULL,\n  created_by       TEXT NOT NULL,\n  decided_at       TEXT,\n  decided_by       TEXT,\n  revoke_reason    TEXT,\n  accepted_user_id TEXT\n)"
+    },
+    {
+      "type": "index",
+      "name": "staff_invitations_one_pending",
+      "tbl_name": "staff_invitations",
+      "sql": "CREATE UNIQUE INDEX staff_invitations_one_pending ON staff_invitations(email) WHERE status = 'pending'"
+    },
+    {
+      "type": "table",
+      "name": "approval_requests",
+      "tbl_name": "approval_requests",
+      "sql": "CREATE TABLE approval_requests (\n  id                TEXT PRIMARY KEY,\n  category          TEXT NOT NULL,\n  target_type       TEXT NOT NULL,\n  target_id         TEXT NOT NULL,\n  payload           TEXT NOT NULL,\n  reason            TEXT NOT NULL,\n  requested_by      TEXT NOT NULL,\n  approver          TEXT NOT NULL CHECK (approver IN ('owner', 'super')),\n  status            TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled', 'expired')),\n  expires_at        TEXT NOT NULL,\n  decided_by        TEXT,\n  decided_at        TEXT,\n  decision_comment  TEXT,\n  executed_at       TEXT,\n  execution_result  TEXT,\n  escalated_at      TEXT,\n  created_at        TEXT NOT NULL,\n  updated_at        TEXT NOT NULL\n)"
+    },
+    {
+      "type": "index",
+      "name": "approval_requests_status",
+      "tbl_name": "approval_requests",
+      "sql": "CREATE INDEX approval_requests_status ON approval_requests(status, approver, created_at)"
+    },
+    {
+      "type": "index",
+      "name": "approval_requests_one_pending",
+      "tbl_name": "approval_requests",
+      "sql": "CREATE UNIQUE INDEX approval_requests_one_pending ON approval_requests(category, target_id) WHERE status = 'pending'"
     }
   ]
 }
