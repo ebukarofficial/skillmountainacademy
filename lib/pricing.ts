@@ -109,3 +109,39 @@ export function internationalAmount(usdCents: number | null | undefined, cur: Ex
   if (!r || !u || !Number.isFinite(r) || !Number.isFinite(u) || r <= 0 || u <= 0) return null;
   return Math.round(usd * (r / u));
 }
+
+// ---------- Stage D: country-based tuition ----------
+// The approved rule (owner, 27 Nov 2026): the country of RESIDENCE decides; nationality never does.
+//   NG -> NGN local tuition | US -> USD | GB -> GBP | eurozone -> EUR | Canada, rest of Africa, everywhere else -> USD
+// currencyForCountry above implements exactly this (NAIRA_MARKETS = ["NG"]). No other currency (CAD etc.) exists here.
+export type Tier = "local" | "international";
+export const tierForCountry = (cc: string | null | undefined): Tier => (currencyForCountry(cc) === "NGN" ? "local" : "international");
+
+// Rounding policies the owner can choose for pound and euro tuition (D: FX policy). None is applied until chosen.
+export const ROUNDING = ["nearest_whole", "up_whole", "nearest_cent"] as const;
+export type Rounding = (typeof ROUNDING)[number];
+// Converts an integer number of US cents into integer minor units (pence / cents) of GBP or EUR.
+// rates are "units of currency per 1 NGN" (the existing KV feed), so the GBP-per-USD cross rate is r[GBP] / r[USD].
+export function crossConvertMinor(usdCents: number, cur: "GBP" | "EUR", rates: Rates, rounding: Rounding): number | null {
+  if (!Number.isInteger(usdCents) || usdCents <= 0) return null;
+  const r = rates.rates[cur], u = rates.rates.USD;
+  if (!r || !u || !Number.isFinite(r) || !Number.isFinite(u) || r <= 0 || u <= 0) return null;
+  const exact = usdCents * (r / u); // minor units, unrounded
+  if (rounding === "nearest_cent") return Math.round(exact);
+  if (rounding === "up_whole") return Math.ceil(exact / 100 - 1e-9) * 100;
+  return Math.round(exact / 100) * 100;
+}
+
+// Splits an integer amount of minor units into the instalment plan; the last part takes the remainder.
+export function splitMinor(total: number, plan: Plan, split: number[] = PAY_PLAN.split): number[] {
+  if (plan === "full") return [total];
+  const parts = split.slice(0, -1).map((pct) => Math.floor((total * pct) / 100));
+  parts.push(total - parts.reduce((a, b) => a + b, 0));
+  return parts;
+}
+
+// Money from minor units (cents, pence, kobo): whole units when exact, otherwise two decimals.
+export function moneyMinor(minor: number, cur: Currency): string {
+  const whole = minor % 100 === 0;
+  return new Intl.NumberFormat(LOCALE[cur], { style: "currency", currency: cur, maximumFractionDigits: whole ? 0 : 2, minimumFractionDigits: whole ? 0 : 2, currencyDisplay: "narrowSymbol" }).format(minor / 100);
+}

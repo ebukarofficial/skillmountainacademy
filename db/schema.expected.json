@@ -1,5 +1,5 @@
 {
-  "migration": "0011_catalogue.sql",
+  "migration": "0012_pricing_snapshot.sql",
   "migrations": [
     "0001_init.sql",
     "0002_seed_programmes.sql",
@@ -11,7 +11,8 @@
     "0008_security.sql",
     "0009_owner.sql",
     "0010_owner_integrity.sql",
-    "0011_catalogue.sql"
+    "0011_catalogue.sql",
+    "0012_pricing_snapshot.sql"
   ],
   "schema": [
     {
@@ -48,7 +49,7 @@
       "type": "table",
       "name": "orders",
       "tbl_name": "orders",
-      "sql": "CREATE TABLE orders (\n  id               TEXT PRIMARY KEY,\n  reference        TEXT NOT NULL UNIQUE,\n  created_at       TEXT NOT NULL,\n  registration_id  TEXT NOT NULL REFERENCES registrations(id),\n  programme_slug   TEXT NOT NULL,\n  plan             TEXT NOT NULL CHECK (plan IN ('full', 'parts')),\n  method           TEXT NOT NULL CHECK (method IN ('paystack', 'bank')),\n  total_kobo       INTEGER NOT NULL,   -- what the learner owes in NGN, computed by the server\n  regular_kobo     INTEGER NOT NULL,   -- the programme's regular price at the time\n  hold_id          TEXT,               -- the price hold used, if any\n  group_size       INTEGER NOT NULL DEFAULT 1,\n  display_currency TEXT NOT NULL DEFAULT 'NGN',\n  fx_rate          REAL,               -- units of display_currency per 1 NGN, when the order was made\n  fx_at            TEXT,               -- when that rate was fetched\n  status           TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'part_paid', 'paid', 'cancelled'))\n)"
+      "sql": "CREATE TABLE orders (\n  id               TEXT PRIMARY KEY,\n  reference        TEXT NOT NULL UNIQUE,\n  created_at       TEXT NOT NULL,\n  registration_id  TEXT NOT NULL REFERENCES registrations(id),\n  programme_slug   TEXT NOT NULL,\n  plan             TEXT NOT NULL CHECK (plan IN ('full', 'parts')),\n  method           TEXT NOT NULL CHECK (method IN ('paystack', 'bank')),\n  total_kobo       INTEGER NOT NULL,   -- what the learner owes in NGN, computed by the server\n  regular_kobo     INTEGER NOT NULL,   -- the programme's regular price at the time\n  hold_id          TEXT,               -- the price hold used, if any\n  group_size       INTEGER NOT NULL DEFAULT 1,\n  display_currency TEXT NOT NULL DEFAULT 'NGN',\n  fx_rate          REAL,               -- units of display_currency per 1 NGN, when the order was made\n  fx_at            TEXT,               -- when that rate was fetched\n  status           TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'part_paid', 'paid', 'cancelled'))\n, residence_country TEXT, ip_country TEXT, pricing_tier TEXT, tuition_currency TEXT, tuition_minor INTEGER, charge_currency TEXT, pricing_snapshot TEXT)"
     },
     {
       "type": "index",

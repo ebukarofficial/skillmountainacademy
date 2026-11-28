@@ -80,6 +80,7 @@ export type Programme = {
   tone: string;
   learn: string[];
   school?: string;           // school slug (2027 catalogue); programmes without one keep their own tag
+  priceUsdCents?: number | null; // international tuition benchmark (Stage B/D); absent = no international price set
 };
 
 // Every programme is online, one-on-one, teacher-to-student, with a Skill Mountain Academy certificate,
@@ -167,7 +168,7 @@ const fromSnapshot = (p: SnapshotProgramme): Programme => ({
   ...(p.audience ? { audience: p.audience } : {}), ...(p.track === "cloud" ? { track: "cloud" as const } : {}),
   timedPrice: p.timedPrice, fastTrack: false, curriculum: `/curricula/${p.slug}.pdf`, groupPrice: p.groupPrice,
   ...(p.fullPaymentOnly ? { fullPaymentOnly: true } : {}), tone: safeTone(p.tone), learn: p.learn,
-  ...(p.school ? { school: p.school } : {}),
+  ...(p.school ? { school: p.school } : {}), ...(p.priceUsdCents ? { priceUsdCents: p.priceUsdCents } : {}),
 });
 
 // The published catalogue: the build-time snapshot of the database when there is one, otherwise the seed.

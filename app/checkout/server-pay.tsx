@@ -7,7 +7,7 @@ import { BANK, CFG, FLAGS, type Programme } from "@/lib/config";
 import { approx, convertParts, dueDays, lagosDate, money, planParts, type Plan } from "@/lib/pricing";
 import { TERMS_VERSION } from "@/lib/terms";
 import { BankDetails } from "../components";
-import { useCurrency, useQuote, FxNote, PayCurrency } from "../currency";
+import { useCurrency, useQuote, FxNote, PayCurrency, quoteFigure } from "../currency";
 import { useHold } from "../hold";
 import { Turnstile } from "../turnstile";
 
@@ -60,13 +60,16 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
   // The server's quote is the source of display amounts for the standard price (no group class, no timed offer).
   const quote = useQuote(p.slug, plan);
   const q = quote && quote !== "unavailable" && !(group && groupOn) && !(active && p.timedPrice != null) && quote.charge.total === total ? quote : null;
-  const amount = (i: number) => (q ? (q.display.approximate ? approx(q.display.parts[i], q.currency) : money(q.display.parts[i], q.currency))
+  // International tuition (a programme with a dollar price) cannot be paid online yet: say so and do not submit.
+  const intlBlocked = !!q && q.charge.available === false;
+  const amount = (i: number) => (q ? quoteFigure(q, i)
     : shown && currency !== "NGN" ? approx(shown[i], currency) : money(parts[i], "NGN"));
-  const totalShown = q ? (q.display.approximate ? approx(q.display.total, q.currency) : money(q.display.total, q.currency)) : shown && currency !== "NGN" ? approx(shown.reduce((a, b) => a + b, 0), currency) : money(total, "NGN");
+  const totalShown = q ? quoteFigure(q) : shown && currency !== "NGN" ? approx(shown.reduce((a, b) => a + b, 0), currency) : money(total, "NGN");
   const foreign = q ? q.currency !== "NGN" : !!shown && currency !== "NGN";
 
   async function submit() {
     setErr("");
+    if (intlBlocked) return setErr(q!.charge.reason ?? "This tuition cannot be paid online yet. Please contact Admissions.");
     if (!agreed) return setErr("Please read and accept the Terms and Conditions to continue.");
     if (!token) return setErr("Please complete the security check.");
     setBusy(true);
@@ -74,7 +77,8 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
       const r = await fetch("/api/register", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          programme: p.slug, plan, method, currency, turnstileToken: token, termsAccepted: true, termsVersion: TERMS_VERSION, website: d.website ?? "",
+          // No currency is sent: the server decides it from the country of residence (Stage D).
+          programme: p.slug, plan, method, turnstileToken: token, termsAccepted: true, termsVersion: TERMS_VERSION, website: d.website ?? "",
           members: group && groupOn ? members : [],
           learner: d,
         }),
@@ -164,7 +168,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
       </fieldset>
 
       <div className="rounded-md bg-indigo px-4 py-3 text-sm text-white" data-charge>
-        {foreign
+        {intlBlocked ? <>International tuition: <b>{totalShown}</b>. {q!.charge.reason}</> : foreign
           ? <>Amount charged now{plan === "parts" ? " (part 1 of 3)" : ""}: <b>{money(parts[0], "NGN")}</b> in naira (NGN), about {q ? money(q.display.parts[0], q.currency) : amount(0)}. {method === "paystack" ? "Paystack charges in naira" : "Bank transfers are made in naira"}; your bank converts it at its own rate.</>
           : <>You pay <b>{money(parts[0], "NGN")}</b> now{plan === "parts" ? " (part 1 of 3)" : ""}. {method === "paystack" ? "Paystack charges in naira (NGN)." : "Transfer the amount in naira (NGN)."}</>}
         <FxNote className="mt-1 text-white/70" />

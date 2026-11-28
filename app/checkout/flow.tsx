@@ -16,7 +16,7 @@ import { BankDetails, CloudBadges, CurriculumModal, focusFor, naira, photoFor, p
 declare global { interface Window { PaystackPop: any } }
 
 type Data = Record<string, string>;
-const stripped = (d: Data) => { const { website, ...rest } = d; void website; return rest; };
+const stripped = (d: Data) => { const { website, countryCode, ...rest } = d; void website; void countryCode; return rest; }; // the sheet keeps its existing columns
 const newRef = (bank: boolean) => `SMA-${bank ? "BT-" : ""}${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 const input = "mt-1 w-full rounded-md border border-ink/15 bg-white px-4 py-3.5 text-base outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/40";
