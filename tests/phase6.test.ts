@@ -210,7 +210,10 @@ test("checkout: server flow only when the backend is ready; otherwise the origin
   const page = read("app/checkout/flow.tsx");
   assert.match(page, /backend\.mode === "server"/);
   assert.match(page, /backend\.mode === "legacy"/);
-  assert.match(page, /window\.PaystackPop\.setup/, "original Paystack popup flow kept as the fallback");
+  // Stage D.1.1 (owner directive): the browser-only Paystack popup fallback was removed. Without the server, checkout
+  // stops with a clear "temporarily unavailable" message; every Paystack checkout is opened by the server.
+  assert.doesNotMatch(page, /PaystackPop/, "no browser-only payment fallback");
+  assert.match(page, /data-checkout-unavailable/);
 });
 
 test("checkout display: converted parts shown on the page are the exact-sum ones (regression: 155+93+62 ≠ 311)", () => {

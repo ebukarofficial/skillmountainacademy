@@ -24,7 +24,8 @@ const key = () => crypto.randomUUID();
 before(async () => {
   w = await startWorker({ mock: (req, b) => {
     const u = new URL(req.url);
-    if (u.host === "api.paystack.co" && u.pathname === "/transaction/initialize" && failPaystack > 0) { failPaystack--; return Response.json({ status: false, message: "down" }, { status: 502 }); }
+    // Stage D.1.1: a definite refusal (HTTP 4xx, status false) allows a later new attempt; a 5xx would be "uncertain".
+    if (u.host === "api.paystack.co" && u.pathname === "/transaction/initialize" && failPaystack > 0) { failPaystack--; return Response.json({ status: false, message: "Invalid key" }, { status: 400 }); }
     void b;
     return undefined;
   } });
@@ -57,7 +58,8 @@ test("success: registration, order WITH its complete pricing snapshot, and insta
   assert.equal(init.length, 1);
   const ib = JSON.parse(init[0].body);
   assert.deepEqual([ib.currency, ib.amount, ib.metadata.order_id], ["NGN", 22_500_000, o.id], "Paystack: NGN, part 1, for the stored order");
-  assert.equal(JSON.parse(String(o.payment_init ?? (await sql<{ payment_init: string }>("SELECT payment_init FROM orders WHERE id = ?1", o.id))[0].payment_init)).authorizationUrl, j.authorizationUrl);
+  // Stage D.1.1: the checkout is stored on its payment attempt (migration 0014), no longer on orders.payment_init.
+  assert.deepEqual((await sql<{ state: string; authorization_url: string }>("SELECT state, authorization_url FROM payment_attempts WHERE order_id = ?1", o.id)).map((a) => [a.state, a.authorization_url]), [["initialized", j.authorizationUrl]]);
 });
 
 test("snapshot write failure: nothing is saved, nothing is charged, no email or sheet call, and the student is told", async () => {
@@ -96,7 +98,8 @@ test("snapshot validation: an incomplete pricing record is caught before anythin
     tier: "international_legacy_ngn", tuitionCurrency: "USD", tuition: { currency: "NGN", minor: 45_000_000, status: "international_price_not_set" },
     display: { kind: "guide_from_naira", currency: "USD", totalMinor: 31100 }, charge: { provider: "Paystack", currency: "NGN", totalNaira: 450000, partsNaira: [450000] },
     catalogue: { localNaira: 450000, internationalUsdCents: null, appliedNaira: 450000 },
-    fx: { policy: "not_approved", usable: false, reason: "policy_not_approved", source: "open.er-api.com", fetchedAt: "2026-11-27T05:00:00Z", ageHours: 1, rate: 0.00069, rounding: null, calculation: "450000 NGN x 0.00069" } };
+    fx: { policy: "not_approved", usable: false, reason: "policy_not_approved", source: "open.er-api.com", fetchedAt: "2026-11-27T05:00:00Z", ageHours: 1, rate: 0.00069, rounding: null, calculation: "450000 NGN x 0.00069" },
+    decision: { basis: "country_rule", approvedBy: null, exception: null, payableNaira: 450000 } }; // decision: added in Stage D.1.1
   assert.deepEqual(snapshotProblems(good), []);
   assert.deepEqual(snapshotProblems({ ...good, fx: { ...good.fx, source: null } }), ["exchange-rate details"]);
   assert.deepEqual(snapshotProblems({ ...good, charge: { ...good.charge, partsNaira: [1] } }), ["charge"]);
@@ -140,9 +143,9 @@ test("retry after the payment could not start: the order is kept, the retry star
   const r1 = await post(b);
   assert.equal(r1.status, 502);
   assert.match(((await r1.json()) as { message: string }).message, /registration is saved/);
-  const [o] = await sql<{ id: string; payment_init: string | null; pricing_snapshot: string | null }>("SELECT id, payment_init, pricing_snapshot FROM orders WHERE idempotency_key = ?1", k);
+  const [o] = await sql<{ id: string; pricing_snapshot: string | null }>("SELECT id, pricing_snapshot FROM orders WHERE idempotency_key = ?1", k);
   assert.ok(o.pricing_snapshot, "saved with its pricing record");
-  assert.equal(o.payment_init, null, "no payment started");
+  assert.deepEqual((await sql<{ state: string }>("SELECT state FROM payment_attempts WHERE order_id = ?1", o.id)).map((a) => a.state), ["failed"], "no checkout opened");
   const r2 = await post(b);
   assert.equal(r2.status, 200);
   const j2 = (await r2.json()) as { authorizationUrl: string; replayed: boolean };
@@ -176,7 +179,7 @@ test("older database: no pricing record can be stored, so no order is created an
     await db.prepare("INSERT INTO registrations (id, role, created_at, programme_slug, terms, first_name, email) VALUES ('hr1','learner','2026-10-01T10:00:00Z','cloud','t','Hist','hist@example.com')").run();
     await db.prepare("INSERT INTO orders (id, reference, created_at, registration_id, programme_slug, plan, method, total_kobo, regular_kobo, group_size, display_currency, status) VALUES ('ho1','SMA-HIST0000001','2026-10-01T10:00:00Z','hr1','cloud','full','bank',45000000,45000000,1,'USD','pending')").run();
     const before = await db.prepare("SELECT * FROM orders WHERE id = 'ho1'").first();
-    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql", "0013_order_idempotency.sql"]);
+    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql"]);
     const afterRow = await db.prepare("SELECT * FROM orders WHERE id = 'ho1'").first<Record<string, unknown>>();
     for (const [k, v] of Object.entries(before!)) assert.equal(afterRow![k], v, k);
     assert.deepEqual([afterRow!.pricing_snapshot, afterRow!.idempotency_key, afterRow!.payment_init, afterRow!.charge_currency], [null, null, null, null]);

@@ -26,7 +26,7 @@ const NOW = new Date().toISOString();
 const PENDING = "0010_owner_integrity.sql";
 // Expansion Stage B added 0011_catalogue.sql (local/staging only). Production and this staging rehearsal start at 0009,
 // so both are pending; the 0010 evidence below is unchanged and 0011 is checked alongside it.
-const PENDING_ALL = ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql"]; // 0012: Stage D, local/staging only
+const PENDING_ALL = ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql"]; // 0012: Stage D, local/staging only
 // 0011 adds columns (catalogue fields, duration snapshot) and 0012 empty pricing-snapshot columns on orders; no rows added or removed
 const CATALOGUE_TABLES = ["programmes", "enrolments", "orders"];
 const evidence: Record<string, unknown> = {};
@@ -119,8 +119,8 @@ test("3C-C3..C9 apply 0010 to the staging database (wrangler d1 migrations apply
   assert.throws(() => execLocal(stg, "DELETE FROM audit_log WHERE id = 'a1'"), /365 days/);
   // C9 compatibility: every existing table keeps every row and its content; only owner_record is new.
   const after = backup(stg, dir("backups-after")).manifest;
-  const diff = compareManifests(b9.manifest, after, { ignoreTables: ["owner_record", "d1_migrations", "schools", "programme_drafts", ...CATALOGUE_TABLES] });
-  const unexplained = diff.differences.filter((d) => !/migration|schema|trigger|owner_record|schools|programme_drafts|critical|tables? (added|count)/i.test(d));
+  const diff = compareManifests(b9.manifest, after, { ignoreTables: ["owner_record", "d1_migrations", "schools", "programme_drafts", "payment_attempts", ...CATALOGUE_TABLES] });
+  const unexplained = diff.differences.filter((d) => !/migration|schema|trigger|owner_record|schools|programme_drafts|payment_attempts|critical|tables? (added|count)/i.test(d));
   assert.deepEqual(unexplained, [], diff.differences.join(" | "));
   for (const [name, info] of Object.entries(b9.manifest.tables)) {
     if (name === "d1_migrations") continue;

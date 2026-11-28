@@ -188,8 +188,8 @@ test("compatibility: compatible, older, newer and drifted schemas are told apart
   const e = loadExpected();
   assert.equal(compatibility(e.migrations, e.schema, e).status, "compatible");
   assert.equal(compatibility(e.migrations.slice(0, 9), e.schema, e).status, "older_schema");
-  assert.deepEqual(compatibility(e.migrations.slice(0, 9), e.schema, e).pending, ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql"]);
-  assert.equal(compatibility([...e.migrations, "0014_future.sql"], e.schema, e).status, "newer_schema");
+  assert.deepEqual(compatibility(e.migrations.slice(0, 9), e.schema, e).pending, ["0010_owner_integrity.sql", "0011_catalogue.sql", "0012_pricing_snapshot.sql", "0013_order_idempotency.sql", "0014_payment_attempts.sql"]);
+  assert.equal(compatibility([...e.migrations, "0015_future.sql"], e.schema, e).status, "newer_schema");
   assert.equal(compatibility(["0001_init.sql", "0003_lms.sql"], e.schema, e).status, "schema_drift");
   assert.equal(compatibility([], e.schema, e).status, "unknown");
   const noTrig = e.schema.filter((x) => x.type !== "trigger");
@@ -224,7 +224,7 @@ test("the Worker's expected schema version equals the last migration and the sch
   assert.equal(EXPECTED_MIGRATION, loadExpected().migration);
   assert.equal(schemaStatus(EXPECTED_MIGRATION).status, "compatible");
   assert.equal(schemaStatus("0009_owner.sql").status, "database_older");
-  assert.equal(schemaStatus("0014_next.sql").status, "database_newer");
+  assert.equal(schemaStatus("0015_next.sql").status, "database_newer");
   assert.equal(schemaStatus(null).status, "unknown");
 });
 

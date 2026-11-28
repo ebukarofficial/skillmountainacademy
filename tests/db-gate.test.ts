@@ -219,7 +219,7 @@ test("rollback: SAFE only for a same-schema rollback at or above the security fl
   assert.deepEqual([d.verdict, d.crossed], ["SAFE", []]);
   // Stage B: rolling back across 0011 needs the catalogue check: unrun -> CHECK_REQUIRED; no publications -> SAFE.
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL }).verdict, "CHECK_REQUIRED");
-  assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL, facts: { catalogue_published_changes: 0, orders_with_pricing_snapshot: 0 } }).verdict, "SAFE");
+  assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL, facts: { catalogue_published_changes: 0, orders_with_pricing_snapshot: 0, payment_attempts_open: 0 } }).verdict, "SAFE");
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: ALL, facts: { catalogue_published_changes: 2 } }).verdict, "UNSAFE");
 });
 
@@ -257,7 +257,7 @@ test("rollback: unknown history, a candidate needing newer schema, an unknown ca
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: null }).verdict, "UNSAFE");
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: upTo("0009_owner.sql") }).verdict, "UNSAFE");
   assert.equal(decideRollback({ candidateExpected: "0099_future.sql", dbApplied: ALL }).verdict, "UNSAFE");
-  const fut = decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: [...ALL, "0014_future.sql"], known: [...ALL, "0014_future.sql"] });
+  const fut = decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: [...ALL, "0015_future.sql"], known: [...ALL, "0015_future.sql"] });
   assert.equal(fut.verdict, "UNSAFE");
-  assert.ok(fut.reasons.some((r) => /No compatibility assessment for 0014_future\.sql/.test(r)));
+  assert.ok(fut.reasons.some((r) => /No compatibility assessment for 0015_future\.sql/.test(r)));
 });

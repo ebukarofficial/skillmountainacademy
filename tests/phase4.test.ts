@@ -54,7 +54,8 @@ test("currency follows the chosen country at enrolment; naira everywhere else; r
   for (const f of ["app/page.tsx", "app/site-parts.tsx", "app/programmes/[slug]/page.tsx"]) assert.doesNotMatch(read(f), /CurrencySwitcher|FxNote/, `${f}: no currency selector`);
   assert.match(cur, /export function Money\(\{ naira \}: \{ naira: number \}\) \{\n  return <>\{display\(naira, "NGN", null\)\}<\/>;/, "Money shows naira");
   assert.match(read("app/checkout/server-pay.tsx"), /<PayCurrency \/>/);
-  assert.match(read("app/checkout/flow.tsx"), /<PayCurrency \/>/);
+  // Stage D.1.1: the browser-only (legacy) payment step was removed; the currency note is on the server payment step only.
+  assert.match(read("app/checkout/flow.tsx"), /data-checkout-unavailable/);
   assert.match(read("app/checkout/flow.tsx"), /<CountrySelect d=\{d\} \/>/, "the country field sets the currency");
   for (const f of ["app/checkout/page.tsx", "app/checkout/flow.tsx", "app/checkout/server-pay.tsx"]) assert.doesNotMatch(read(f), /<CurrencySwitcher/, `${f}: students never pick a currency`);
   assert.doesNotMatch(cur.slice(cur.indexOf("export function PayCurrency")), /<select/, "PayCurrency only shows the currency the country gave");
