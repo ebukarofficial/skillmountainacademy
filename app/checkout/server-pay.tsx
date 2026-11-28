@@ -14,8 +14,9 @@ import { Turnstile } from "../turnstile";
 export type Backend = { mode: "checking" | "server" | "legacy"; payments: boolean };
 
 // Asks the Worker what is set up. Anything missing (or no Worker at all) keeps the original checkout.
-export function useBackend(): Backend {
+export function useBackend(): Backend & { recheck: () => void } {
   const [b, setB] = useState<Backend>({ mode: "checking", payments: false });
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let off = false;
     fetch("/api/status", { headers: { accept: "application/json" } })
@@ -28,8 +29,8 @@ export function useBackend(): Backend {
       })
       .catch(() => { if (!off) setB({ mode: "legacy", payments: false }); });
     return () => { off = true; };
-  }, []);
-  return b;
+  }, [tick]);
+  return { ...b, recheck: () => { setB({ mode: "checking", payments: false }); setTick((t) => t + 1); } };
 }
 
 type Result = { reference: string; method: "paystack" | "bank"; totalNaira: number; payNowNaira: number; parts: { seq: number; naira: number; due: string }[]; authorizationUrl: string | null };

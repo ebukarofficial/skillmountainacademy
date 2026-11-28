@@ -4,20 +4,14 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { CFG, EDUCATION, ENGLISH, GFORM, duration, type Programme } from "@/lib/config";
-import { TERMS_VERSION } from "@/lib/terms";
+import { CFG, EDUCATION, ENGLISH, duration, type Programme } from "@/lib/config";
 import { BankDone, ServerPayment, useBackend } from "./server-pay";
 import { useHold } from "../hold";
 import { useAdmission } from "../admissions-status";
-import { ChargeNote, CountrySelect, PayCurrency } from "../currency";
-import { BankDetails, CloudBadges, CurriculumModal, focusFor, naira, photoFor, postForm, postSheet } from "../components";
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-declare global { interface Window { PaystackPop: any } }
+import { ChargeNote, CountrySelect } from "../currency";
+import { CloudBadges, CurriculumModal, focusFor, naira, photoFor } from "../components";
 
 type Data = Record<string, string>;
-const stripped = (d: Data) => { const { website, countryCode, ...rest } = d; void website; void countryCode; return rest; }; // the sheet keeps its existing columns
-const newRef = (bank: boolean) => `SMA-${bank ? "BT-" : ""}${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
 const input = "mt-1 w-full rounded-md border border-ink/15 bg-white px-4 py-3.5 text-base outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/40";
 
@@ -79,20 +73,16 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
   const [step, setStep] = useState(() => Math.min(draft()?.step ?? 0, 2));
   const [d, setD] = useState<Data>(() => draft()?.d ?? {});
   const [bg, setBg] = useState("");
-  const [method, setMethod] = useState<"paystack" | "bank">("paystack");
-  const [agreed, setAgreed] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [done, setDone] = useState<{ ref: string; kind: "paid" | "bank" } | null>(null);
   const [view, setView] = useState(false);
   const [serverDone, setServerDone] = useState<Parameters<typeof BankDone>[0]["r"] | null>(null);
 
   useEffect(() => {
     try {
-      if (done || serverDone) sessionStorage.removeItem(draftKey);
+      if (serverDone) sessionStorage.removeItem(draftKey);
       else if (Object.keys(d).length) sessionStorage.setItem(draftKey, JSON.stringify({ step, d: { ...d, website: undefined } }));
     } catch { /* storage unavailable */ }
-  }, [d, step, done, serverDone, draftKey]);
+  }, [d, step, serverDone, draftKey]);
   const box = useRef<HTMLDivElement>(null);
   // On a programme page the form sits mid-page, so "back to the top" means the top of the form.
   const top = () => (embedded ? box.current?.scrollIntoView({ behavior: "smooth", block: "start" }) : window.scrollTo({ top: 0, behavior: "smooth" }));
@@ -110,32 +100,10 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
     e.preventDefault(); setErr(""); setD(grab(e)); setStep(2); top();
   }
 
-  async function submit(prog: Programme) {
-    setErr("");
-    if (!agreed) return setErr("Please read and accept the Terms and Conditions to continue.");
-    const bank = method === "bank";
-    if (!bank && (!window.PaystackPop || !CFG.paystackKey)) return setErr("Payment is not ready yet. Refresh the page and try again.");
-    if (d.website) { setDone({ ref: newRef(bank), kind: bank ? "bank" : "paid" }); return; } // bot caught by the hidden field: pretend it worked, save nothing
-    const reference = newRef(bank);
-    const fullName = [d.firstName, d.middleName, d.surname].filter(Boolean).join(" ");
-    const terms = `Accepted v${TERMS_VERSION} on ${new Date().toISOString()}`;
-    setBusy(true);
-    await postForm({ name: fullName, email: d.email, phone: d.phone, programme: prog.name, reference, terms });
-    await postSheet({ action: "apply", reference, method: bank ? "Bank transfer" : "Paystack", programme: prog.name, fullName, terms, ...stripped(d), duration: duration(prog) });
-    if (bank) { setBusy(false); setDone({ ref: reference, kind: "bank" }); top(); return; }
-    window.PaystackPop.setup({
-      key: CFG.paystackKey, email: d.email, amount: prog.price * 100, currency: "NGN", ref: reference,
-      channels: ["card", "bank_transfer"],
-      metadata: { programme: prog.name, name: fullName, phone: d.phone },
-      callback: () => { postSheet({ action: "verify", reference }); setBusy(false); setDone({ ref: reference, kind: "paid" }); top(); },
-      onClose: () => setBusy(false),
-    }).openIframe();
-  }
-
   const fullName = [d.firstName, d.middleName, d.surname].filter(Boolean).join(" ");
 
   // Admissions closed, not yet open or full: no form and no payment (the server refuses too).
-  if (adm.ready && !adm.canEnrol && !serverDone && !done) {
+  if (adm.ready && !adm.canEnrol && !serverDone) {
     return (
       <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-white p-6 sm:p-8" data-enrol-closed>
         <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Admissions</p>
@@ -153,35 +121,6 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
         <BankDone r={serverDone} p={p} name={fullName} />
         <p className="mt-5 rounded-md bg-[#f8f8f9] px-4 py-3 text-center text-sm">Your reference: <b>{serverDone.reference}</b></p>
         <p className="mt-3 text-center text-sm text-ink/70">We emailed these details to <b>{d.email}</b>. Check your spam folder if you do not see it.</p>
-        <div className="mt-5 text-center"><Link href="/" className="bg-indigo inline-block rounded-full px-8 py-3 font-display font-semibold text-white">Back to home</Link></div>
-      </div>
-    );
-  }
-
-  if (done) {
-    const msg = `Hello Skill Mountain Academy, I have paid ${naira(p.price)} for ${p.name}. Name: ${fullName}. Reference: ${done.ref}. I am sending my teller.`;
-    return (
-      <div ref={box} className="mx-auto max-w-xl scroll-mt-24 rounded-lg border border-ink/10 bg-white p-6 sm:p-8">
-        <span className="bg-indigo mx-auto grid h-16 w-16 place-items-center rounded-full text-3xl text-white">✓</span>
-        {done.kind === "paid" ? (
-          <>
-            <h1 className="mt-5 text-center font-(family-name:--font-serif) text-4xl font-medium">Payment received</h1>
-            <p className="mt-3 text-center text-ink/75">Thank you, {d.firstName}. We are confirming your payment for <b>{p.name}</b> with Paystack. Your welcome email is on its way to <b>{d.email}</b>. It has your curriculum link and a link to book your class days and times.</p>
-          </>
-        ) : (
-          <>
-            <h1 className="mt-5 text-center font-(family-name:--font-serif) text-4xl font-medium">Application received</h1>
-            <p className="mt-3 text-center text-ink/75">Thank you, {d.firstName}. Your place for <b>{p.name}</b> is reserved once we confirm your payment. Please pay the fee of <b>{naira(p.price)}</b> to the account below and send us your teller.</p>
-            <div className="mt-5"><BankDetails /></div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(msg)}`} target="_blank" rel="noopener noreferrer" className="bg-indigo rounded-full py-3 text-center font-display font-semibold text-white">Send teller on WhatsApp</a>
-              <a href={`mailto:admission@skillmountainacademy.com?subject=${encodeURIComponent(`Teller: ${done.ref}`)}&body=${encodeURIComponent(msg)}`} className="rounded-full border-2 border-indigo py-3 text-center font-display font-semibold text-indigo">Send teller by email</a>
-            </div>
-            <p className="mt-3 text-center text-sm text-ink/70">When we confirm your payment, we email your welcome message with your curriculum and your booking link.</p>
-          </>
-        )}
-        <p className="mt-5 rounded-md bg-[#f8f8f9] px-4 py-3 text-center text-sm">Your reference: <b>{done.ref}</b></p>
-        <p className="mt-3 text-center text-sm text-ink/70">Check your spam folder if you do not see our email.</p>
         <div className="mt-5 text-center"><Link href="/" className="bg-indigo inline-block rounded-full px-8 py-3 font-display font-semibold text-white">Back to home</Link></div>
       </div>
     );
@@ -255,44 +194,17 @@ export function EnrolmentFlow({ p, embedded = false }: { p: Programme; embedded?
         {step === 2 && backend.mode === "server" && (
           <ServerPayment p={p} d={d} payments={backend.payments} onBack={() => { setStep(0); top(); }} onDone={(r) => { setServerDone(r); top(); }} />
         )}
+        {/* Stage D.1.1: there is no browser-only payment any more. Without the server (and its database), no order with a
+            pricing record can be created, so online checkout stops here; nothing is charged and no application is sent. */}
         {step === 2 && backend.mode === "legacy" && (
-          <div className="space-y-4">
-            <PayCurrency />
-            <h2 className="font-(family-name:--font-serif) text-3xl font-medium">Review and pay</h2>
-            <div className="rounded-md bg-[#f8f8f9] p-4 text-sm">
-              <p><b>{fullName}</b> · {d.email} · {d.phone}</p>
-              <p className="text-ink/70">{p.name} · {duration(p)} · {d.education}</p>
-              <button type="button" onClick={() => { setStep(0); top(); }} className="mt-1 font-semibold text-brand-red underline">Edit my details</button>
-            </div>
-
-            <fieldset>
-              <legend className="font-display font-bold">How would you like to pay?</legend>
-              <div className="mt-2 grid gap-3">
-                {([["paystack", "Pay online with Paystack", "Card or bank transfer. Confirmed automatically."], ["bank", "Bank transfer", "Pay to our UBA account, then send us your teller."]] as const).map(([v, t, s]) => (
-                  <label key={v} className={`flex cursor-pointer items-start gap-3 rounded-md border-2 px-4 py-3 transition ${method === v ? "border-indigo bg-white" : "border-transparent bg-[#f8f8f9]"}`}>
-                    <input type="radio" name="method" checked={method === v} onChange={() => setMethod(v)} className="mt-1 h-5 w-5 accent-indigo" />
-                    <span><span className="block font-display font-bold">{t}</span><span className="text-sm text-ink/70">{s}</span></span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            {method === "bank" && <BankDetails />}
-            {!p.fullPaymentOnly && <p className="rounded-md bg-[#f8f8f9] px-4 py-3 text-sm">Want to pay in 3 parts (50%, 30%, 20%)? <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(`Hello, I would like to pay for ${p.name} in 3 parts.`)}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-red underline">Message us on WhatsApp</a> and we will set it up for you.</p>}
-
-            <label className="flex items-start gap-3 rounded-md bg-[#f8f8f9] px-4 py-3 text-sm">
-              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-brand-red" />
-              <span>I have read and understood the <Link href="/terms/" target="_blank" className="font-semibold text-brand-red underline">Terms and Conditions</Link>, <Link href="/refunds/" target="_blank" className="font-semibold text-brand-red underline">Refund Policy</Link> and <Link href="/privacy/" target="_blank" className="font-semibold text-brand-red underline">Privacy Policy</Link>. I confirm the details are correct and I agree to SMA using them to process this registration. If the learner is under 18, I am their parent or guardian and I give this consent for them.</span>
-            </label>
-            {!GFORM.url && <p className="rounded-xl bg-brand-orange/20 px-4 py-2 text-sm">Setup note: the Google Form is not connected yet, so registrations will not be saved.</p>}
-            {err && <p role="alert" className="font-medium text-brand-red">{err}</p>}
+          <div className="space-y-4" data-checkout-unavailable>
+            <h2 className="font-(family-name:--font-serif) text-3xl font-medium">Checkout is temporarily unavailable</h2>
+            <p className="text-ink/75">We cannot take registrations or payments online at this moment. Nothing has been charged and no registration was created. Your details are kept in this browser tab, so you can try again shortly.</p>
+            <p className="text-ink/75">You can also contact Admissions at <a href="mailto:admission@skillmountainacademy.com" className="font-semibold text-brand-red underline">admission@skillmountainacademy.com</a> or on <a href={`https://wa.me/${CFG.whatsapp}?text=${encodeURIComponent(`Hello, I would like to register for ${p.name}, but online checkout was unavailable.`)}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-red underline">WhatsApp</a>, and they will help you register.</p>
             <div className="flex gap-3">
               <button type="button" onClick={() => { setStep(1); top(); }} className="rounded-full border-2 border-indigo px-6 py-4 font-display font-semibold text-indigo">Back</button>
-              <button type="button" disabled={busy || !agreed} onClick={() => submit(p)} className="bg-indigo flex-1 rounded-full py-4 font-display font-semibold text-white disabled:opacity-60">
-                {busy ? "Please wait…" : method === "bank" ? "Submit application" : `Pay ${naira(p.price)} with Paystack`}
-              </button>
+              <button type="button" onClick={backend.recheck} className="bg-indigo flex-1 rounded-full py-4 font-display font-semibold text-white">Try again</button>
             </div>
-            {!agreed && <p className="text-center text-sm text-ink/70">Tick the box above to continue.</p>}
           </div>
         )}
       </div>

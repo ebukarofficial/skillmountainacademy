@@ -1,5 +1,5 @@
 {
-  "migration": "0013_order_idempotency.sql",
+  "migration": "0014_payment_attempts.sql",
   "migrations": [
     "0001_init.sql",
     "0002_seed_programmes.sql",
@@ -13,7 +13,8 @@
     "0010_owner_integrity.sql",
     "0011_catalogue.sql",
     "0012_pricing_snapshot.sql",
-    "0013_order_idempotency.sql"
+    "0013_order_idempotency.sql",
+    "0014_payment_attempts.sql"
   ],
   "schema": [
     {
@@ -537,6 +538,24 @@
       "name": "orders_idempotency_key",
       "tbl_name": "orders",
       "sql": "CREATE UNIQUE INDEX orders_idempotency_key ON orders(idempotency_key)"
+    },
+    {
+      "type": "table",
+      "name": "payment_attempts",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE TABLE payment_attempts (\n  id                TEXT PRIMARY KEY,\n  order_id          TEXT NOT NULL REFERENCES orders(id),\n  instalment_id     TEXT NOT NULL REFERENCES instalments(id),\n  attempt           INTEGER NOT NULL,\n  reference         TEXT NOT NULL UNIQUE,\n  state             TEXT NOT NULL CHECK (state IN ('claimed', 'initialized', 'failed', 'uncertain', 'released')),\n  authorization_url TEXT,\n  access_code       TEXT,\n  detail            TEXT,\n  claimed_at        TEXT NOT NULL,\n  updated_at        TEXT NOT NULL,\n  released_by       TEXT,\n  released_reason   TEXT,\n  UNIQUE (instalment_id, attempt)\n)"
+    },
+    {
+      "type": "index",
+      "name": "payment_attempts_one_active",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE UNIQUE INDEX payment_attempts_one_active ON payment_attempts(instalment_id) WHERE state IN ('claimed', 'initialized', 'uncertain')"
+    },
+    {
+      "type": "index",
+      "name": "payment_attempts_state",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE INDEX payment_attempts_state ON payment_attempts(state, updated_at)"
     }
   ]
 }

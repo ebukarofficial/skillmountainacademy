@@ -3,7 +3,6 @@
 // New enrolments start on each programme page, where the same enrolment flow is built in.
 import { Suspense, useEffect } from "react";
 import Link from "next/link";
-import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PROGRAMMES, REMOVED_SLUGS, duration, findProgramme } from "@/lib/config";
 import { MessageStrip, SiteFooter, SiteHeader } from "../site-parts";
@@ -51,7 +50,6 @@ export default function CheckoutPage() {
       <SiteHeader />
       <main id="main" className="min-h-screen overflow-x-clip pb-20">
         <MessageStrip />
-        <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-6">
           <p className="font-display text-xs font-semibold uppercase tracking-[0.22em] text-brand-red">Enrolment</p>
           <span className="rounded-full border border-ink/15 px-4 py-1.5 text-sm">🔒 Secure checkout</span>

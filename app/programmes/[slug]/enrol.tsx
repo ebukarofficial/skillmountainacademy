@@ -2,7 +2,6 @@
 // Section 9 of a programme page: the enrolment flow, built into the page. It opens from any "Proceed to
 // enrolment" link (href="#enrol") or its own button, so a visitor never leaves the programme page to enrol.
 import { useEffect, useState } from "react";
-import Script from "next/script";
 import type { Programme } from "@/lib/config";
 import { EnrolmentFlow } from "../../checkout/flow";
 import { useAdmission } from "../../admissions-status";
@@ -18,7 +17,6 @@ export function EnrolSection({ p }: { p: Programme }) {
   }, []);
   return (
     <div>
-      {open && <Script src="https://js.paystack.co/v1/inline.js" strategy="afterInteractive" />}
       {open ? <EnrolmentFlow p={p} embedded /> : (
         <div className="rounded-lg border border-ink/10 bg-white p-6 sm:p-8">
           <p className="text-lg text-ink/75">{adm.canEnrol ? "The application takes about five minutes: your details, a few questions about your goals, then payment." : adm.detail}</p>
