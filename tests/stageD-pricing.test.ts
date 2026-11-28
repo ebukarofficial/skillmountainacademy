@@ -136,7 +136,7 @@ test("worker: registration ignores a browser currency, validates the country, sn
   const [o] = await sql<Record<string, unknown>>("SELECT * FROM orders WHERE reference = ?1", j.reference);
   assert.deepEqual([o.total_kobo, o.display_currency, o.residence_country, o.pricing_tier, o.tuition_currency, o.tuition_minor, o.charge_currency], [45_000_000, "GBP", "GB", "international_legacy_ngn", "NGN", 45_000_000, "NGN"]);
   const snap = JSON.parse(String(o.pricing_snapshot));
-  assert.deepEqual([snap.catalogue.localNaira, snap.catalogue.internationalUsdCents, snap.charge.currency, snap.fx.source], [450000, null, "NGN", "open.er-api.com"]);
+  assert.deepEqual([snap.catalogue.localNaira, snap.catalogue.internationalUsdCents, snap.charge.currency, snap.fx.source, snap.flow], [450000, null, "NGN", "open.er-api.com", "registration"]);
   const ngR = await register("cloud", { country: "Nigeria", countryCode: "NG" });
   const ng = (await sql<Record<string, unknown>>("SELECT pricing_tier, tuition_currency, tuition_minor, display_currency FROM orders WHERE reference = ?1", ((await ngR.json()) as { reference: string }).reference))[0];
   assert.deepEqual({ ...ng }, { pricing_tier: "local", tuition_currency: "NGN", tuition_minor: 45_000_000, display_currency: "NGN" });
@@ -148,14 +148,15 @@ test("worker: registration ignores a browser currency, validates the country, sn
 });
 
 test("worker: orders made before 0012 are untouched and stay readable", async () => {
+  // Stage D.1: a database without the pricing columns refuses new registrations (no order without its pricing record),
+  // so the historical order is written as an older Worker wrote it.
   const old = await startWorker({ migrationsUpTo: "0011_catalogue.sql" });
   try {
-    await (await old.mf.getKVNamespace("KV")).put("fx:NGN", JSON.stringify({ ...RATES, fetchedAt: new Date().toISOString() }));
-    const r = await old.post("/api/register", registration({ programme: "cloud", method: "bank", learner: { ...registration().learner, email: "old@example.com", countryCode: "US", country: "United States" } }));
-    assert.equal(r.status, 200, await r.clone().text());
     const db = await old.db();
+    await db.prepare("INSERT INTO registrations (id, role, created_at, programme_slug, terms, first_name, email, country) VALUES ('r-old','learner','2026-11-01T10:00:00Z','cloud','t','Old','old@example.com','United States')").run();
+    await db.prepare("INSERT INTO orders (id, reference, created_at, registration_id, programme_slug, plan, method, total_kobo, regular_kobo, group_size, display_currency, fx_rate, fx_at, status) VALUES ('o-old','SMA-OLD000000001','2026-11-01T10:00:00Z','r-old','cloud','full','bank',45000000,45000000,1,'USD',0.00069,'2026-11-01T05:00:00Z','pending')").run();
     const before = await db.prepare("SELECT id, reference, total_kobo, regular_kobo, display_currency, fx_rate, status FROM orders").all();
-    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql"]);
+    assert.deepEqual(await old.applyPending(), ["0012_pricing_snapshot.sql", "0013_order_idempotency.sql"]);
     assert.deepEqual((await db.prepare("SELECT id, reference, total_kobo, regular_kobo, display_currency, fx_rate, status FROM orders").all()).results, before.results);
     assert.deepEqual({ ...(await db.prepare("SELECT pricing_snapshot, charge_currency, residence_country FROM orders").first()) }, { pricing_snapshot: null, charge_currency: null, residence_country: null }, "no backfill");
   } finally { await old.dispose(); }
