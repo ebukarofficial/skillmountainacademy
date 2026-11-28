@@ -8,7 +8,8 @@ import { ApiError, nowIso } from "../http";
 import type { Ctx } from "./api";
 import { getSetting, putSetting } from "./data/engagement";
 import { deleteUserSessions, getUser, setAdminRole, updateUser } from "./data/users";
-import { createApproval, createAssignment, currentHead, endAssignment, getDepartment, userAssignments, type ApprovalRequest } from "./data/institution";
+import { claimExecution, createApproval, createAssignment, currentHead, endAssignment, finishExecution, getApproval, getDepartment, userAssignments, type ApprovalRequest } from "./data/institution";
+import { Repo } from "../repo";
 import { accountChangeRefusal, groupChangeRefusal, isAdminRole, isOwner, isSuper, type AdminRole } from "./permissions";
 import { isBootstrapped } from "./data/owner";
 import { releaseAttempt } from "./payment-release";
@@ -70,7 +71,7 @@ const EXECUTORS: Record<Category, Exec> = {
     if (why) throw new ApiError(403, "forbidden", why);
     await setAdminRole(c.db, target.id, next as AdminRole);
     await deleteUserSessions(c.db, target.id);
-    await c.audit("admin.group_assigned", "user", target.id, { from: target.admin_role ?? null, to: next, approvalRequest: r.id, requestedBy: r.requested_by, approvedBy: c.user.id, reason: r.reason });
+    await c.audit("admin.group_assigned", "user", target.id, { from: target.admin_role ?? null, to: next, authority: "approval", approvalRequest: r.id, requestedBy: r.requested_by, approvedBy: c.user.id, reason: r.reason });
     return `group changed from ${target.admin_role ?? "none"} to ${next}`;
   },
   async staff_reinstatement(c, r) {
@@ -80,14 +81,14 @@ const EXECUTORS: Record<Category, Exec> = {
     const why = accountChangeRefusal(c.user, target, c.owner, await isBootstrapped(c.db));
     if (why) throw new ApiError(403, "forbidden", why);
     await updateUser(c.db, target.id, { status: "active" });
-    await c.audit("staff.reinstated", "user", target.id, { from: "suspended", to: "active", approvalRequest: r.id, requestedBy: r.requested_by, approvedBy: c.user.id, reason: r.reason });
+    await c.audit("staff.reinstated", "user", target.id, { from: "suspended", to: "active", authority: "approval", approvalRequest: r.id, requestedBy: r.requested_by, approvedBy: c.user.id, reason: r.reason });
     return "account reactivated";
   },
   async department_head_appointment(c, r, p) {
     const slug = String(p.departmentSlug ?? "");
     const dept = await getDepartment(c.db, slug);
     if (!dept || dept.status !== "active") throw new ApiError(404, "not_found", "That department is not active.");
-    await appointHead(c, slug, r.target_id, `${r.reason} (approval ${r.id})`);
+    await appointHead(c, slug, r.target_id, `${r.reason} (approval ${r.id})`, { authority: "approval", approvalRequest: r.id, requestedBy: r.requested_by });
     return `head of ${dept.name} appointed`;
   },
   async payment_attempt_release(c, r, p) {
@@ -112,7 +113,7 @@ export async function assertOneDepartment(c: Ctx, userId: string, slug: string) 
     throw new ApiError(409, "one_department", "This person already belongs to another department. Belonging to several departments needs the owner's policy.");
 }
 // Appoints a head, ending the current head's headship (their record is kept). Caller has checked authority.
-export async function appointHead(c: Ctx, slug: string, userId: string, reason: string) {
+export async function appointHead(c: Ctx, slug: string, userId: string, reason: string, via: Record<string, unknown> = { authority: c.isOwner ? "owner_direct" : "delegated" }) {
   await assertAssignable(c, userId);
   const at = nowIso();
   const current = await currentHead(c.db, slug);
@@ -130,7 +131,7 @@ export async function appointHead(c: Ctx, slug: string, userId: string, reason: 
   if (sameDept) await endAssignment(c.db, sameDept.id, c.user.id, `became head: ${reason}`, at);
   const id = crypto.randomUUID();
   await createAssignment(c.db, { id, user_id: userId, department_slug: slug, position: "head", reason, created_at: at, created_by: c.user.id });
-  await c.audit("staff.head_appointed", "user", userId, { department: slug, assignment: id, previousHead: current?.user_id ?? null, reason });
+  await c.audit("staff.head_appointed", "user", userId, { department: slug, assignment: id, previousHead: current?.user_id ?? null, reason, ...via });
   return id;
 }
 
@@ -140,7 +141,8 @@ export async function openApproval(c: Ctx, f: { category: Category; targetType: 
   const hours = Math.min(24 * 30, Math.max(1, Math.round(f.rule.expiresInHours || 72)));
   const r: ApprovalRequest = { id: crypto.randomUUID(), category: f.category, target_type: f.targetType, target_id: f.targetId, payload: JSON.stringify(f.payload), reason: f.reason,
     requested_by: c.user.id, approver: f.rule.approver === "super" ? "super" : "owner", status: "pending", expires_at: new Date(Date.now() + hours * 3600_000).toISOString(),
-    decided_by: null, decided_at: null, decision_comment: null, executed_at: null, execution_result: null, escalated_at: null, created_at: at, updated_at: at };
+    decided_by: null, decided_at: null, decision_comment: null, executed_at: null, execution_result: null, escalated_at: null, created_at: at, updated_at: at,
+    execution_status: "not_applicable", execution_claimed_at: null, execution_claimed_by: null, execution_attempts: 0 };
   try { await createApproval(c.db, r); }
   catch (e) {
     if (/UNIQUE/i.test(String(e))) throw new ApiError(409, "already_requested", "There is already a pending request for this. It must be decided or cancelled first.");
@@ -148,4 +150,60 @@ export async function openApproval(c: Ctx, f: { category: Category; targetType: 
   }
   await c.audit("approval.requested", "approval_request", r.id, { category: r.category, target: r.target_id, approver: r.approver, expiresAt: r.expires_at, reason: r.reason, payload: f.payload });
   return r;
+}
+
+// ---------- execution (Stage E.1): separate from the decision, claimed atomically, recoverable ----------
+// Has the approved change already taken effect? Used before every run, so a recovery after an uncertain outcome never
+// repeats a change that already happened: it records it instead.
+async function alreadyApplied(c: Ctx, r: ApprovalRequest, p: Record<string, unknown>): Promise<boolean> {
+  if (r.category === "staff_group_change") return (await getUser(c.db, r.target_id))?.admin_role === String(p.adminRole ?? "");
+  if (r.category === "staff_reinstatement") { const t = await getUser(c.db, r.target_id); return !!t && t.status === "active" && !t.removed_at; }
+  if (r.category === "department_head_appointment") return (await currentHead(c.db, String(p.departmentSlug ?? "")))?.user_id === r.target_id;
+  if (r.category === "payment_attempt_release") return (await new Repo(c.db).getAttempt(r.target_id))?.state === "released";
+  return false;
+}
+// An interrupted run (the Worker stopped after claiming) may be recovered once its claim is this old.
+export const EXECUTION_STALE_MS = 120_000;
+export type ExecutionOutcome = { executed: boolean; status: string; result: string; error?: string };
+
+// Runs an approved request's action. Exactly one caller wins the claim. Every rule is checked again with the acting
+// approver's CURRENT authority; a definite refusal is recorded as failed (nothing changed); an unexpected error is
+// recorded as failed with an uncertain outcome, and is never retried automatically. A recovery is an explicit request
+// by an eligible approver, and starts by checking whether the change already took effect.
+export async function executeApproved(c: Ctx, id: string, recovery: boolean): Promise<ExecutionOutcome> {
+  const at = nowIso();
+  const stale = recovery ? new Date(Date.now() - EXECUTION_STALE_MS).toISOString() : null;
+  if (!(await claimExecution(c.db, id, c.user.id, at, stale))) {
+    const now = await getApproval(c.db, id);
+    if (now?.execution_status === "executing") throw new ApiError(409, "execution_in_progress", "This request is being carried out right now. Reload in a moment.");
+    if (now?.execution_status === "completed") throw new ApiError(409, "already_completed", "This request has already been carried out.");
+    throw new ApiError(409, "not_executable", `This request cannot be carried out (decision: ${now?.status ?? "unknown"}).`);
+  }
+  const r = (await getApproval(c.db, id))!;
+  const payload = (() => { try { return JSON.parse(r.payload) as Record<string, unknown>; } catch { return {}; } })();
+  await c.audit("approval.execution_started", "approval_request", id, { category: r.category, attempt: r.execution_attempts, recovery });
+  const finish = async (outcome: "completed" | "failed", result: string) => {
+    if (!(await finishExecution(c.db, id, at, outcome, result, nowIso()))) await c.audit("approval.execution_superseded", "approval_request", id, { outcome, result });
+  };
+  try {
+    if (await alreadyApplied(c, r, payload)) {
+      const result = "already in effect: no change made";
+      await finish("completed", result);
+      await c.audit("approval.execution_reconciled", "approval_request", id, { category: r.category, recovery, result });
+      return { executed: true, status: "completed", result };
+    }
+    const exec = executorFor(r.category);
+    if (!exec) throw new ApiError(409, "no_executor", "This kind of request has no executor.");
+    const result = await exec(c, r, payload);
+    await finish("completed", result);
+    await c.audit("approval.executed", "approval_request", id, { category: r.category, target: r.target_id, result, recovery });
+    return { executed: true, status: "completed", result };
+  } catch (e) {
+    const definite = e instanceof ApiError;
+    const msg = definite ? `${e.code}: ${e.message}` : String((e as Error)?.message ?? e).slice(0, 300);
+    const result = definite ? `refused, nothing changed (${msg})` : `outcome uncertain (${msg}); check before recovering`;
+    await finish("failed", result);
+    await c.audit("approval.execution_failed", "approval_request", id, { category: r.category, target: r.target_id, definite, error: msg, recovery });
+    return { executed: false, status: "failed", result, error: msg };
+  }
 }

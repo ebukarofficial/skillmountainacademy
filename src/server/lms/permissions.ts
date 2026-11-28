@@ -130,7 +130,7 @@ const TABLE: [string, string, Area][] = [
   ["GET", "/api/app/admin/invitations", "users"], ["POST", "/api/app/admin/invitations", "users"], ["POST", "/api/app/admin/invitations/:id/revoke", "users"],
   ["GET", "/api/app/admin/department", "any"],
   ["GET", "/api/app/admin/approvals", "any"], ["GET", "/api/app/admin/approvals/:id", "any"], ["POST", "/api/app/admin/approvals", "any"],
-  ["POST", "/api/app/admin/approvals/:id/decision", "any"], ["POST", "/api/app/admin/approvals/:id/cancel", "any"], ["POST", "/api/app/admin/approvals/:id/escalate", "any"],
+  ["POST", "/api/app/admin/approvals/:id/decision", "any"], ["POST", "/api/app/admin/approvals/:id/execute", "any"], ["POST", "/api/app/admin/approvals/:id/cancel", "any"], ["POST", "/api/app/admin/approvals/:id/escalate", "any"],
   ["PUT", "/api/app/owner/institution-policy", "owner"], ["PUT", "/api/app/owner/approval-policy", "owner"],
 ];
 

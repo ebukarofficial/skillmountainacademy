@@ -1,5 +1,5 @@
 // Institutional structure (Expansion Stage E, migration 0015). SQL only; rules are in src/server/lms/institution.ts.
-import { all, one, run, type DB } from "./base";
+import { all, batch, one, run, stmt, type DB } from "./base";
 
 export type Department = { slug: string; name: string; purpose: string | null; status: "active" | "archived"; created_at: string; created_by: string | null; updated_at: string; updated_by: string | null };
 export type Assignment = { id: string; user_id: string; department_slug: string; position: "head" | "staff"; reason: string | null; created_at: string; created_by: string | null;
@@ -9,7 +9,10 @@ export type Invitation = { id: string; email: string; full_name: string; role: "
   decided_by: string | null; revoke_reason: string | null; accepted_user_id: string | null };
 export type ApprovalRequest = { id: string; category: string; target_type: string; target_id: string; payload: string; reason: string; requested_by: string; approver: "owner" | "super";
   status: "pending" | "approved" | "rejected" | "cancelled" | "expired"; expires_at: string; decided_by: string | null; decided_at: string | null; decision_comment: string | null;
-  executed_at: string | null; execution_result: string | null; escalated_at: string | null; created_at: string; updated_at: string };
+  executed_at: string | null; execution_result: string | null; escalated_at: string | null; created_at: string; updated_at: string;
+  // Stage E.1 (migration 0016): what happened to the action, kept apart from the approver's decision.
+  execution_status: ExecutionStatus; execution_claimed_at: string | null; execution_claimed_by: string | null; execution_attempts: number };
+export type ExecutionStatus = "not_applicable" | "awaiting_execution" | "executing" | "completed" | "failed";
 
 // ---------- departments ----------
 export const listDepartments = (db: DB) => all<Department>(db, "SELECT * FROM departments ORDER BY status, name");
@@ -46,15 +49,52 @@ export const moveInvitation = (db: DB, id: string, to: Invitation["status"], f: 
   run(db, "UPDATE staff_invitations SET status = ?2, decided_at = ?3, decided_by = ?4, revoke_reason = ?5, accepted_user_id = ?6 WHERE id = ?1 AND status = 'pending'",
     id, to, at, f.by ?? null, f.reason ?? null, f.userId ?? null);
 
+// Stage E.1: accepting an invitation is ONE D1 batch, which D1 runs as a single SQL transaction. The invitation is
+// claimed (pending, not expired) and stamped with the new account's id; every insert after it runs only if that claim
+// is the one recorded (WHERE EXISTS … accepted_user_id = this id). If anything fails (the email already has an account,
+// a constraint, the database), the whole batch rolls back and the invitation stays pending: never consumed without
+// its account. A concurrent second request finds the invitation no longer pending and inserts nothing.
+export type Acceptance = { invitationId: string; userId: string; at: string; email: string; fullName: string; role: "admin" | "instructor"; adminRole: string | null;
+  staffNo: string | null; verification: string | null; departmentSlug: string | null; position: "head" | "staff" | null; createdBy: string; assignmentId: string;
+  auditAccepted: string; auditJoined: string; ipHash: string | null };
+export async function acceptInvitationAtomic(db: DB, a: Acceptance): Promise<boolean> {
+  const mine = "EXISTS (SELECT 1 FROM staff_invitations WHERE id = ?1 AND status = 'accepted' AND accepted_user_id = ?2)";
+  const res = await batch(db, [
+    stmt(db, "UPDATE staff_invitations SET status = 'accepted', decided_at = ?3, accepted_user_id = ?2 WHERE id = ?1 AND status = 'pending' AND expires_at > ?3", a.invitationId, a.userId, a.at),
+    stmt(db, `INSERT INTO users (id, email, role, status, full_name, created_at, staff_no, verification, admin_role)
+      SELECT ?2, ?3, ?4, 'active', ?5, ?6, ?7, ?8, ?9 WHERE ${mine}`, a.invitationId, a.userId, a.email, a.role, a.fullName, a.at, a.staffNo, a.verification, a.adminRole),
+    stmt(db, `INSERT INTO staff_assignments (id, user_id, department_slug, position, reason, created_at, created_by)
+      SELECT ?3, ?2, ?4, ?5, ?6, ?7, ?8 WHERE ?4 IS NOT NULL AND ?5 IS NOT NULL AND ${mine}`, a.invitationId, a.userId, a.assignmentId, a.departmentSlug, a.position, `invitation ${a.invitationId}`, a.at, a.createdBy),
+    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash)
+      SELECT ?3, ?4, ?2, 'invite.accepted', 'staff_invitation', ?1, ?5, ?6 WHERE ${mine}`, a.invitationId, a.userId, crypto.randomUUID(), a.at, a.auditAccepted, a.ipHash),
+    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash)
+      SELECT ?3, ?4, ?5, 'staff.joined', 'user', ?2, ?6, NULL WHERE ${mine}`, a.invitationId, a.userId, crypto.randomUUID(), a.at, a.createdBy, a.auditJoined),
+  ]);
+  return (res[0]?.meta?.changes ?? 0) === 1;
+}
+
 // ---------- approval requests ----------
 export const getApproval = (db: DB, id: string) => one<ApprovalRequest>(db, "SELECT * FROM approval_requests WHERE id = ?1", id);
 export const listApprovals = (db: DB) => all<ApprovalRequest>(db, "SELECT * FROM approval_requests ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC LIMIT 300");
 export const createApproval = (db: DB, r: ApprovalRequest) => run(db, `INSERT INTO approval_requests (id, category, target_type, target_id, payload, reason, requested_by, approver, status, expires_at, created_at, updated_at)
   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9, ?10, ?10)`, r.id, r.category, r.target_type, r.target_id, r.payload, r.reason, r.requested_by, r.approver, r.expires_at, r.created_at);
-export const decideApproval = (db: DB, id: string, to: "approved" | "rejected" | "cancelled" | "expired", by: string | null, comment: string | null, at: string) =>
+// A decision other than approval: nothing will ever execute (execution_status stays not_applicable).
+export const decideApproval = (db: DB, id: string, to: "rejected" | "cancelled" | "expired", by: string | null, comment: string | null, at: string) =>
   run(db, "UPDATE approval_requests SET status = ?2, decided_by = ?3, decision_comment = ?4, decided_at = ?5, updated_at = ?5 WHERE id = ?1 AND status = 'pending'", id, to, by, comment, at);
-export const recordExecution = (db: DB, id: string, executed: boolean, result: string, at: string) =>
-  run(db, "UPDATE approval_requests SET executed_at = ?2, execution_result = ?3, updated_at = ?4 WHERE id = ?1", id, executed ? at : null, result, at);
+// Approval records the decision and queues the action; it does not say the action happened.
+export const approveRequest = (db: DB, id: string, by: string, comment: string | null, at: string) =>
+  run(db, "UPDATE approval_requests SET status = 'approved', execution_status = 'awaiting_execution', decided_by = ?2, decision_comment = ?3, decided_at = ?4, updated_at = ?4 WHERE id = ?1 AND status = 'pending'", id, by, comment, at);
+// Atomic claim: exactly one caller moves the request to "executing". The first run claims only a freshly approved
+// request; a recovery may also claim a failed one, or one whose earlier run was interrupted (still "executing" after
+// staleBefore). Rejected, cancelled and expired requests can never be claimed.
+export const claimExecution = (db: DB, id: string, by: string, at: string, staleBefore: string | null) =>
+  run(db, `UPDATE approval_requests SET execution_status = 'executing', execution_claimed_at = ?3, execution_claimed_by = ?2, execution_attempts = execution_attempts + 1, updated_at = ?3
+    WHERE id = ?1 AND status = 'approved' AND (execution_status = 'awaiting_execution'
+      OR (?4 IS NOT NULL AND (execution_status = 'failed' OR (execution_status = 'executing' AND execution_claimed_at < ?4))))`, id, by, at, staleBefore);
+// Records the outcome, only for the claim that is still current (a stale claimant cannot overwrite a newer run).
+export const finishExecution = (db: DB, id: string, claimedAt: string, outcome: "completed" | "failed", result: string, at: string) =>
+  run(db, `UPDATE approval_requests SET execution_status = ?3, execution_result = ?4, executed_at = CASE WHEN ?3 = 'completed' THEN ?5 ELSE executed_at END, updated_at = ?5
+    WHERE id = ?1 AND execution_status = 'executing' AND execution_claimed_at = ?2`, id, claimedAt, outcome, result, at);
 export const escalateApproval = (db: DB, id: string, at: string) =>
   run(db, "UPDATE approval_requests SET approver = 'owner', escalated_at = ?2, updated_at = ?2 WHERE id = ?1 AND status = 'pending' AND approver = 'super'", id, at);
 export const historyFor = (db: DB, targetId: string) => all<{ at: string; action: string; actor_name: string | null; detail: string | null }>(db,

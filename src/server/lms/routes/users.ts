@@ -187,7 +187,9 @@ route("PATCH", "/api/app/admin/users/:id", ["admin"], async (c) => {
   // A suspended person's unused sign-in links stop working too.
   if (patch.status === "suspended") await revokeTokens(c.db, u.id, nowIso());
   await c.audit("user.update", "user", u.id, { ...patch, ...(adminRole !== undefined ? { adminRole } : {}), ...(reason ? { reason } : {}) });
-  if (accessChange) await c.audit("staff.access_changed", "user", u.id, { reason,
+  // Stage E.1: a direct change is marked as the owner's own authority or the actor's group authority, so it can never be
+  // mistaken for a change made through an approved request (those carry authority "approval" and the request id).
+  if (accessChange) await c.audit("staff.access_changed", "user", u.id, { reason, authority: c.isOwner ? "owner_direct" : "group",
     from: { status: u.status, role: u.role, adminRole: u.admin_role ?? null }, to: { status: patch.status ?? u.status, role: patch.role ?? u.role, adminRole: adminRole ?? (becameAdmin ? "reporting" : u.admin_role ?? null) } });
   return ok({ user: adminView((await getUser(c.db, u.id))!) });
 });

@@ -17,16 +17,16 @@ import { Checker } from "../../validate";
 import { Repo } from "../../repo";
 import { notFound, ok, parseJsonCol, publicRoute, requireStrongAuth, route, type Ctx } from "../api";
 import { ADMIN_ROLES, GRANTS, accountChangeRefusal, adminMay, canManageAdmins, groupChangeRefusal, isAdminRole, isSuper, ownerEmail, permissionTable, type AdminRole } from "../permissions";
-import { audit, canSignIn, createUser, getUser, getUserByEmail, setAdminRole, type User } from "../data/users";
+import { audit, canSignIn, getUser, getUserByEmail, logError } from "../data/users";
 import { isBootstrapped } from "../data/owner";
 import { newStaffNo } from "../ids";
 import {
   accessHistory, activeAssignments, assignmentHistory, createAssignment, createDepartment, currentHead, decideApproval, departmentRoster, endAssignment, escalateApproval, getApproval,
-  getAssignment, getDepartment, getInvitation, historyFor, invitationByHash, listApprovals, listDepartments, listInvitations, moveInvitation, recordExecution,
+  getAssignment, getDepartment, getInvitation, historyFor, invitationByHash, listApprovals, listDepartments, listInvitations, moveInvitation, acceptInvitationAtomic, approveRequest,
   updateDepartment, userAssignments, createInvitation, type ApprovalRequest, type Invitation,
 } from "../data/institution";
 import {
-  DEFAULT_APPROVALS, EVALUATED_ONLY, EXECUTABLE, appointHead, assertAssignable, assertOneDepartment, executorFor, getApprovalPolicy, getInstitutionPolicy, mayDecide,
+  DEFAULT_APPROVALS, EVALUATED_ONLY, EXECUTABLE, appointHead, assertAssignable, assertOneDepartment, executeApproved, EXECUTION_STALE_MS, getApprovalPolicy, getInstitutionPolicy, mayDecide,
   openApproval, ruleFor, saveApprovalPolicy, saveInstitutionPolicy, type ApprovalPolicy, type Category, type CategoryRule, type InstitutionPolicy, type PaymentReleaseRule,
 } from "../institution";
 import { sendStaffInvitation, startSession } from "./auth";
@@ -264,29 +264,49 @@ publicRoute("POST", "/api/auth/invitations/decline", async (c) => {
 });
 
 publicRoute("POST", "/api/auth/invitations/accept", async (c) => {
-  const i = await pendingByToken(c, (await c.body<{ token?: string }>()).token);
+  const raw = (await c.body<{ token?: string }>()).token;
+  // A repeated acceptance (a double click, a retry after a lost response) never creates a second account and never
+  // starts another session: the person is told the account exists and to sign in through the usual entrance.
+  const prior = /^[\w-]{30,64}$/.test(String(raw ?? "")) ? await invitationByHash(c.db, await inviteHash(String(raw))) : null;
+  if (prior?.status === "accepted" && prior.accepted_user_id && (await getUser(c.db, prior.accepted_user_id))) {
+    await new Repo(c.db).limitOrThrow(`invite:${c.ipHash}`, 20, 600);
+    return ok({ accepted: true, signedIn: false, alreadyAccepted: true, message: "This invitation was already accepted. Sign in from your staff entrance with the invited email address." });
+  }
+  const i = await pendingByToken(c, raw);
   if (await getUserByEmail(c.db, i.email)) throw new ApiError(409, "exists", "An account with this email already exists. Sign in instead, or ask the Academy.");
   const dept = i.department_slug ? await getDepartment(c.db, i.department_slug) : null;
   if (i.department_slug && (!dept || dept.status !== "active")) throw new ApiError(409, "department_unavailable", "The department in this invitation is no longer active. Ask the Academy for a new invitation.");
   if (i.position === "head" && i.department_slug && (await currentHead(c.db, i.department_slug))) throw new ApiError(409, "head_exists", "That department now has a head. Ask the Academy for a new invitation.");
   const userId = crypto.randomUUID();
   const at = nowIso();
-  // Single use: only one request can move the invitation out of "pending".
-  const res = (await moveInvitation(c.db, i.id, "accepted", { userId }, at));
-  if (!res) throw INVALID();
   // Exactly what was invited: the role, group and department recorded on the invitation. Nothing the browser sends.
-  const u: User = { id: userId, email: i.email, role: i.role, status: "active", full_name: i.full_name, phone: null, bio: null, photo_key: null, student_no: null, specialization: null,
-    qualifications: null, links: null, registration_id: null, created_at: at, last_login_at: null, staff_no: (await newStaffNo(c.db, i.role)) ?? undefined };
-  if (i.role === "instructor") u.verification = "application_received";
-  await createUser(c.db, u);
-  if (i.role === "admin") await setAdminRole(c.db, userId, i.admin_role && isAdminRole(i.admin_role) ? i.admin_role : "reporting");
-  if (i.department_slug && i.position) await createAssignment(c.db, { id: crypto.randomUUID(), user_id: userId, department_slug: i.department_slug, position: i.position, reason: `invitation ${i.id}`, created_at: at, created_by: i.created_by });
-  await audit(c.db, { actor_id: userId, action: "invite.accepted", target_type: "staff_invitation", target_id: i.id, detail: { email: i.email, role: i.role, adminRole: i.admin_role, department: i.department_slug, position: i.position }, ip_hash: c.ipHash });
-  await audit(c.db, { actor_id: i.created_by, action: "staff.joined", target_type: "user", target_id: userId, detail: { invitation: i.id, role: i.role, adminRole: i.admin_role, department: i.department_slug, position: i.position } });
+  const detail = { role: i.role, adminRole: i.admin_role, department: i.department_slug, position: i.position };
+  let accepted: boolean;
+  try {
+    accepted = await acceptInvitationAtomic(c.db, { invitationId: i.id, userId, at, email: i.email, fullName: i.full_name, role: i.role,
+      adminRole: i.role === "admin" ? (i.admin_role && isAdminRole(i.admin_role) ? i.admin_role : "reporting") : null,
+      staffNo: await newStaffNo(c.db, i.role), verification: i.role === "instructor" ? "application_received" : null,
+      departmentSlug: i.department_slug && i.position ? i.department_slug : null, position: i.department_slug ? i.position : null, createdBy: i.created_by, assignmentId: crypto.randomUUID(),
+      auditAccepted: JSON.stringify({ email: i.email, ...detail }), auditJoined: JSON.stringify({ invitation: i.id, ...detail }), ipHash: c.ipHash });
+  } catch (e) {
+    // Rolled back as a whole: the invitation is still pending and can be accepted again once the problem is fixed.
+    await logError(c.db, "/api/auth/invitations/accept", `Invitation ${i.id} not accepted (rolled back): ${String((e as Error)?.message ?? e).slice(0, 300)}`).catch(() => undefined);
+    if (/UNIQUE/i.test(String(e))) throw new ApiError(409, "exists", "An account with this email already exists. Sign in instead, or ask the Academy.");
+    throw new ApiError(503, "try_again", "We could not complete this just now. Your invitation is still valid: please try again in a few minutes.");
+  }
+  // Another request accepted it first, or it expired in the meantime: nothing was written by this one.
+  if (!accepted) throw INVALID();
   const user = (await getUser(c.db, userId))!;
   if (!canSignIn(user)) return ok({ accepted: true, signedIn: false });
-  const { cookie, mfa } = await startSession(c, user, "auth.login.invitation");
-  return ok({ accepted: true, signedIn: true, role: user.role, mfaRequired: mfa }, 200, { "set-cookie": cookie });
+  // The account is complete and valid from here on. If the session cannot be started, the person signs in through
+  // the usual email link instead; nothing needs repairing.
+  try {
+    const { cookie, mfa } = await startSession(c, user, "auth.login.invitation");
+    return ok({ accepted: true, signedIn: true, role: user.role, mfaRequired: mfa }, 200, { "set-cookie": cookie });
+  } catch (e) {
+    await audit(c.db, { actor_id: userId, action: "invite.session_failed", target_type: "user", target_id: userId, detail: { invitation: i.id, error: String((e as Error)?.message ?? e).slice(0, 200) } }).catch(() => undefined);
+    return ok({ accepted: true, signedIn: false, message: "Your account is ready. Sign in from your staff entrance with the invited email address." });
+  }
 });
 
 // ---------- approvals ----------
@@ -299,7 +319,10 @@ route("GET", "/api/app/admin/approvals", ["admin"], async (c) => {
   for (const r0 of await listApprovals(c.db)) {
     if (!visible(c, r0)) continue;
     const r = await expireApprovalIfDue(c, r0);
-    rows.push({ ...approvalView(r), requesterName: await name(r.requested_by), deciderName: await name(r.decided_by), canDecide: r.status === "pending" && !mayDecide(c, r) });
+    const recoverable = r.status === "approved" && (r.execution_status === "failed" || r.execution_status === "awaiting_execution"
+      || (r.execution_status === "executing" && Date.now() - Date.parse(r.execution_claimed_at ?? r.updated_at) > EXECUTION_STALE_MS));
+    rows.push({ ...approvalView(r), requesterName: await name(r.requested_by), deciderName: await name(r.decided_by), canDecide: r.status === "pending" && !mayDecide(c, r),
+      canRecover: recoverable && !mayDecide(c, r) });
   }
   return ok({ approvals: rows });
 });
@@ -373,23 +396,29 @@ route("POST", "/api/app/admin/approvals/:id/decision", ["admin"], async (c) => {
   if (decision === "approve" && !(await ruleFor(c.db, r.category as Category)))
     throw new ApiError(409, "policy_withdrawn", "The owner has switched this approval off since the request was made. Cancel the request.");
   const at = nowIso();
-  const res = (await decideApproval(c.db, r.id, decision === "approve" ? "approved" : "rejected", c.user.id, comment, at));
+  const res = decision === "approve" ? await approveRequest(c.db, r.id, c.user.id, comment, at) : await decideApproval(c.db, r.id, "rejected", c.user.id, comment, at);
   if (!res) throw new ApiError(409, "changed", "This request changed in the meantime. Reload it.");
   await c.audit(decision === "approve" ? "approval.approved" : "approval.rejected", "approval_request", r.id, { category: r.category, target: r.target_id, comment });
   if (decision === "reject") return ok({ approval: approvalView((await getApproval(c.db, r.id))!) });
-  // Execution happens only now, after approval, with every rule checked again.
-  const exec = executorFor(r.category);
-  try {
-    const result = exec ? await exec(c, { ...r, status: "approved" }, parseJsonCol(r.payload, {})) : "no executor";
-    await recordExecution(c.db, r.id, !!exec, result, nowIso());
-    await c.audit("approval.executed", "approval_request", r.id, { category: r.category, target: r.target_id, result });
-    return ok({ approval: approvalView((await getApproval(c.db, r.id))!), executed: !!exec });
-  } catch (e) {
-    const msg = e instanceof ApiError ? `${e.code}: ${e.message}` : "unexpected error";
-    await recordExecution(c.db, r.id, false, `not executed (${msg})`, nowIso());
-    await c.audit("approval.execution_failed", "approval_request", r.id, { category: r.category, target: r.target_id, error: msg });
-    return ok({ approval: approvalView((await getApproval(c.db, r.id))!), executed: false, error: msg });
-  }
+  // The decision is recorded; the action runs now, as its own step with its own status.
+  const outcome = await executeApproved(c, r.id, false);
+  return ok({ approval: approvalView((await getApproval(c.db, r.id))!), executed: outcome.executed, execution: outcome, ...(outcome.error ? { error: outcome.error } : {}) });
+});
+
+// Recovery of an approved request whose action failed, or whose run was interrupted. An explicit request by an
+// eligible approver (never automatic), re-checking approver eligibility, the owner's policy and the target's state.
+route("POST", "/api/app/admin/approvals/:id/execute", ["admin"], async (c) => {
+  const r = await getApproval(c.db, c.params.id);
+  if (!r || !visible(c, r)) throw notFound("That request");
+  if (r.status !== "approved") throw new ApiError(409, "not_approved", `This request is ${r.status}; only an approved request can be carried out.`);
+  if (r.execution_status === "completed") throw new ApiError(409, "already_completed", "This request has already been carried out.");
+  const why = mayDecide(c, r);
+  if (why) { await c.audit("approval.recovery_refused", "approval_request", r.id, { why }); throw new ApiError(403, "forbidden", why); }
+  await requireStrongAuth(c, "approval.execute", r.id);
+  if (!(await ruleFor(c.db, r.category as Category))) throw new ApiError(409, "policy_withdrawn", "The owner has switched this approval off since it was approved. It cannot be carried out; record the outcome and close it.");
+  await c.audit("approval.recovery_requested", "approval_request", r.id, { previous: r.execution_status, attempts: r.execution_attempts });
+  const outcome = await executeApproved(c, r.id, true);
+  return ok({ approval: approvalView((await getApproval(c.db, r.id))!), executed: outcome.executed, execution: outcome, ...(outcome.error ? { error: outcome.error } : {}) });
 });
 
 route("POST", "/api/app/admin/approvals/:id/cancel", ["admin"], async (c) => {
