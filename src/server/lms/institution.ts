@@ -7,12 +7,13 @@
 import { ApiError, nowIso } from "../http";
 import type { Ctx } from "./api";
 import { getSetting, putSetting } from "./data/engagement";
-import { deleteUserSessions, getUser, setAdminRole, updateUser } from "./data/users";
-import { claimExecution, createApproval, createAssignment, currentHead, endAssignment, finishExecution, getApproval, getDepartment, userAssignments, type ApprovalRequest } from "./data/institution";
+import { auditStmt, deleteUserSessionsStmt, getUser, reinstateStmt, setAdminRoleStmt } from "./data/users";
+import { claimExecution, completeStmt, createApproval, createAssignmentStmt, currentHead, effectStmt, endAssignmentStmt, fenceFor, fenceStmt, getApproval, getDepartment, recordOutcome, userAssignments, type ApprovalRequest } from "./data/institution";
+import { batch } from "./data/base";
 import { Repo } from "../repo";
 import { accountChangeRefusal, groupChangeRefusal, isAdminRole, isOwner, isSuper, type AdminRole } from "./permissions";
 import { isBootstrapped } from "./data/owner";
-import { releaseAttempt } from "./payment-release";
+import { planRelease } from "./payment-release";
 
 // ---------- owner policies ----------
 export type InstitutionPolicy = {
@@ -57,9 +58,15 @@ export function mayDecide(c: Ctx, r: ApprovalRequest): string | null {
 }
 
 // ---------- executors: run ONLY after approval, re-checking every rule with the approver's authority ----------
-type Exec = (c: Ctx, r: ApprovalRequest, payload: Record<string, unknown>) => Promise<string>;
+// Stage E.2: an executor no longer writes anything. It checks (reads only; for payment release, also the read-only
+// Paystack verification) and returns a PLAN: the action's statements, its audit records, and an SQL condition that
+// is true only when the action's intended result is in place. executeApproved() commits the plan in ONE D1 batch (one
+// transaction) behind the run's fence, so a superseded run cannot commit any part of it.
+export type Plan = { stmts: D1PreparedStatement[]; effect: { sql: string; binds: (string | number | null)[] }; result: string };
+type Exec = (c: Ctx, r: ApprovalRequest, payload: Record<string, unknown>, claimId: string) => Promise<Plan>;
+const via = (c: Ctx, r: ApprovalRequest, claimId: string) => ({ authority: "approval", approvalRequest: r.id, requestedBy: r.requested_by, approvedBy: c.user.id, claim: claimId, attempt: r.execution_attempts });
 const EXECUTORS: Record<Category, Exec> = {
-  async staff_group_change(c, r, p) {
+  async staff_group_change(c, r, p, claimId) {
     const target = await getUser(c.db, r.target_id);
     if (!target) throw new ApiError(404, "not_found", "That staff member no longer exists.");
     const next = String(p.adminRole ?? "");
@@ -69,31 +76,37 @@ const EXECUTORS: Record<Category, Exec> = {
     const requester = await getUser(c.db, r.requested_by);
     const why = (requester ? groupChangeRefusal(requester, target, next, c.owner, booted) : "The requester no longer exists.") ?? groupChangeRefusal(c.user, target, next, c.owner, booted);
     if (why) throw new ApiError(403, "forbidden", why);
-    await setAdminRole(c.db, target.id, next as AdminRole);
-    await deleteUserSessions(c.db, target.id);
-    await c.audit("admin.group_assigned", "user", target.id, { from: target.admin_role ?? null, to: next, authority: "approval", approvalRequest: r.id, requestedBy: r.requested_by, approvedBy: c.user.id, reason: r.reason });
-    return `group changed from ${target.admin_role ?? "none"} to ${next}`;
+    return {
+      stmts: [setAdminRoleStmt(c.db, target.id, next), deleteUserSessionsStmt(c.db, target.id),
+        auditStmt(c.db, { actor_id: c.user.id, action: "admin.group_assigned", target_type: "user", target_id: target.id, ip_hash: c.ipHash,
+          detail: { from: target.admin_role ?? null, to: next, reason: r.reason, ...via(c, r, claimId) } })],
+      effect: { sql: "SELECT 1 FROM users WHERE id = ?2 AND admin_role = ?3", binds: [target.id, next] },
+      result: `group changed from ${target.admin_role ?? "none"} to ${next}`,
+    };
   },
-  async staff_reinstatement(c, r) {
+  async staff_reinstatement(c, r, _p, claimId) {
     const target = await getUser(c.db, r.target_id);
     if (!target) throw new ApiError(404, "not_found", "That staff member no longer exists.");
     if (target.status !== "suspended") throw new ApiError(409, "not_suspended", "This account is not suspended.");
     const why = accountChangeRefusal(c.user, target, c.owner, await isBootstrapped(c.db));
     if (why) throw new ApiError(403, "forbidden", why);
-    await updateUser(c.db, target.id, { status: "active" });
-    await c.audit("staff.reinstated", "user", target.id, { from: "suspended", to: "active", authority: "approval", approvalRequest: r.id, requestedBy: r.requested_by, approvedBy: c.user.id, reason: r.reason });
-    return "account reactivated";
+    return {
+      stmts: [reinstateStmt(c.db, target.id),
+        auditStmt(c.db, { actor_id: c.user.id, action: "staff.reinstated", target_type: "user", target_id: target.id, ip_hash: c.ipHash,
+          detail: { from: "suspended", to: "active", reason: r.reason, ...via(c, r, claimId) } })],
+      effect: { sql: "SELECT 1 FROM users WHERE id = ?2 AND status = 'active' AND removed_at IS NULL", binds: [target.id] },
+      result: "account reactivated",
+    };
   },
-  async department_head_appointment(c, r, p) {
+  async department_head_appointment(c, r, p, claimId) {
     const slug = String(p.departmentSlug ?? "");
     const dept = await getDepartment(c.db, slug);
     if (!dept || dept.status !== "active") throw new ApiError(404, "not_found", "That department is not active.");
-    await appointHead(c, slug, r.target_id, `${r.reason} (approval ${r.id})`, { authority: "approval", approvalRequest: r.id, requestedBy: r.requested_by });
-    return `head of ${dept.name} appointed`;
+    const h = await planHead(c, slug, r.target_id, `${r.reason} (approval ${r.id})`, via(c, r, claimId));
+    return { stmts: h.stmts, effect: { sql: "SELECT 1 FROM staff_assignments WHERE id = ?2 AND position = 'head' AND ended_at IS NULL", binds: [h.id] }, result: `head of ${dept.name} appointed` };
   },
-  async payment_attempt_release(c, r, p) {
-    await releaseAttempt(c, r.target_id, { reason: r.reason, confirmedWithPaystack: p.confirmedWithPaystack === true, releasedBy: r.requested_by, approvedBy: c.user.id, approvalRequest: r.id });
-    return "payment attempt released";
+  async payment_attempt_release(c, r, p, claimId) {
+    return planRelease(c, r.target_id, { reason: r.reason, confirmedWithPaystack: p.confirmedWithPaystack === true, releasedBy: r.requested_by, approvedBy: c.user.id, approvalRequest: r.id, claimId });
   },
 };
 export const executorFor = (cat: string): Exec | null => (EXECUTABLE as readonly string[]).includes(cat) ? EXECUTORS[cat as Category] : null;
@@ -112,8 +125,9 @@ export async function assertOneDepartment(c: Ctx, userId: string, slug: string) 
   if (mine.length && !(await getInstitutionPolicy(c.db)).multipleDepartments)
     throw new ApiError(409, "one_department", "This person already belongs to another department. Belonging to several departments needs the owner's policy.");
 }
-// Appoints a head, ending the current head's headship (their record is kept). Caller has checked authority.
-export async function appointHead(c: Ctx, slug: string, userId: string, reason: string, via: Record<string, unknown> = { authority: c.isOwner ? "owner_direct" : "delegated" }) {
+// Plans a head appointment: ends the current head's headship (their record is kept) and the person's ordinary
+// membership of the same department, then creates the headship, with audit records. Caller has checked authority.
+export async function planHead(c: Ctx, slug: string, userId: string, reason: string, viaInfo: Record<string, unknown>) {
   await assertAssignable(c, userId);
   const at = nowIso();
   const current = await currentHead(c.db, slug);
@@ -123,16 +137,21 @@ export async function appointHead(c: Ctx, slug: string, userId: string, reason: 
   const elsewhere = mine.filter((a) => a.department_slug !== slug);
   if (elsewhere.length && !(await getInstitutionPolicy(c.db)).multipleDepartments)
     throw new ApiError(409, "one_department", "This person belongs to another department. Belonging to several departments needs the owner's policy.");
-  if (current) {
-    await endAssignment(c.db, current.id, c.user.id, `replaced as head: ${reason}`, at);
-    await c.audit("staff.head_replaced", "user", current.user_id, { department: slug, reason });
-  }
+  const stmts: D1PreparedStatement[] = [];
+  const audit = (action: string, target: string, detail: unknown) => auditStmt(c.db, { actor_id: c.user.id, action, target_type: "user", target_id: target, detail, ip_hash: c.ipHash });
+  if (current) stmts.push(endAssignmentStmt(c.db, current.id, c.user.id, `replaced as head: ${reason}`, at), audit("staff.head_replaced", current.user_id, { department: slug, reason, ...viaInfo }));
   const sameDept = mine.find((a) => a.department_slug === slug);
-  if (sameDept) await endAssignment(c.db, sameDept.id, c.user.id, `became head: ${reason}`, at);
+  if (sameDept) stmts.push(endAssignmentStmt(c.db, sameDept.id, c.user.id, `became head: ${reason}`, at));
   const id = crypto.randomUUID();
-  await createAssignment(c.db, { id, user_id: userId, department_slug: slug, position: "head", reason, created_at: at, created_by: c.user.id });
-  await c.audit("staff.head_appointed", "user", userId, { department: slug, assignment: id, previousHead: current?.user_id ?? null, reason, ...via });
-  return id;
+  stmts.push(createAssignmentStmt(c.db, { id, user_id: userId, department_slug: slug, position: "head", reason, created_at: at, created_by: c.user.id }),
+    audit("staff.head_appointed", userId, { department: slug, assignment: id, previousHead: current?.user_id ?? null, reason, ...viaInfo }));
+  return { id, stmts };
+}
+// A direct appointment (the owner, or a Super Administrator the owner has authorised): the same plan, in one batch.
+export async function appointHead(c: Ctx, slug: string, userId: string, reason: string) {
+  const h = await planHead(c, slug, userId, reason, { authority: c.isOwner ? "owner_direct" : "delegated" });
+  await batch(c.db, h.stmts);
+  return h.id;
 }
 
 // ---------- opening a request (nothing executes here) ----------
@@ -142,7 +161,7 @@ export async function openApproval(c: Ctx, f: { category: Category; targetType: 
   const r: ApprovalRequest = { id: crypto.randomUUID(), category: f.category, target_type: f.targetType, target_id: f.targetId, payload: JSON.stringify(f.payload), reason: f.reason,
     requested_by: c.user.id, approver: f.rule.approver === "super" ? "super" : "owner", status: "pending", expires_at: new Date(Date.now() + hours * 3600_000).toISOString(),
     decided_by: null, decided_at: null, decision_comment: null, executed_at: null, execution_result: null, escalated_at: null, created_at: at, updated_at: at,
-    execution_status: "not_applicable", execution_claimed_at: null, execution_claimed_by: null, execution_attempts: 0 };
+    execution_status: "not_applicable", execution_claimed_at: null, execution_claimed_by: null, execution_attempts: 0, execution_claim_id: null };
   try { await createApproval(c.db, r); }
   catch (e) {
     if (/UNIQUE/i.test(String(e))) throw new ApiError(409, "already_requested", "There is already a pending request for this. It must be decided or cancelled first.");
@@ -152,9 +171,9 @@ export async function openApproval(c: Ctx, f: { category: Category; targetType: 
   return r;
 }
 
-// ---------- execution (Stage E.1): separate from the decision, claimed atomically, recoverable ----------
-// Has the approved change already taken effect? Used before every run, so a recovery after an uncertain outcome never
-// repeats a change that already happened: it records it instead.
+// ---------- execution (Stage E.1, fenced in Stage E.2) ----------
+// Has the approved change already taken effect? Checked before every run, so a recovery never repeats a change that
+// already happened: it records it instead.
 async function alreadyApplied(c: Ctx, r: ApprovalRequest, p: Record<string, unknown>): Promise<boolean> {
   if (r.category === "staff_group_change") return (await getUser(c.db, r.target_id))?.admin_role === String(p.adminRole ?? "");
   if (r.category === "staff_reinstatement") { const t = await getUser(c.db, r.target_id); return !!t && t.status === "active" && !t.removed_at; }
@@ -162,18 +181,27 @@ async function alreadyApplied(c: Ctx, r: ApprovalRequest, p: Record<string, unkn
   if (r.category === "payment_attempt_release") return (await new Repo(c.db).getAttempt(r.target_id))?.state === "released";
   return false;
 }
-// An interrupted run (the Worker stopped after claiming) may be recovered once its claim is this old.
+// A run claimed more than this long ago may be taken over by an explicit recovery. Safe because of the fence: taking
+// over issues a new claim id, after which the earlier run can never commit (see executeApproved).
 export const EXECUTION_STALE_MS = 120_000;
 export type ExecutionOutcome = { executed: boolean; status: string; result: string; error?: string };
+const isFence = (e: unknown, col: "owner_check" | "effect_check") => new RegExp(`NOT NULL constraint failed: execution_fences\\.${col}`).test(String((e as Error)?.message ?? e));
 
-// Runs an approved request's action. Exactly one caller wins the claim. Every rule is checked again with the acting
-// approver's CURRENT authority; a definite refusal is recorded as failed (nothing changed); an unexpected error is
-// recorded as failed with an uncertain outcome, and is never retried automatically. A recovery is an explicit request
-// by an eligible approver, and starts by checking whether the change already took effect.
+// Runs an approved request's action.
+//  1. Claim: exactly one caller wins, with a NEW claim id (the fencing token).
+//  2. Reconcile: a recovery first looks for a fence row of the previous run (proof its action committed) and checks
+//     whether the change is already in effect; either way it records completion and changes nothing.
+//  3. Check and plan: every rule is checked again with the acting approver's CURRENT authority (reads only).
+//  4. Commit, as ONE D1 batch: [fence (aborts unless this run still owns the claim) → the action → effect check
+//     (aborts unless the intended result is in place) → audit "executed" → status completed]. All or nothing.
+//  5. Outcome: a definite refusal or a rolled-back batch is recorded as failed (nothing committed); a superseded run
+//     records nothing over the newer run; an outcome that cannot be determined is left for reconciliation, never retried.
 export async function executeApproved(c: Ctx, id: string, recovery: boolean): Promise<ExecutionOutcome> {
+  const before = await getApproval(c.db, id);
   const at = nowIso();
+  const claimId = crypto.randomUUID();
   const stale = recovery ? new Date(Date.now() - EXECUTION_STALE_MS).toISOString() : null;
-  if (!(await claimExecution(c.db, id, c.user.id, at, stale))) {
+  if (!(await claimExecution(c.db, id, c.user.id, at, stale, claimId))) {
     const now = await getApproval(c.db, id);
     if (now?.execution_status === "executing") throw new ApiError(409, "execution_in_progress", "This request is being carried out right now. Reload in a moment.");
     if (now?.execution_status === "completed") throw new ApiError(409, "already_completed", "This request has already been carried out.");
@@ -181,29 +209,62 @@ export async function executeApproved(c: Ctx, id: string, recovery: boolean): Pr
   }
   const r = (await getApproval(c.db, id))!;
   const payload = (() => { try { return JSON.parse(r.payload) as Record<string, unknown>; } catch { return {}; } })();
-  await c.audit("approval.execution_started", "approval_request", id, { category: r.category, attempt: r.execution_attempts, recovery });
-  const finish = async (outcome: "completed" | "failed", result: string) => {
-    if (!(await finishExecution(c.db, id, at, outcome, result, nowIso()))) await c.audit("approval.execution_superseded", "approval_request", id, { outcome, result });
+  const base = { category: r.category, target: r.target_id, attempt: r.execution_attempts, claim: claimId, recovery };
+  await c.audit("approval.execution_started", "approval_request", id, { ...base, previousClaim: before?.execution_claim_id ?? null, previousStatus: before?.execution_status ?? null });
+  const record = async (outcome: "completed" | "failed", result: string, action: string, detail: Record<string, unknown> = {}) => {
+    return recordOutcome(c.db, id, claimId, outcome, result, nowIso(), { actor_id: c.user.id, action, detail: { ...base, result, ...detail }, ip_hash: c.ipHash });
+  };
+  const superseded = async (where: string): Promise<ExecutionOutcome> => {
+    await c.audit("approval.execution_superseded", "approval_request", id, { ...base, at: where, committed: false });
+    return { executed: false, status: "superseded", result: "a newer run took over; this run committed nothing" };
   };
   try {
+    // 2. Reconcile.
+    if (recovery && before?.execution_claim_id && (await fenceFor(c.db, before.execution_claim_id))) {
+      const result = `already committed by the previous run (attempt ${before.execution_attempts}): no change made`;
+      return (await record("completed", result, "approval.execution_reconciled", { previousClaim: before.execution_claim_id })) ? { executed: true, status: "completed", result } : superseded("reconcile");
+    }
     if (await alreadyApplied(c, r, payload)) {
       const result = "already in effect: no change made";
-      await finish("completed", result);
-      await c.audit("approval.execution_reconciled", "approval_request", id, { category: r.category, recovery, result });
-      return { executed: true, status: "completed", result };
+      return (await record("completed", result, "approval.execution_reconciled")) ? { executed: true, status: "completed", result } : superseded("reconcile");
     }
+    // 3. Check and plan.
     const exec = executorFor(r.category);
     if (!exec) throw new ApiError(409, "no_executor", "This kind of request has no executor.");
-    const result = await exec(c, r, payload);
-    await finish("completed", result);
-    await c.audit("approval.executed", "approval_request", id, { category: r.category, target: r.target_id, result, recovery });
-    return { executed: true, status: "completed", result };
+    const plan = await exec(c, r, payload, claimId);
+    // 4. Commit.
+    const done = nowIso();
+    try {
+      await batch(c.db, [
+        fenceStmt(c.db, claimId, id, done),
+        ...plan.stmts,
+        effectStmt(c.db, claimId, plan.effect.sql, ...plan.effect.binds),
+        auditStmt(c.db, { actor_id: c.user.id, action: "approval.executed", target_type: "approval_request", target_id: id, ip_hash: c.ipHash, detail: { ...base, result: plan.result } }),
+        completeStmt(c.db, id, claimId, plan.result, done),
+      ]);
+    } catch (e) {
+      if (isFence(e, "owner_check")) return superseded("commit");
+      if (isFence(e, "effect_check")) throw new ApiError(409, "target_changed", "The target changed while this was being carried out. Nothing was committed.");
+      // Anything else rolled the batch back, unless the error came after a commit (a lost response): the fence row
+      // tells which. If even that cannot be read, the outcome is left for reconciliation.
+      let committed: boolean | null = null;
+      try { committed = !!(await fenceFor(c.db, claimId)); } catch { committed = null; }
+      if (committed) return { executed: true, status: "completed", result: plan.result };
+      if (committed === null) {
+        await c.audit("approval.execution_uncertain", "approval_request", id, { ...base, error: String((e as Error)?.message ?? e).slice(0, 300) }).catch(() => undefined);
+        return { executed: false, status: "executing", result: "outcome could not be confirmed; reconcile before any further run" };
+      }
+      const msg = String((e as Error)?.message ?? e).slice(0, 300);
+      const result = `failed, nothing committed (${msg})`;
+      if (!(await record("failed", result, "approval.execution_failed", { definite: true, rolledBack: true, error: msg }))) return superseded("rolled back");
+      return { executed: false, status: "failed", result, error: msg };
+    }
+    return { executed: true, status: "completed", result: plan.result };
   } catch (e) {
-    const definite = e instanceof ApiError;
-    const msg = definite ? `${e.code}: ${e.message}` : String((e as Error)?.message ?? e).slice(0, 300);
-    const result = definite ? `refused, nothing changed (${msg})` : `outcome uncertain (${msg}); check before recovering`;
-    await finish("failed", result);
-    await c.audit("approval.execution_failed", "approval_request", id, { category: r.category, target: r.target_id, definite, error: msg, recovery });
+    if (!(e instanceof ApiError)) throw e;
+    const msg = `${e.code}: ${e.message}`;
+    const result = `refused, nothing changed (${msg})`;
+    if (!(await record("failed", result, "approval.execution_failed", { definite: true, error: msg }))) return superseded("refusal");
     return { executed: false, status: "failed", result, error: msg };
   }
 }

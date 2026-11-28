@@ -155,6 +155,11 @@ export class Repo {
       .bind(id, to, f.authorization_url ?? null, f.access_code ?? null, f.detail ?? null, f.released_by ?? null, f.released_reason ?? null, new Date().toISOString(), JSON.stringify(from)).run());
     return (r.meta.changes ?? 0) > 0;
   }
+  // Stage E.2: the release as a statement, so an approved release commits in one batch with its fence and audit record.
+  releaseStmt(id: string, by: string, reason: string, at: string) {
+    return this.db.prepare("UPDATE payment_attempts SET state = 'released', released_by = ?2, released_reason = ?3, updated_at = ?4 WHERE id = ?1 AND state IN ('uncertain', 'claimed')")
+      .bind(id, by, reason, at);
+  }
   async listAttempts(states: string[]) {
     const r = await guard(() => this.db.prepare(`SELECT a.*, o.reference AS order_reference, i.seq, i.amount_kobo, i.status AS instalment_status FROM payment_attempts a
       JOIN orders o ON o.id = a.order_id JOIN instalments i ON i.id = a.instalment_id WHERE a.state IN (SELECT value FROM json_each(?1)) ORDER BY a.updated_at DESC LIMIT 200`).bind(JSON.stringify(states)).all());

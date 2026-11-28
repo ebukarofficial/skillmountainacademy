@@ -1,5 +1,5 @@
 // Users, sign-in tokens, sessions and the audit log.
-import { all, insert, one, run, update, type DB } from "./base";
+import { all, insert, insertStmt, one, run, stmt, update, type DB } from "./base";
 
 export type Role = "student" | "instructor" | "admin";
 export type User = {
@@ -108,6 +108,10 @@ export const purgeSessions = (db: DB, before: string) => run(db, "DELETE FROM au
 export const audit = (db: DB, e: { actor_id: string | null; action: string; target_type?: string; target_id?: string; detail?: unknown; ip_hash?: string | null }) =>
   insert(db, "audit_log", { id: crypto.randomUUID(), at: new Date().toISOString(), actor_id: e.actor_id, action: e.action, target_type: e.target_type ?? null,
     target_id: e.target_id ?? null, detail: e.detail === undefined ? null : JSON.stringify(e.detail).slice(0, 2000), ip_hash: e.ip_hash ?? null });
+// Stage E.2: the same audit row as a statement, so it can commit in one batch with the change it records.
+export const auditStmt = (db: DB, e: { actor_id: string | null; action: string; target_type?: string; target_id?: string; detail?: unknown; ip_hash?: string | null }) =>
+  insertStmt(db, "audit_log", { id: crypto.randomUUID(), at: new Date().toISOString(), actor_id: e.actor_id, action: e.action, target_type: e.target_type ?? null,
+    target_id: e.target_id ?? null, detail: e.detail === undefined ? null : JSON.stringify(e.detail).slice(0, 2000), ip_hash: e.ip_hash ?? null });
 export const listAudit = (db: DB, limit: number, offset: number) => all<Record<string, string>>(db,
   "SELECT a.*, u.full_name AS actor_name FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id ORDER BY a.at DESC LIMIT ?1 OFFSET ?2", limit, offset);
 
@@ -146,3 +150,8 @@ export async function setMfaRequired(db: DB, userId: string, on: boolean) {
   try { await run(db, "UPDATE users SET mfa_required = ?2 WHERE id = ?1", userId, on ? 1 : 0); }
   catch (e) { if (!/no such column|has no column named/i.test(String((e as Error)?.message ?? e))) throw e; }
 }
+
+// Stage E.2: statement forms for changes that must commit together with their fence and audit records.
+export const setAdminRoleStmt = (db: DB, userId: string, role: string) => stmt(db, "UPDATE users SET admin_role = ?2 WHERE id = ?1", userId, role);
+export const deleteUserSessionsStmt = (db: DB, userId: string) => stmt(db, "DELETE FROM auth_sessions WHERE user_id = ?1", userId);
+export const reinstateStmt = (db: DB, userId: string) => stmt(db, "UPDATE users SET status = 'active' WHERE id = ?1 AND status = 'suspended' AND removed_at IS NULL", userId);

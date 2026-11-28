@@ -4,6 +4,7 @@
 import { ApiError } from "../http";
 import type { Ctx } from "./api";
 import { Repo, type PaymentAttempt } from "../repo";
+import { auditStmt } from "./data/users";
 import { CLAIM_TTL_MS, verifyReference, verifyWithPaystack } from "../routes/payments";
 
 // Every check short of the release itself. Paystack is asked first; a payment it reports as successful is recorded
@@ -34,4 +35,23 @@ export async function releaseAttempt(c: Ctx, attemptId: string, o: { reason: str
   await c.audit("payment.attempt_release", "payment_attempt", a.id, { reference: a.reference, reason: o.reason, paystack, confirmedWithPaystack: o.confirmedWithPaystack,
     releasedBy: o.releasedBy, approvedBy: o.approvedBy ?? null, approvalRequest: o.approvalRequest ?? null });
   return repo.getAttempt(a.id);
+}
+
+// Stage E.2: an APPROVED release, planned as statements that commit only inside the approval's fenced batch. Every
+// check above runs first (Paystack is asked first; a successful payment is recorded and never released).
+export async function planRelease(c: Ctx, attemptId: string, o: { reason: string; confirmedWithPaystack: boolean; releasedBy: string; approvedBy: string; approvalRequest: string; claimId: string }) {
+  const { repo, attempt: a, paystack } = await checkReleasable(c, attemptId, o.confirmedWithPaystack);
+  const at = new Date().toISOString();
+  const reason = `${o.reason} (approval ${o.approvalRequest})`;
+  return {
+    stmts: [
+      repo.releaseStmt(a.id, o.releasedBy, reason, at),
+      auditStmt(c.db, { actor_id: c.user.id, action: "payment.attempt_release", target_type: "payment_attempt", target_id: a.id, ip_hash: c.ipHash,
+        detail: { reference: a.reference, reason: o.reason, paystack, confirmedWithPaystack: o.confirmedWithPaystack, releasedBy: o.releasedBy, approvedBy: o.approvedBy,
+          approvalRequest: o.approvalRequest, claim: o.claimId } }),
+    ],
+    // The batch commits only if THIS run moved the attempt to released (not a release made by anyone else).
+    effect: { sql: "SELECT 1 FROM payment_attempts WHERE id = ?2 AND state = 'released' AND released_reason = ?3 AND updated_at = ?4", binds: [a.id, reason, at] },
+    result: "payment attempt released",
+  };
 }

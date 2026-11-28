@@ -11,7 +11,8 @@ export type ApprovalRequest = { id: string; category: string; target_type: strin
   status: "pending" | "approved" | "rejected" | "cancelled" | "expired"; expires_at: string; decided_by: string | null; decided_at: string | null; decision_comment: string | null;
   executed_at: string | null; execution_result: string | null; escalated_at: string | null; created_at: string; updated_at: string;
   // Stage E.1 (migration 0016): what happened to the action, kept apart from the approver's decision.
-  execution_status: ExecutionStatus; execution_claimed_at: string | null; execution_claimed_by: string | null; execution_attempts: number };
+  execution_status: ExecutionStatus; execution_claimed_at: string | null; execution_claimed_by: string | null; execution_attempts: number;
+  execution_claim_id: string | null }; // Stage E.2 (migration 0017): the fencing token of the current or last run
 export type ExecutionStatus = "not_applicable" | "awaiting_execution" | "executing" | "completed" | "failed";
 
 // ---------- departments ----------
@@ -35,6 +36,11 @@ export const getAssignment = (db: DB, id: string) => one<Assignment>(db, "SELECT
 export const createAssignment = (db: DB, a: Omit<Assignment, "ended_at" | "ended_by" | "end_reason">) =>
   run(db, "INSERT INTO staff_assignments (id, user_id, department_slug, position, reason, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     a.id, a.user_id, a.department_slug, a.position, a.reason, a.created_at, a.created_by);
+export const createAssignmentStmt = (db: DB, a: Omit<Assignment, "ended_at" | "ended_by" | "end_reason">) =>
+  stmt(db, "INSERT INTO staff_assignments (id, user_id, department_slug, position, reason, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    a.id, a.user_id, a.department_slug, a.position, a.reason, a.created_at, a.created_by);
+export const endAssignmentStmt = (db: DB, id: string, by: string, reason: string, at: string) =>
+  stmt(db, "UPDATE staff_assignments SET ended_at = ?2, ended_by = ?3, end_reason = ?4 WHERE id = ?1 AND ended_at IS NULL", id, at, by, reason);
 export const endAssignment = (db: DB, id: string, by: string, reason: string, at: string) =>
   run(db, "UPDATE staff_assignments SET ended_at = ?2, ended_by = ?3, end_reason = ?4 WHERE id = ?1 AND ended_at IS NULL", id, at, by, reason);
 
@@ -84,17 +90,47 @@ export const decideApproval = (db: DB, id: string, to: "rejected" | "cancelled" 
 // Approval records the decision and queues the action; it does not say the action happened.
 export const approveRequest = (db: DB, id: string, by: string, comment: string | null, at: string) =>
   run(db, "UPDATE approval_requests SET status = 'approved', execution_status = 'awaiting_execution', decided_by = ?2, decision_comment = ?3, decided_at = ?4, updated_at = ?4 WHERE id = ?1 AND status = 'pending'", id, by, comment, at);
-// Atomic claim: exactly one caller moves the request to "executing". The first run claims only a freshly approved
-// request; a recovery may also claim a failed one, or one whose earlier run was interrupted (still "executing" after
-// staleBefore). Rejected, cancelled and expired requests can never be claimed.
-export const claimExecution = (db: DB, id: string, by: string, at: string, staleBefore: string | null) =>
-  run(db, `UPDATE approval_requests SET execution_status = 'executing', execution_claimed_at = ?3, execution_claimed_by = ?2, execution_attempts = execution_attempts + 1, updated_at = ?3
+// Atomic claim: exactly one caller moves the request to "executing", with a NEW random claim id (the fencing token).
+// The first run claims only a freshly approved request; a recovery may also claim a failed one, or one whose earlier run
+// was interrupted (still "executing" after staleBefore). Rejected, cancelled and expired requests can never be claimed.
+// Reclaiming replaces the claim id, so the earlier run can no longer pass its fence (fenceStmt) and cannot commit.
+export const claimExecution = (db: DB, id: string, by: string, at: string, staleBefore: string | null, claimId: string) =>
+  run(db, `UPDATE approval_requests SET execution_status = 'executing', execution_claim_id = ?5, execution_claimed_at = ?3, execution_claimed_by = ?2,
+      execution_attempts = execution_attempts + 1, updated_at = ?3
     WHERE id = ?1 AND status = 'approved' AND (execution_status = 'awaiting_execution'
-      OR (?4 IS NOT NULL AND (execution_status = 'failed' OR (execution_status = 'executing' AND execution_claimed_at < ?4))))`, id, by, at, staleBefore);
-// Records the outcome, only for the claim that is still current (a stale claimant cannot overwrite a newer run).
-export const finishExecution = (db: DB, id: string, claimedAt: string, outcome: "completed" | "failed", result: string, at: string) =>
-  run(db, `UPDATE approval_requests SET execution_status = ?3, execution_result = ?4, executed_at = CASE WHEN ?3 = 'completed' THEN ?5 ELSE executed_at END, updated_at = ?5
-    WHERE id = ?1 AND execution_status = 'executing' AND execution_claimed_at = ?2`, id, claimedAt, outcome, result, at);
+      OR (?4 IS NOT NULL AND (execution_status = 'failed' OR (execution_status = 'executing' AND execution_claimed_at < ?4))))`, id, by, at, staleBefore, claimId);
+
+// ---- fencing (Stage E.2): the statements that make an action commit only for the current claim ----
+const OWNS = "EXISTS (SELECT 1 FROM approval_requests WHERE id = ?2 AND status = 'approved' AND execution_status = 'executing' AND execution_claim_id = ?1)";
+// First statement of the batch. NOT NULL makes the whole batch roll back when this run no longer owns the claim; the
+// primary key makes a claim commit at most once.
+export const fenceStmt = (db: DB, claimId: string, approvalId: string, at: string) =>
+  stmt(db, `INSERT INTO execution_fences (claim_id, approval_id, owner_check, effect_check, committed_at)
+    SELECT ?1, ?2, CASE WHEN ${OWNS} THEN 'current' ELSE NULL END, 'pending', ?3`, claimId, approvalId, at);
+// After the action's statements: rolls the whole batch back unless the intended result is in place (for example the
+// payment attempt really moved to "released" by this run). existsSql uses ?2, ?3, … for its own values.
+export const effectStmt = (db: DB, claimId: string, existsSql: string, ...binds: (string | number | null)[]) =>
+  stmt(db, `UPDATE execution_fences SET effect_check = CASE WHEN EXISTS (${existsSql}) THEN 'confirmed' ELSE NULL END WHERE claim_id = ?1`, claimId, ...binds);
+// The completion, inside the same batch, for the claim that just passed its fence.
+export const completeStmt = (db: DB, approvalId: string, claimId: string, result: string, at: string) =>
+  stmt(db, `UPDATE approval_requests SET execution_status = 'completed', execution_result = ?3, executed_at = ?4, updated_at = ?4
+    WHERE id = ?1 AND execution_claim_id = ?2 AND execution_status = 'executing'`, approvalId, claimId, result, at);
+export const fenceFor = (db: DB, claimId: string) => one<{ claim_id: string; approval_id: string; committed_at: string }>(db, "SELECT * FROM execution_fences WHERE claim_id = ?1", claimId);
+export const fencesFor = (db: DB, approvalId: string) => all<{ claim_id: string; committed_at: string }>(db, "SELECT claim_id, committed_at FROM execution_fences WHERE approval_id = ?1 ORDER BY committed_at", approvalId);
+// Records a run's outcome other than a committed action (completed without changes, or failed), with its audit entry,
+// only while the run still owns the claim: a superseded run can overwrite neither the status nor the audit outcome.
+export async function recordOutcome(db: DB, approvalId: string, claimId: string, outcome: "completed" | "failed", result: string, at: string,
+  auditRow: { actor_id: string; action: string; detail: unknown; ip_hash: string | null }): Promise<boolean> {
+  const res = await batch(db, [
+    stmt(db, `INSERT INTO audit_log (id, at, actor_id, action, target_type, target_id, detail, ip_hash)
+      SELECT ?3, ?4, ?5, ?6, 'approval_request', ?2, ?7, ?8 WHERE ${OWNS}`, claimId, approvalId, crypto.randomUUID(), at, auditRow.actor_id, auditRow.action,
+      JSON.stringify(auditRow.detail).slice(0, 2000), auditRow.ip_hash),
+    stmt(db, `UPDATE approval_requests SET execution_status = ?3, execution_result = ?4, executed_at = CASE WHEN ?3 = 'completed' THEN ?5 ELSE executed_at END, updated_at = ?5
+      WHERE id = ?2 AND execution_claim_id = ?1 AND execution_status = 'executing' AND status = 'approved'`, claimId, approvalId, outcome, result, at),
+  ]);
+  return (res[1]?.meta?.changes ?? 0) === 1;
+}
+
 export const escalateApproval = (db: DB, id: string, at: string) =>
   run(db, "UPDATE approval_requests SET approver = 'owner', escalated_at = ?2, updated_at = ?2 WHERE id = ?1 AND status = 'pending' AND approver = 'super'", id, at);
 export const historyFor = (db: DB, targetId: string) => all<{ at: string; action: string; actor_name: string | null; detail: string | null }>(db,
