@@ -1,5 +1,5 @@
 {
-  "migration": "0017_execution_fencing.sql",
+  "migration": "0018_payment_reconciliation.sql",
   "migrations": [
     "0001_init.sql",
     "0002_seed_programmes.sql",
@@ -17,7 +17,8 @@
     "0014_payment_attempts.sql",
     "0015_institution.sql",
     "0016_approval_execution.sql",
-    "0017_execution_fencing.sql"
+    "0017_execution_fencing.sql",
+    "0018_payment_reconciliation.sql"
   ],
   "schema": [
     {
@@ -546,7 +547,7 @@
       "type": "table",
       "name": "payment_attempts",
       "tbl_name": "payment_attempts",
-      "sql": "CREATE TABLE payment_attempts (\n  id                TEXT PRIMARY KEY,\n  order_id          TEXT NOT NULL REFERENCES orders(id),\n  instalment_id     TEXT NOT NULL REFERENCES instalments(id),\n  attempt           INTEGER NOT NULL,\n  reference         TEXT NOT NULL UNIQUE,\n  state             TEXT NOT NULL CHECK (state IN ('claimed', 'initialized', 'failed', 'uncertain', 'released')),\n  authorization_url TEXT,\n  access_code       TEXT,\n  detail            TEXT,\n  claimed_at        TEXT NOT NULL,\n  updated_at        TEXT NOT NULL,\n  released_by       TEXT,\n  released_reason   TEXT,\n  UNIQUE (instalment_id, attempt)\n)"
+      "sql": "CREATE TABLE payment_attempts (\n  id                TEXT PRIMARY KEY,\n  order_id          TEXT NOT NULL REFERENCES orders(id),\n  instalment_id     TEXT NOT NULL REFERENCES instalments(id),\n  attempt           INTEGER NOT NULL,\n  reference         TEXT NOT NULL UNIQUE,\n  state             TEXT NOT NULL CHECK (state IN ('claimed', 'initialized', 'failed', 'uncertain', 'released')),\n  authorization_url TEXT,\n  access_code       TEXT,\n  detail            TEXT,\n  claimed_at        TEXT NOT NULL,\n  updated_at        TEXT NOT NULL,\n  released_by       TEXT,\n  released_reason   TEXT, version INTEGER NOT NULL DEFAULT 0, verified_status TEXT, verified_at TEXT, verified_version INTEGER, first_verified_at TEXT, outcome TEXT CHECK (outcome IS NULL OR outcome IN ('paid', 'reconcile')), resolved_by TEXT, resolved_reason TEXT,\n  UNIQUE (instalment_id, attempt)\n)"
     },
     {
       "type": "index",
@@ -637,6 +638,54 @@
       "name": "execution_fences_approval",
       "tbl_name": "execution_fences",
       "sql": "CREATE INDEX execution_fences_approval ON execution_fences(approval_id)"
+    },
+    {
+      "type": "index",
+      "name": "payment_attempts_outcome",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE INDEX payment_attempts_outcome ON payment_attempts(instalment_id, outcome)"
+    },
+    {
+      "type": "trigger",
+      "name": "payment_attempts_version",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE TRIGGER payment_attempts_version AFTER UPDATE ON payment_attempts WHEN NEW.version = OLD.version BEGIN UPDATE payment_attempts SET version = OLD.version + 1 WHERE id = NEW.id; END"
+    },
+    {
+      "type": "trigger",
+      "name": "payment_attempts_release_guard",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE TRIGGER payment_attempts_release_guard BEFORE UPDATE OF state ON payment_attempts WHEN NEW.state = 'released' AND OLD.state <> 'released' AND NOT (OLD.outcome IS NULL AND OLD.verified_version = OLD.version AND OLD.verified_status IN ('failed', 'abandoned') AND OLD.verified_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 minutes') AND OLD.first_verified_at <= strftime('%Y-%m-%dT%H:%M:%fZ', OLD.verified_at, '-30 minutes') AND NOT EXISTS (SELECT 1 FROM instalments WHERE id = OLD.instalment_id AND status = 'paid') AND NOT EXISTS (SELECT 1 FROM payments WHERE provider_ref = OLD.reference OR instalment_id = OLD.instalment_id)) BEGIN SELECT RAISE(ABORT, 'payment_release_refused'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "payments_attempt_outcome",
+      "tbl_name": "payments",
+      "sql": "CREATE TRIGGER payments_attempt_outcome AFTER INSERT ON payments WHEN NEW.provider = 'paystack' BEGIN UPDATE payment_attempts SET outcome = CASE WHEN state IN ('released', 'failed') OR EXISTS (SELECT 1 FROM payments p WHERE p.instalment_id = NEW.instalment_id AND p.id <> NEW.id) OR outcome = 'reconcile' THEN 'reconcile' ELSE 'paid' END WHERE reference = NEW.provider_ref; END"
+    },
+    {
+      "type": "trigger",
+      "name": "payments_duplicate_bank",
+      "tbl_name": "payments",
+      "sql": "CREATE TRIGGER payments_duplicate_bank AFTER INSERT ON payments WHEN NEW.provider <> 'paystack' BEGIN UPDATE payment_attempts SET outcome = 'reconcile' WHERE instalment_id = NEW.instalment_id AND outcome = 'paid'; END"
+    },
+    {
+      "type": "trigger",
+      "name": "payment_attempts_checkout_guard",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE TRIGGER payment_attempts_checkout_guard BEFORE INSERT ON payment_attempts WHEN EXISTS (SELECT 1 FROM instalments WHERE id = NEW.instalment_id AND status = 'paid') OR EXISTS (SELECT 1 FROM payment_attempts WHERE instalment_id = NEW.instalment_id AND outcome IS NOT NULL AND resolved_by IS NULL) BEGIN SELECT RAISE(ABORT, 'checkout_blocked'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "payment_attempts_outcome_kept",
+      "tbl_name": "payment_attempts",
+      "sql": "CREATE TRIGGER payment_attempts_outcome_kept BEFORE UPDATE OF outcome ON payment_attempts WHEN OLD.outcome IS NOT NULL AND (NEW.outcome IS NULL OR (OLD.outcome = 'reconcile' AND NEW.outcome <> 'reconcile')) BEGIN SELECT RAISE(ABORT, 'payment_outcome_kept'); END"
+    },
+    {
+      "type": "trigger",
+      "name": "instalments_paid_kept",
+      "tbl_name": "instalments",
+      "sql": "CREATE TRIGGER instalments_paid_kept BEFORE UPDATE OF status ON instalments WHEN OLD.status = 'paid' AND NEW.status <> 'paid' BEGIN SELECT RAISE(ABORT, 'instalment_paid_kept'); END"
     }
   ]
 }

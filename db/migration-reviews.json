@@ -52,5 +52,11 @@
     "reviewedBy": "Claude (Stage E.1 engineering review, 28 Nov 2026)",
     "reviewedAt": "2026-11-28",
     "summary": "Adds execution columns to approval_requests. The two UPDATEs touch only approved requests on the new column (still 'not_applicable'): executed_at set -> 'completed', otherwise 'failed'. 0015 was never applied in production, so production has no rows to change. No existing value is overwritten and no access is granted."
+  },
+  "0018_payment_reconciliation.sql": {
+    "sha256": "abd5673974cb48e186a06b2cebad789c5b494ad87d33a9da59582ab2d96293f9",
+    "reviewedBy": "Claude (Stage E.4 engineering review, 28 Nov 2026)",
+    "reviewedAt": "2026-11-28",
+    "summary": "Adds nullable evidence/outcome columns and a version counter (default 0) to payment_attempts, and seven triggers. The three triggers that write data change only the new columns of payment_attempts: the version counter after any update, and the outcome ('paid' or 'reconcile') when a payment row is inserted. The migration itself updates no row; no existing value (attempt, payment, instalment, order) is overwritten. The other triggers only refuse unsafe changes (an unsettled release, a checkout for a paid or unreconciled part, removing an outcome, un-paying an instalment). 0014 was never applied in production."
   }
 }
