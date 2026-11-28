@@ -36,6 +36,7 @@ export const CLASSIFICATION: Record<string, TableClass> = {
   resource_chunks: { class: "academic", note: "full-text search index of resources (FTS5)" },
   instructor_ratings: { class: "academic" },
   orders: { class: "financial" },
+  payment_attempts: { class: "financial", note: "Paystack checkout attempts per instalment (no card data)" },
   instalments: { class: "financial" },
   payments: { class: "financial" },
   webhook_events: { class: "financial", note: "payment-provider events already processed (prevents double crediting)" },

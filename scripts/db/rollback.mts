@@ -87,6 +87,11 @@ export const COMPAT: Record<string, MigrationCompat> = {
     checks: [{ id: "orders_with_pricing_snapshot", area: "data", description: "orders created by a Stage D.1 Worker (an older Worker would create orders without the required pricing record)", onFail: "action",
       sql: "SELECT COUNT(*) AS n FROM orders WHERE pricing_snapshot IS NOT NULL",
       remediation: "rolling back below Stage D.1 lets new orders be created without a pricing snapshot; roll back only with registrations closed" }] },
+  "0014_payment_attempts.sql": { olderWorker: "check",
+    areas: { schema: "additive payment_attempts table with a one-active-attempt unique index", data: "an older Worker ignores payment_attempts and can open Paystack checkouts without a claim" },
+    checks: [{ id: "payment_attempts_open", area: "data", description: "payment attempts that are in progress or uncertain (an older Worker would not respect them)", onFail: "action",
+      sql: "SELECT COUNT(*) AS n FROM payment_attempts WHERE state IN ('claimed', 'uncertain')",
+      remediation: "resolve uncertain attempts with Finance before rolling back; an older Worker could open a second checkout for them" }] },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));

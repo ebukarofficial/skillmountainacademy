@@ -37,6 +37,7 @@ export const POLICY: Record<string, TablePolicy> = {
     "price_usd_cents", "price_kobo", "level", "audience", "full_payment_only", "position", "source", "created_at", "updated_at"), updated_by: "null" } },
   registrations: { columns: { ...keep("id", "created_at", "role", "lead_id", "programme_slug", "country", "adult", "education", "english", "computer_literate", "background", "industry", "terms"),
     first_name: "first_name", middle_name: "null", surname: "surname", email: "email", phone: "phone", city: "null", background_detail: "text", why: "text", goals: "text", guardian_name: "name", guardian_phone: "phone", ip_hash: "null" } },
+  payment_attempts: { columns: { ...keep("id", "order_id", "instalment_id", "attempt", "state", "claimed_at", "updated_at", "released_reason"), reference: "ref", authorization_url: "null", access_code: "null", detail: "null", released_by: "null" } },
   orders: { columns: { ...keep("id", "created_at", "registration_id", "programme_slug", "plan", "method", "total_kobo", "regular_kobo", "hold_id", "group_size", "display_currency", "fx_rate", "fx_at", "status",
     "residence_country", "ip_country", "pricing_tier", "tuition_currency", "tuition_minor", "charge_currency", "pricing_snapshot",
     "request_fingerprint"), reference: "ref", idempotency_key: "null", payment_init: "null" } },
