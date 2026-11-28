@@ -46,5 +46,11 @@
     "ownerApprovalRequired": true,
     "ownerApproved": false,
     "ownerDecision": "Before applying in production: (1) confirm Cloud Engineering should have no crossed-out price (the live website shows none; the database row from 0002 has NGN 700,000); (2) confirm existing enrolments should keep their current durations as a permanent snapshot. Stage B authorises local and staging only."
+  },
+  "0016_approval_execution.sql": {
+    "sha256": "79508a9c68526d88e2339881b4b064b701897e1fba84b6b3ad1a3a1f4bd9be22",
+    "reviewedBy": "Claude (Stage E.1 engineering review, 28 Nov 2026)",
+    "reviewedAt": "2026-11-28",
+    "summary": "Adds execution columns to approval_requests. The two UPDATEs touch only approved requests on the new column (still 'not_applicable'): executed_at set -> 'completed', otherwise 'failed'. 0015 was never applied in production, so production has no rows to change. No existing value is overwritten and no access is granted."
   }
 }

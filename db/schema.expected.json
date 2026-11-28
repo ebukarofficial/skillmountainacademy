@@ -1,5 +1,5 @@
 {
-  "migration": "0015_institution.sql",
+  "migration": "0016_approval_execution.sql",
   "migrations": [
     "0001_init.sql",
     "0002_seed_programmes.sql",
@@ -15,7 +15,8 @@
     "0012_pricing_snapshot.sql",
     "0013_order_idempotency.sql",
     "0014_payment_attempts.sql",
-    "0015_institution.sql"
+    "0015_institution.sql",
+    "0016_approval_execution.sql"
   ],
   "schema": [
     {
@@ -604,7 +605,7 @@
       "type": "table",
       "name": "approval_requests",
       "tbl_name": "approval_requests",
-      "sql": "CREATE TABLE approval_requests (\n  id                TEXT PRIMARY KEY,\n  category          TEXT NOT NULL,\n  target_type       TEXT NOT NULL,\n  target_id         TEXT NOT NULL,\n  payload           TEXT NOT NULL,\n  reason            TEXT NOT NULL,\n  requested_by      TEXT NOT NULL,\n  approver          TEXT NOT NULL CHECK (approver IN ('owner', 'super')),\n  status            TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled', 'expired')),\n  expires_at        TEXT NOT NULL,\n  decided_by        TEXT,\n  decided_at        TEXT,\n  decision_comment  TEXT,\n  executed_at       TEXT,\n  execution_result  TEXT,\n  escalated_at      TEXT,\n  created_at        TEXT NOT NULL,\n  updated_at        TEXT NOT NULL\n)"
+      "sql": "CREATE TABLE approval_requests (\n  id                TEXT PRIMARY KEY,\n  category          TEXT NOT NULL,\n  target_type       TEXT NOT NULL,\n  target_id         TEXT NOT NULL,\n  payload           TEXT NOT NULL,\n  reason            TEXT NOT NULL,\n  requested_by      TEXT NOT NULL,\n  approver          TEXT NOT NULL CHECK (approver IN ('owner', 'super')),\n  status            TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled', 'expired')),\n  expires_at        TEXT NOT NULL,\n  decided_by        TEXT,\n  decided_at        TEXT,\n  decision_comment  TEXT,\n  executed_at       TEXT,\n  execution_result  TEXT,\n  escalated_at      TEXT,\n  created_at        TEXT NOT NULL,\n  updated_at        TEXT NOT NULL\n, execution_status TEXT NOT NULL DEFAULT 'not_applicable' CHECK (execution_status IN ('not_applicable', 'awaiting_execution', 'executing', 'completed', 'failed')), execution_claimed_at TEXT, execution_claimed_by TEXT, execution_attempts INTEGER NOT NULL DEFAULT 0)"
     },
     {
       "type": "index",
@@ -617,6 +618,12 @@
       "name": "approval_requests_one_pending",
       "tbl_name": "approval_requests",
       "sql": "CREATE UNIQUE INDEX approval_requests_one_pending ON approval_requests(category, target_id) WHERE status = 'pending'"
+    },
+    {
+      "type": "index",
+      "name": "approval_requests_execution",
+      "tbl_name": "approval_requests",
+      "sql": "CREATE INDEX approval_requests_execution ON approval_requests(execution_status) WHERE execution_status IN ('awaiting_execution', 'executing', 'failed')"
     }
   ]
 }

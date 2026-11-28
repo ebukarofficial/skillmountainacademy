@@ -16,7 +16,10 @@ type Overview = { departments: Dept[]; assignments: Assign[]; invitations: Invit
   categories: { executable: string[]; evaluatedOnly: string[] }; roles: { groups: string[]; grants: Record<string, { read: string[]; write: string[] }>; routes: { method: string; path: string; area: string }[] };
   you: { owner: boolean; super: boolean } };
 type Approval = { id: string; category: string; target_id: string; payload: Record<string, unknown>; reason: string; requested_by: string; requesterName: string | null; approver: string; status: string;
-  expires_at: string; decided_at: string | null; deciderName: string | null; decision_comment: string | null; executed_at: string | null; execution_result: string | null; escalated_at: string | null; created_at: string; canDecide: boolean };
+  expires_at: string; decided_at: string | null; deciderName: string | null; decision_comment: string | null; executed_at: string | null; execution_result: string | null; escalated_at: string | null; created_at: string; canDecide: boolean;
+  execution_status: string; execution_attempts: number; canRecover: boolean };
+// Stage E.1: what happened to the action, shown apart from the decision.
+const EXECUTION: Record<string, string> = { not_applicable: "", awaiting_execution: "action not carried out yet", executing: "action in progress", completed: "action carried out", failed: "action NOT carried out" };
 
 const GROUPS: [string, string][] = [["super", "Super Administrator"], ["admissions", "Admissions"], ["finance", "Finance"], ["academic", "Academic Administration"], ["faculty", "Faculty Management"], ["support", "Student Support"], ["reporting", "Read-only Reporting"]];
 const groupName = (g: string | null) => GROUPS.find(([k]) => k === g)?.[1] ?? (g ? g : "Unassigned");
@@ -152,10 +155,12 @@ function Approvals({ meId }: { meId: string }) {
   return <Card title="Approval requests">
     <p className="text-sm text-ink/70">Nothing in a request happens until it is approved, and nobody can approve their own request. When approved, every rule is checked again before the change is made.</p>
     {!data.approvals.length ? <Empty>No requests.</Empty> : <ul className="mt-3 divide-y divide-ink/10">{data.approvals.map((a) => <li key={a.id} className="py-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2"><b>{CATEGORY[a.category] ?? a.category}</b><Badge s={a.status} /><span className="text-ink/55">needs {a.approver === "owner" ? "the owner" : "a Super Administrator"}{a.escalated_at ? " (escalated)" : ""}</span></div>
+      <div className="flex flex-wrap items-center gap-2"><b>{CATEGORY[a.category] ?? a.category}</b><Badge s={a.status} />{a.status === "approved" && a.execution_status !== "completed" && <Badge s={a.execution_status === "failed" ? "failed" : "pending"} />}<span className="text-ink/55">needs {a.approver === "owner" ? "the owner" : "a Super Administrator"}{a.escalated_at ? " (escalated)" : ""}</span></div>
       <p className="text-ink/75">Asked by {a.requesterName ?? "unknown"} on {when(a.created_at)}: {a.reason}</p>
       {a.decided_at && <p className="text-ink/65">{a.status} by {a.deciderName ?? "—"} on {when(a.decided_at)}{a.decision_comment ? `: ${a.decision_comment}` : ""}</p>}
-      {a.execution_result && <p className="text-ink/65">Result: {a.execution_result}</p>}
+      {a.status === "approved" && <p className={a.execution_status === "failed" ? "font-semibold text-brand-red" : "text-ink/65"} data-execution={a.execution_status}>
+        Approved: {EXECUTION[a.execution_status] ?? a.execution_status}{a.execution_attempts > 1 ? ` (${a.execution_attempts} runs)` : ""}{a.execution_result ? `. ${a.execution_result}` : ""}</p>}
+      {a.status === "approved" && a.canRecover && <div className="mt-2"><Btn small kind="ghost" disabled={busy} onClick={() => { if (confirm("Carry out this approved request now? Every rule is checked again first, and nothing is repeated if it already took effect.")) run(() => api(`/api/app/admin/approvals/${a.id}/execute`, { method: "POST", body: {} }), "Done. See the result on the request.", reload); }}>Carry out again</Btn></div>}
       {a.status === "pending" && <div className="mt-2 flex flex-wrap gap-2">
         {a.canDecide && <><Btn small disabled={busy} onClick={() => { if (confirm("Approve this request? The change is made at once.")) run(() => api(`/api/app/admin/approvals/${a.id}/decision`, { method: "POST", body: { decision: "approve" } }), "Approved.", reload); }}>Approve</Btn>
           <Btn small kind="ghost" disabled={busy} onClick={() => { const comment = ask("Reject this request. Comment (required):"); if (comment) run(() => api(`/api/app/admin/approvals/${a.id}/decision`, { method: "POST", body: { decision: "reject", comment } }), "Rejected.", reload); }}>Reject</Btn></>}
