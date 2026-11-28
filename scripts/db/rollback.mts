@@ -80,6 +80,8 @@ export const COMPAT: Record<string, MigrationCompat> = {
     checks: [{ id: "catalogue_published_changes", area: "data", description: "programmes published, paused or retired through the catalogue (changes an older Worker would not honour)", onFail: "unsafe",
       sql: "SELECT COUNT(*) AS n FROM programmes WHERE published_at IS NOT NULL OR status <> 'published'",
       remediation: "an older Worker would keep selling a paused or retired programme, or reject a newly published one; do not roll back below 0011 after the first catalogue publication" }] },
+  "0012_pricing_snapshot.sql": { olderWorker: "safe",
+    areas: { schema: "additive nullable pricing-snapshot columns on orders", data: "an older Worker leaves the new columns empty on the orders it creates; charging (NGN) and existing orders are unchanged" } },
 };
 
 const num = (m: string) => Number(m.slice(0, 4));

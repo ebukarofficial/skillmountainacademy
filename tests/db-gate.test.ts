@@ -257,7 +257,7 @@ test("rollback: unknown history, a candidate needing newer schema, an unknown ca
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: null }).verdict, "UNSAFE");
   assert.equal(decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: upTo("0009_owner.sql") }).verdict, "UNSAFE");
   assert.equal(decideRollback({ candidateExpected: "0099_future.sql", dbApplied: ALL }).verdict, "UNSAFE");
-  const fut = decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: [...ALL, "0012_future.sql"], known: [...ALL, "0012_future.sql"] });
+  const fut = decideRollback({ candidateExpected: "0010_owner_integrity.sql", dbApplied: [...ALL, "0013_future.sql"], known: [...ALL, "0013_future.sql"] });
   assert.equal(fut.verdict, "UNSAFE");
-  assert.ok(fut.reasons.some((r) => /No compatibility assessment for 0012_future\.sql/.test(r)));
+  assert.ok(fut.reasons.some((r) => /No compatibility assessment for 0013_future\.sql/.test(r)));
 });

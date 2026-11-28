@@ -113,7 +113,8 @@ test("FX fallback source is used when the first one fails", async () => {
 
 test("acceptance 6: the order saves the currency shown and the FX rate used; the charge is in NGN", async () => {
   await w.fetchApi("/api/geo", { cf: { country: "US" } });
-  const r = await w.post("/api/register", registration({ currency: "USD", learner: { ...registration().learner, email: "fx@example.com" } }));
+  // Stage D: the currency comes from the validated country of residence; a browser-sent currency ("GBP") is ignored.
+  const r = await w.post("/api/register", registration({ currency: "GBP", learner: { ...registration().learner, email: "fx@example.com", country: "United States", countryCode: "US" } }));
   assert.equal(r.status, 200, await r.clone().text());
   const j = await r.json() as { reference: string; chargeCurrency: string; payNowNaira: number; fxRate: number };
   assert.equal(j.chargeCurrency, "NGN");
