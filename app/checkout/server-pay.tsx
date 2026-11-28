@@ -49,6 +49,8 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Stage D.1: one key per checkout attempt. A retry (double click, network drop) returns the order already created.
+  const [idempotencyKey] = useState(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`));
 
   const groupOn = FLAGS.GROUP_ENABLED && p.groupPrice != null;
   const total = group && groupOn ? p.groupPrice! : active && p.timedPrice != null ? p.timedPrice : p.price;
@@ -78,7 +80,7 @@ export function ServerPayment({ p, d, payments, onBack, onDone }: {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
           // No currency is sent: the server decides it from the country of residence (Stage D).
-          programme: p.slug, plan, method, turnstileToken: token, termsAccepted: true, termsVersion: TERMS_VERSION, website: d.website ?? "",
+          programme: p.slug, plan, method, idempotencyKey, turnstileToken: token, termsAccepted: true, termsVersion: TERMS_VERSION, website: d.website ?? "",
           members: group && groupOn ? members : [],
           learner: d,
         }),
