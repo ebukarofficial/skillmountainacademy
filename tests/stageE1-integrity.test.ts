@@ -263,7 +263,7 @@ test("E1.11 an interrupted execution: refused while fresh, recovered once stale,
   await setGroup(ids.sto, "support");
 });
 
-test("E1.12 an unexpected failure is recorded as uncertain and is not retried automatically", async () => {
+test("E1.12 an unexpected database failure is recorded as failed and is not retried automatically", async () => {
   const id = await request(ids.sto, "faculty");
   await exec("CREATE TRIGGER t_fail_group BEFORE UPDATE OF admin_role ON users WHEN NEW.admin_role = 'faculty' BEGIN SELECT RAISE(ABORT, 'injected database failure'); END");
   try {
@@ -272,7 +272,11 @@ test("E1.12 an unexpected failure is recorded as uncertain and is not retried au
   } finally { await exec("DROP TRIGGER t_fail_group"); }
   const a = await approval(id);
   assert.deepEqual([a.status, a.execution_status, a.execution_attempts], ["approved", "failed", 1]);
-  assert.match(a.execution_result!, /^outcome uncertain/);
+  // Stage E.2: the action commits in one fenced batch, so a database failure inside it is known to have rolled back
+  // (no fence row for the run). Before E.2 this outcome could only be reported as uncertain.
+  assert.match(a.execution_result!, /^failed, nothing committed/);
+  assert.equal(await countWhere("execution_fences WHERE approval_id = ?1", id), 0);
+  assert.equal(await groupOf(ids.sto), "support", "nothing committed");
   await new Promise((r) => setTimeout(r, 300));
   assert.equal((await approval(id)).execution_attempts, 1, "no automatic retry");
   // An explicit recovery checks the target first, then runs.
